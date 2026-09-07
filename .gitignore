@@ -31,7 +31,8 @@ htmlcov/
 *.swp
 
 # WorkBuddy 工作区数据
-.workbuddy/
+.workbuddy/*
+!.workbuddy/skills/
 
 # 系统文件
 Thumbs.db
