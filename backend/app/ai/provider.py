@@ -133,8 +133,15 @@ class RemoteLLMProvider:
         if t not in _TYPE_WHITELIST:
             data["type"] = "交易"  # 兜底默认
         # 文本字段若被 LLM 返回为 list，则拼接成字符串
-        _text_fields = ("positioning", "features", "target_users", "business_model",
-                        "pricing", "strengths", "weaknesses")
+        _text_fields = (
+            "positioning",
+            "features",
+            "target_users",
+            "business_model",
+            "pricing",
+            "strengths",
+            "weaknesses",
+        )
         for key in _text_fields:
             val = data.get(key)
             if isinstance(val, list):

@@ -31,6 +31,7 @@ select = ["E", "F", "I", "UP", "B"]
 ignore = [
     "B008", # FastAPI 依赖注入：Query/Depends 必须在参数默认值中调用，属框架惯用写法
     "UP042", # str+Enum 继承：Pydantic 推荐写法，使枚举按字符串序列化
+    "E501", # 中文文案行：CJK 字符显示宽度约为 ASCII 两倍，88 字符限制对含中文的行过严
 ]
 
 [tool.pytest.ini_options]

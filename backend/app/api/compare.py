@@ -1,7 +1,7 @@
 """竞品对比 API。
 
 雷达图评分维度：以 0~5 整数评分，存于 Competitor.ext_fields 的 "ratings" 键。
-维度固定 5 项（业务/工程取舍：MVP 用固定维度，后续可扩展为可配置）。
+维度可在「设置」中配置（存 app_settings 表），compare 与 report 共用同一份维度。
 """
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,13 +9,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.settings import get_rating_dimensions
 from app.db import get_session
 from app.models.competitor import Competitor, DataStatus
 
 router = APIRouter(prefix="/api/compare", tags=["compare"])
-
-# 雷达图 5 维评分
-RATING_DIMENSIONS = ["功能完整度", "用户规模", "鉴定能力", "价格竞争力", "口碑"]
 
 
 class CompareRequest(BaseModel):
@@ -43,11 +41,11 @@ class CompareResponse(BaseModel):
     items: list[CompareItem]
 
 
-def _ratings_of(competitor: Competitor) -> dict[str, int]:
+def _ratings_of(competitor: Competitor, dims: list[str]) -> dict[str, int]:
     """从 ext_fields 读取评分，缺失维度补 0。"""
     ext = competitor.ext_fields or {}
     raw = ext.get("ratings") or {}
-    return {dim: int(raw.get(dim, 0)) for dim in RATING_DIMENSIONS}
+    return {dim: int(raw.get(dim, 0) or 0) for dim in dims}
 
 
 @router.post("", response_model=CompareResponse)
@@ -55,6 +53,7 @@ async def compare(
     payload: CompareRequest, session: AsyncSession = Depends(get_session)
 ) -> CompareResponse:
     """按 id 列表返回对比数据（仅已入库竞品参与对比）。"""
+    dims = await get_rating_dimensions(session)
     stmt = select(Competitor).where(
         Competitor.id.in_(payload.ids),
         Competitor.data_status == DataStatus.STORED.value,
@@ -79,8 +78,8 @@ async def compare(
             pricing=c.pricing,
             strengths=c.strengths,
             weaknesses=c.weaknesses,
-            ratings=_ratings_of(c),
+            ratings=_ratings_of(c, dims),
         )
         for c in competitors
     ]
-    return CompareResponse(dimensions=RATING_DIMENSIONS, items=items)
+    return CompareResponse(dimensions=dims, items=items)

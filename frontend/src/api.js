@@ -41,4 +41,18 @@ export const competitorApi = {
   compare(ids) {
     return http.post('/compare', { ids })
   },
+  // —— 设置：评分维度 ——
+  getRatingDimensions() {
+    return http.get('/settings/rating-dimensions')
+  },
+  setRatingDimensions(dimensions) {
+    return http.put('/settings/rating-dimensions', { dimensions })
+  },
+  // —— 报告 ——
+  exportReport(ids) {
+    return http.post('/report/export', ids && ids.length ? { ids } : {})
+  },
+  reportDownloadUrl(filename) {
+    return `/api/report/download/${encodeURIComponent(filename)}`
+  },
 }

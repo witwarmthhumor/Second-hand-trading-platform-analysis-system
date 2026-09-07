@@ -1,8 +1,14 @@
 <script setup>
 import { ref, onMounted, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import * as echarts from 'echarts'
+// echarts 按需引入：只注册用到的雷达图组件，避免全量打包（chunk 从 ~2.2MB 降到 ~500KB）
+import * as echarts from 'echarts/core'
+import { RadarChart } from 'echarts/charts'
+import { TooltipComponent, LegendComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
 import { competitorApi } from './api'
+
+echarts.use([RadarChart, TooltipComponent, LegendComponent, CanvasRenderer])
 
 const activeTab = ref('list')
 
@@ -29,7 +35,9 @@ let radarChart = null
 
 const typeOptions = ['鉴定', '交易', '行情', '社区']
 const statusOptions = ['已上线', '内测', '已下线']
-const ratingDims = ['功能完整度', '用户规模', '鉴定能力', '价格竞争力', '口碑']
+// 评分维度：从后端设置读取（可在"设置"页配置）
+const DEFAULT_DIMS = ['功能完整度', '用户规模', '鉴定能力', '价格竞争力', '口碑']
+const ratingDims = ref([...DEFAULT_DIMS])
 
 // —— 列表 ——
 async function fetchList() {
@@ -56,6 +64,14 @@ const saving = ref(false)
 const isEdit = ref(false)
 const editId = ref(null)
 
+function emptyRatings() {
+  const r = {}
+  ratingDims.value.forEach((d) => {
+    r[d] = 0
+  })
+  return r
+}
+
 function emptyForm() {
   return {
     name: '',
@@ -71,7 +87,7 @@ function emptyForm() {
     weaknesses: '',
     tags: [],
     remark: '',
-    ratings: { 功能完整度: 0, 用户规模: 0, 鉴定能力: 0, 价格竞争力: 0, 口碑: 0 },
+    ratings: emptyRatings(),
   }
 }
 
@@ -97,7 +113,7 @@ function openEdit(row) {
     weaknesses: row.weaknesses || '',
     tags: row.tags || [],
     remark: row.remark || '',
-    ratings: row.ext_fields?.ratings || { 功能完整度: 0, 用户规模: 0, 鉴定能力: 0, 价格竞争力: 0, 口碑: 0 },
+    ratings: { ...emptyRatings(), ...(row.ext_fields?.ratings || {}) },
   }
   isEdit.value = true
   editId.value = row.id
@@ -268,9 +284,83 @@ function renderRadar() {
   })
 }
 
+// —— 报告导出 ——
+const exporting = ref(false)
+
+async function doExportReport() {
+  exporting.value = true
+  try {
+    // 勾选了竞品则只导出勾选项，否则导出全部已入库竞品
+    const ids = selectedIds.value.length >= 1 ? selectedIds.value : null
+    const r = await competitorApi.exportReport(ids)
+    window.open(competitorApi.reportDownloadUrl(r.filename), '_blank')
+    ElMessage.success(`报告已生成（${r.competitor_count} 个竞品）`)
+  } catch (e) {
+    ElMessage.error(e.message)
+  } finally {
+    exporting.value = false
+  }
+}
+
+// —— 设置：评分维度 ——
+const dimsDraft = ref([])
+const newDim = ref('')
+const dimsSaving = ref(false)
+
+async function loadDims() {
+  try {
+    const r = await competitorApi.getRatingDimensions()
+    ratingDims.value = r.dimensions
+    dimsDraft.value = [...r.dimensions]
+  } catch (e) {
+    ElMessage.error(e.message)
+  }
+}
+
+function addDim() {
+  const d = newDim.value.trim()
+  if (!d) return
+  if (dimsDraft.value.includes(d)) {
+    ElMessage.warning('该维度已存在')
+    return
+  }
+  if (dimsDraft.value.length >= 8) {
+    ElMessage.warning('最多 8 个维度（雷达图过多难以阅读）')
+    return
+  }
+  dimsDraft.value.push(d)
+  newDim.value = ''
+}
+
+function removeDim(d) {
+  if (dimsDraft.value.length <= 3) {
+    ElMessage.warning('至少保留 3 个维度')
+    return
+  }
+  dimsDraft.value = dimsDraft.value.filter((x) => x !== d)
+}
+
+async function saveDims() {
+  if (dimsDraft.value.length < 3) {
+    ElMessage.warning('至少 3 个维度')
+    return
+  }
+  dimsSaving.value = true
+  try {
+    const r = await competitorApi.setRatingDimensions(dimsDraft.value)
+    ratingDims.value = r.dimensions
+    ElMessage.success('评分维度已更新（新维度对雷达图、对比与报告立即生效）')
+  } catch (e) {
+    ElMessage.error(e.message)
+  } finally {
+    dimsSaving.value = false
+  }
+}
+
 onMounted(() => {
   fetchList()
   fetchPending()
+  loadDims()
 })
 </script>
 
@@ -286,6 +376,7 @@ onMounted(() => {
         <el-tab-pane label="待校对" name="pending" />
         <el-tab-pane label="录入竞品" name="form" />
         <el-tab-pane label="对比" name="compare" />
+        <el-tab-pane label="设置" name="settings" />
       </el-tabs>
     </el-header>
 
@@ -320,6 +411,9 @@ onMounted(() => {
             @click="goCompare"
           >
             对比 ({{ selectedIds.length }})
+          </el-button>
+          <el-button type="info" plain :loading="exporting" @click="doExportReport">
+            导出报告{{ selectedIds.length ? `(${selectedIds.length})` : '' }}
           </el-button>
         </div>
 
@@ -510,7 +604,7 @@ onMounted(() => {
 
         <div v-if="compareData && compareData.items.length" v-loading="compareLoading">
           <div class="card">
-            <h3 class="card-title">五维雷达图对比</h3>
+            <h3 class="card-title">评分雷达图对比</h3>
             <div ref="radarEl" class="radar" />
           </div>
 
@@ -542,6 +636,42 @@ onMounted(() => {
         </div>
 
         <el-empty v-else-if="!compareLoading" description="请在列表页勾选至少 2 个竞品进行对比" />
+      </div>
+
+      <!-- 设置页 -->
+      <div v-else-if="activeTab === 'settings'" class="form-wrap">
+        <h3 class="section">评分维度配置</h3>
+        <el-alert
+          title="评分维度用于雷达图、竞品评分与报告导出。修改后新维度立即生效；已录入竞品在新维度下无评分的按 0 分处理。"
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 16px"
+        />
+        <div class="dims-list">
+          <el-tag
+            v-for="d in dimsDraft"
+            :key="d"
+            closable
+            size="large"
+            style="margin: 0 8px 8px 0"
+            @close="removeDim(d)"
+          >
+            {{ d }}
+          </el-tag>
+        </div>
+        <div class="dims-add">
+          <el-input
+            v-model="newDim"
+            placeholder="输入新维度名称，如：社区活跃度"
+            style="width: 280px"
+            maxlength="12"
+            @keyup.enter="addDim"
+          />
+          <el-button @click="addDim">添加</el-button>
+        </div>
+        <p class="count">当前 {{ dimsDraft.length }} 个维度（3~8 个）</p>
+        <el-button type="primary" :loading="dimsSaving" @click="saveDims">保存配置</el-button>
       </div>
     </el-main>
 
@@ -638,5 +768,13 @@ body {
 .radar {
   width: 100%;
   height: 420px;
+}
+.dims-list {
+  margin-bottom: 12px;
+}
+.dims-add {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 8px;
 }
 </style>

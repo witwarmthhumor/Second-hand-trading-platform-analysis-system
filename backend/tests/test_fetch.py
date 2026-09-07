@@ -71,7 +71,9 @@ async def test_fetch_creates_pending_review(client, _mock_deps):
 
 async def test_approve_transitions_to_stored(client, _mock_deps):
     """正常：确认后 待校对 → 已入库。"""
-    created = (await client.post("/api/fetch", json={"url": "https://example.com/y"})).json()
+    created = (
+        await client.post("/api/fetch", json={"url": "https://example.com/y"})
+    ).json()
     cid = created["id"]
     assert created["data_status"] == "待校对"
 

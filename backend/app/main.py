@@ -8,9 +8,11 @@ from sqlalchemy import text
 from app.api.compare import router as compare_router
 from app.api.competitors import router as competitors_router
 from app.api.fetch import router as fetch_router
+from app.api.report import router as report_router
+from app.api.settings import router as settings_router
 from app.config import settings
 from app.db import Base, engine
-from app.models import Competitor  # noqa: F401  # 确保模型被注册到 Base
+from app.models import AppSetting, Competitor  # noqa: F401  # 确保模型被注册到 Base
 
 
 @asynccontextmanager
@@ -26,6 +28,8 @@ app = FastAPI(title=settings.app_name, lifespan=lifespan)
 app.include_router(competitors_router)
 app.include_router(fetch_router)
 app.include_router(compare_router)
+app.include_router(settings_router)
+app.include_router(report_router)
 
 
 @app.get("/health")
