@@ -1,6 +1,7 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import * as echarts from 'echarts'
 import { competitorApi } from './api'
 
 const activeTab = ref('list')
@@ -19,8 +20,16 @@ const fetchDialogVisible = ref(false)
 const pending = ref([])
 const pendingLoading = ref(false)
 
+// —— 对比 ——
+const selectedIds = ref([])
+const compareData = ref(null)
+const compareLoading = ref(false)
+const radarEl = ref(null)
+let radarChart = null
+
 const typeOptions = ['鉴定', '交易', '行情', '社区']
 const statusOptions = ['已上线', '内测', '已下线']
+const ratingDims = ['功能完整度', '用户规模', '鉴定能力', '价格竞争力', '口碑']
 
 // —— 列表 ——
 async function fetchList() {
@@ -62,6 +71,7 @@ function emptyForm() {
     weaknesses: '',
     tags: [],
     remark: '',
+    ratings: { 功能完整度: 0, 用户规模: 0, 鉴定能力: 0, 价格竞争力: 0, 口碑: 0 },
   }
 }
 
@@ -87,6 +97,7 @@ function openEdit(row) {
     weaknesses: row.weaknesses || '',
     tags: row.tags || [],
     remark: row.remark || '',
+    ratings: row.ext_fields?.ratings || { 功能完整度: 0, 用户规模: 0, 鉴定能力: 0, 价格竞争力: 0, 口碑: 0 },
   }
   isEdit.value = true
   editId.value = row.id
@@ -100,11 +111,15 @@ async function save() {
   }
   saving.value = true
   try {
+    // 评分写入 ext_fields.ratings，其余字段平铺
+    const payload = { ...form.value }
+    payload.ext_fields = { ratings: form.value.ratings }
+    delete payload.ratings
     if (isEdit.value) {
-      await competitorApi.update(editId.value, form.value)
+      await competitorApi.update(editId.value, payload)
       ElMessage.success('已更新')
     } else {
-      await competitorApi.create(form.value)
+      await competitorApi.create(payload)
       ElMessage.success('已录入')
     }
     activeTab.value = 'list'
@@ -201,6 +216,58 @@ function statusTag(s) {
   return map[s] || 'info'
 }
 
+// —— 对比 ——
+function onSelectionChange(rows) {
+  selectedIds.value = rows.map((r) => r.id)
+}
+
+function goCompare() {
+  if (selectedIds.value.length < 2) {
+    ElMessage.warning('请至少勾选 2 个竞品进行对比')
+    return
+  }
+  activeTab.value = 'compare'
+  loadCompare()
+}
+
+async function loadCompare() {
+  if (selectedIds.value.length < 2) return
+  compareLoading.value = true
+  try {
+    compareData.value = await competitorApi.compare(selectedIds.value)
+    await nextTick()
+    renderRadar()
+  } catch (e) {
+    ElMessage.error(e.message)
+  } finally {
+    compareLoading.value = false
+  }
+}
+
+function renderRadar() {
+  if (!compareData.value || !radarEl.value) return
+  if (radarChart) radarChart.dispose()
+  radarChart = echarts.init(radarEl.value)
+  const dims = compareData.value.dimensions
+  const palette = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272']
+  const series = compareData.value.items.map((item, i) => ({
+    value: dims.map((d) => item.ratings[d] ?? 0),
+    name: item.name,
+    lineStyle: { color: palette[i % palette.length] },
+    itemStyle: { color: palette[i % palette.length] },
+    areaStyle: { opacity: 0.08 },
+  }))
+  radarChart.setOption({
+    tooltip: {},
+    legend: { data: compareData.value.items.map((i) => i.name), bottom: 0 },
+    radar: {
+      indicator: dims.map((d) => ({ name: d, max: 5 })),
+      radius: '65%',
+    },
+    series: [{ type: 'radar', data: series }],
+  })
+}
+
 onMounted(() => {
   fetchList()
   fetchPending()
@@ -246,9 +313,24 @@ onMounted(() => {
           <el-button type="primary" @click="onSearch">查询</el-button>
           <el-button type="primary" plain @click="openCreate">+ 录入竞品</el-button>
           <el-button type="success" plain @click="openFetch">抓取竞品</el-button>
+          <el-button
+            type="warning"
+            plain
+            :disabled="selectedIds.length < 2"
+            @click="goCompare"
+          >
+            对比 ({{ selectedIds.length }})
+          </el-button>
         </div>
 
-        <el-table v-loading="loading" :data="competitors" border stripe>
+        <el-table
+          v-loading="loading"
+          :data="competitors"
+          border
+          stripe
+          @selection-change="onSelectionChange"
+        >
+          <el-table-column type="selection" width="50" />
           <el-table-column prop="name" label="名称" min-width="140" />
           <el-table-column prop="type" label="类型" width="80">
             <template #default="{ row }">
@@ -366,6 +448,22 @@ onMounted(() => {
             <el-input v-model="form.pricing" />
           </el-form-item>
 
+          <h3 class="section">评分（用于对比雷达图）</h3>
+          <el-form-item
+            v-for="d in ratingDims"
+            :key="d"
+            :label="d"
+          >
+            <el-slider
+              v-model="form.ratings[d]"
+              :min="0"
+              :max="5"
+              :step="1"
+              show-stops
+              style="width: 400px"
+            />
+          </el-form-item>
+
           <h3 class="section">评价与备注</h3>
           <el-row :gutter="20">
             <el-col :span="12">
@@ -403,9 +501,47 @@ onMounted(() => {
         </el-form>
       </div>
 
-      <!-- 对比页（占位，阶段 3 实现） -->
-      <div v-else>
-        <el-empty description="多竞品对比功能将在阶段 3 实现" />
+      <!-- 对比页 -->
+      <div v-else-if="activeTab === 'compare'">
+        <div class="toolbar">
+          <el-button plain @click="activeTab = 'list'">← 返回选择</el-button>
+          <el-button @click="loadCompare">刷新对比</el-button>
+        </div>
+
+        <div v-if="compareData && compareData.items.length" v-loading="compareLoading">
+          <div class="card">
+            <h3 class="card-title">五维雷达图对比</h3>
+            <div ref="radarEl" class="radar" />
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">详细对比表</h3>
+            <el-table :data="compareData.items" border stripe>
+              <el-table-column prop="name" label="竞品" min-width="120" fixed="left" />
+              <el-table-column prop="type" label="类型" width="80">
+                <template #default="{ row }">
+                  <el-tag :type="typeTag(row.type)" size="small">{{ row.type }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="launch_status" label="状态" width="90">
+                <template #default="{ row }">
+                  <el-tag :type="statusTag(row.launch_status)" size="small">
+                    {{ row.launch_status }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="positioning" label="定位" min-width="200" show-overflow-tooltip />
+              <el-table-column prop="features" label="核心功能" min-width="200" show-overflow-tooltip />
+              <el-table-column prop="target_users" label="目标用户" min-width="140" show-overflow-tooltip />
+              <el-table-column prop="business_model" label="业务模式" min-width="160" show-overflow-tooltip />
+              <el-table-column prop="pricing" label="定价" min-width="120" show-overflow-tooltip />
+              <el-table-column prop="strengths" label="优势" min-width="180" show-overflow-tooltip />
+              <el-table-column prop="weaknesses" label="不足" min-width="180" show-overflow-tooltip />
+            </el-table>
+          </div>
+        </div>
+
+        <el-empty v-else-if="!compareLoading" description="请在列表页勾选至少 2 个竞品进行对比" />
       </div>
     </el-main>
 
@@ -487,5 +623,20 @@ body {
   color: #909399;
   font-size: 13px;
   margin: 0 0 12px;
+}
+.card {
+  background: #fff;
+  border-radius: 6px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.card-title {
+  margin: 0 0 16px;
+  font-size: 15px;
+  color: #303133;
+}
+.radar {
+  width: 100%;
+  height: 420px;
 }
 </style>

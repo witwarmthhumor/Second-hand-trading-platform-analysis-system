@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlalchemy import text
 
+from app.api.compare import router as compare_router
 from app.api.competitors import router as competitors_router
 from app.api.fetch import router as fetch_router
 from app.config import settings
@@ -24,6 +25,7 @@ app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
 app.include_router(competitors_router)
 app.include_router(fetch_router)
+app.include_router(compare_router)
 
 
 @app.get("/health")

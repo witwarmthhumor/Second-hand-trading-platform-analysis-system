@@ -37,4 +37,8 @@ export const competitorApi = {
   approve(id) {
     return http.post(`/fetch/${id}/approve`)
   },
+  // 多竞品对比
+  compare(ids) {
+    return http.post('/compare', { ids })
+  },
 }
