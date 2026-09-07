@@ -1,12 +1,27 @@
 """FastAPI 应用入口。"""
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from sqlalchemy import text
 
+from app.api.competitors import router as competitors_router
 from app.config import settings
-from app.db import engine
+from app.db import Base, engine
+from app.models import Competitor  # noqa: F401  # 确保模型被注册到 Base
 
-app = FastAPI(title=settings.app_name)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """启动时建表（阶段 1 用 create_all，规模增大后改 Alembic）。"""
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+
+
+app = FastAPI(title=settings.app_name, lifespan=lifespan)
+
+app.include_router(competitors_router)
 
 
 @app.get("/health")

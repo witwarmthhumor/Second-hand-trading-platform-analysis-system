@@ -25,6 +25,9 @@ pgdata/
 .coverage
 htmlcov/
 
+# 运行时状态（run-app 技能的 PID 与日志）
+.run-app/
+
 # IDE / 编辑器
 .idea/
 .vscode/

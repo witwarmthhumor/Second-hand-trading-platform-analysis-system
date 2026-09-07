@@ -1,20 +1,22 @@
-"""健康检查接口测试。
+"""健康检查接口测试（async 版，与 CRUD 测试共享 session event loop）。"""
 
-阶段 0 验证：FastAPI 应用能启动，/health 返回 200 且结构正确。
-数据库连通性依赖容器，这里仅验证接口契约，不依赖真实数据库。
-"""
-
-from fastapi.testclient import TestClient
+import pytest
+from httpx import ASGITransport, AsyncClient
 
 from app.main import app
 
-client = TestClient(app)
+
+@pytest.fixture
+async def client():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        yield c
 
 
-def test_health_returns_ok():
+async def test_health_returns_ok(client):
     """正常路径：/health 返回 200，且包含 status 与 database 字段。"""
-    resp = client.get("/health")
+    resp = await client.get("/health")
     assert resp.status_code == 200
     body = resp.json()
-    assert "status" in body
-    assert "database" in body
+    assert body["status"] == "ok"
+    assert body["database"] == "connected"
