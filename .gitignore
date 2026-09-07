@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# 环境与密钥（.env.example 保留可提交）
+.env
+.env.local
+.env.*.local
+
+# 前端
+node_modules/
+dist/
+.vite/
+
+# 数据库数据卷（Docker）
+pgdata/
+*.sqlite
+*.db
+
+# 测试与缓存
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE / 编辑器
+.idea/
+.vscode/
+*.swp
+
+# WorkBuddy 工作区数据
+.workbuddy/
+
+# 系统文件
+Thumbs.db
+.DS_Store
+desktop.ini
