@@ -24,6 +24,7 @@ class CompetitorBase(BaseModel):
     tags: list[str] | None = None
     remark: str | None = None
     ext_fields: dict | None = None
+    source_url: str | None = Field(None, max_length=1000)
     data_status: DataStatus = DataStatus.STORED
 
 
@@ -48,6 +49,7 @@ class CompetitorUpdate(BaseModel):
     tags: list[str] | None = None
     remark: str | None = None
     ext_fields: dict | None = None
+    source_url: str | None = Field(None, max_length=1000)
     data_status: DataStatus | None = None
 
 

@@ -29,4 +29,12 @@ export const competitorApi = {
   remove(id) {
     return http.delete(`/competitors/${id}`)
   },
+  // 抓取并提炼（落库为待校对）
+  fetch(url) {
+    return http.post('/fetch', { url })
+  },
+  // 校对通过：待校对 → 已入库
+  approve(id) {
+    return http.post(`/fetch/${id}/approve`)
+  },
 }

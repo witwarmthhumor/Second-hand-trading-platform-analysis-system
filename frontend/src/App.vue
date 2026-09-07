@@ -10,6 +10,15 @@ const loading = ref(false)
 const keyword = ref('')
 const filterType = ref('')
 
+// —— 抓取 ——
+const fetchUrl = ref('')
+const fetching = ref(false)
+const fetchDialogVisible = ref(false)
+
+// —— 待校对 ——
+const pending = ref([])
+const pendingLoading = ref(false)
+
 const typeOptions = ['鉴定', '交易', '行情', '社区']
 const statusOptions = ['已上线', '内测', '已下线']
 
@@ -123,9 +132,63 @@ async function remove(row) {
     await competitorApi.remove(row.id)
     ElMessage.success('已删除')
     fetchList()
+    fetchPending()
   } catch (e) {
     ElMessage.error(e.message)
   }
+}
+
+// —— 抓取 ——
+function openFetch() {
+  fetchUrl.value = ''
+  fetchDialogVisible.value = true
+}
+
+async function doFetch() {
+  const url = fetchUrl.value.trim()
+  if (!url) {
+    ElMessage.warning('请输入目标 URL')
+    return
+  }
+  fetching.value = true
+  try {
+    await competitorApi.fetch(url)
+    ElMessage.success('抓取成功，已进入待校对')
+    fetchDialogVisible.value = false
+    fetchPending()
+  } catch (e) {
+    ElMessage.error(e.message)
+  } finally {
+    fetching.value = false
+  }
+}
+
+// —— 待校对 ——
+async function fetchPending() {
+  pendingLoading.value = true
+  try {
+    pending.value = await competitorApi.list({ data_status: '待校对' })
+  } catch (e) {
+    ElMessage.error(e.message)
+  } finally {
+    pendingLoading.value = false
+  }
+}
+
+async function approve(row) {
+  try {
+    await competitorApi.approve(row.id)
+    ElMessage.success('已确认入库')
+    fetchPending()
+    fetchList()
+  } catch (e) {
+    ElMessage.error(e.message)
+  }
+}
+
+function dataStatusTag(s) {
+  const map = { draft: 'info', 待校对: 'warning', 已入库: 'success' }
+  return map[s] || 'info'
 }
 
 function typeTag(type) {
@@ -138,7 +201,10 @@ function statusTag(s) {
   return map[s] || 'info'
 }
 
-onMounted(fetchList)
+onMounted(() => {
+  fetchList()
+  fetchPending()
+})
 </script>
 
 <template>
@@ -150,6 +216,7 @@ onMounted(fetchList)
       </div>
       <el-tabs v-model="activeTab" class="tabs">
         <el-tab-pane label="竞品列表" name="list" />
+        <el-tab-pane label="待校对" name="pending" />
         <el-tab-pane label="录入竞品" name="form" />
         <el-tab-pane label="对比" name="compare" />
       </el-tabs>
@@ -178,6 +245,7 @@ onMounted(fetchList)
           </el-select>
           <el-button type="primary" @click="onSearch">查询</el-button>
           <el-button type="primary" plain @click="openCreate">+ 录入竞品</el-button>
+          <el-button type="success" plain @click="openFetch">抓取竞品</el-button>
         </div>
 
         <el-table v-loading="loading" :data="competitors" border stripe>
@@ -204,6 +272,42 @@ onMounted(fetchList)
           </el-table-column>
         </el-table>
         <p class="count">共 {{ competitors.length }} 条竞品</p>
+      </div>
+
+      <!-- 待校对页 -->
+      <div v-else-if="activeTab === 'pending'">
+        <el-alert
+          title="以下是从网页抓取并由 AI 提炼的竞品，请人工校对后确认入库"
+          type="warning"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 16px"
+        />
+        <el-table v-loading="pendingLoading" :data="pending" border stripe>
+          <el-table-column prop="name" label="名称" min-width="140" />
+          <el-table-column prop="type" label="类型" width="80">
+            <template #default="{ row }">
+              <el-tag :type="typeTag(row.type)" size="small">{{ row.type }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="positioning" label="定位" min-width="200" show-overflow-tooltip />
+          <el-table-column prop="website" label="来源" min-width="180" show-overflow-tooltip />
+          <el-table-column prop="data_status" label="状态" width="90">
+            <template #default="{ row }">
+              <el-tag :type="dataStatusTag(row.data_status)" size="small">
+                {{ row.data_status }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="200" fixed="right">
+            <template #default="{ row }">
+              <el-button link type="success" @click="approve(row)">确认入库</el-button>
+              <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
+              <el-button link type="danger" @click="remove(row)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <p class="count">共 {{ pending.length }} 条待校对</p>
       </div>
 
       <!-- 录入页 -->
@@ -304,6 +408,21 @@ onMounted(fetchList)
         <el-empty description="多竞品对比功能将在阶段 3 实现" />
       </div>
     </el-main>
+
+    <!-- 抓取对话框 -->
+    <el-dialog v-model="fetchDialogVisible" title="抓取竞品" width="520px">
+      <p class="fetch-tip">输入竞品官网 URL，系统将抓取页面并用 AI 提炼结构化信息，生成待校对草稿。</p>
+      <el-input
+        v-model="fetchUrl"
+        placeholder="https://www.weipaitang.com/"
+        clearable
+        @keyup.enter="doFetch"
+      />
+      <template #footer>
+        <el-button @click="fetchDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="fetching" @click="doFetch">抓取并提炼</el-button>
+      </template>
+    </el-dialog>
   </el-container>
 </template>
 
@@ -363,5 +482,10 @@ body {
   border-bottom: 1px solid #ebeef5;
   color: #303133;
   font-size: 15px;
+}
+.fetch-tip {
+  color: #909399;
+  font-size: 13px;
+  margin: 0 0 12px;
 }
 </style>

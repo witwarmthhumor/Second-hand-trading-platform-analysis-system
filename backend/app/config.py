@@ -16,5 +16,10 @@ class Settings(BaseSettings):
         "postgresql+asyncpg://competitor:competitor@localhost:5433/competitor"
     )
 
+    # LLM 配置（OpenAI 兼容接口，通过 .env 注入）
+    llm_api_base: str = "https://www.rightapi.ai/codex/v1"
+    llm_model: str = "gpt-5.4-mini"
+    llm_api_key: str = ""
+
 
 settings = Settings()

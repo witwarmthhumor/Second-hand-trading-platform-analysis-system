@@ -63,6 +63,10 @@ class Competitor(Base):
     # 扩展字段（不同平台类型的专属字段，无需迁移即可扩展）
     ext_fields: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
+    # 采集来源（半自动抓取时记录源 URL 与原始抓取文本）
+    source_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    source_raw: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # 状态
     data_status: Mapped[str] = mapped_column(
         String(20), nullable=False, default=DataStatus.STORED.value, index=True

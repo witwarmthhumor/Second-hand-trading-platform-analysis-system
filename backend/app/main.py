@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 
 from app.api.competitors import router as competitors_router
+from app.api.fetch import router as fetch_router
 from app.config import settings
 from app.db import Base, engine
 from app.models import Competitor  # noqa: F401  # 确保模型被注册到 Base
@@ -22,6 +23,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
 app.include_router(competitors_router)
+app.include_router(fetch_router)
 
 
 @app.get("/health")
