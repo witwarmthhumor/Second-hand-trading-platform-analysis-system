@@ -201,12 +201,13 @@ async def test_approve_wrong_token_keeps_blocked(client, _reset_cost):
     finally:
         fetch_service.get_provider = orig
 
-    # 错误令牌
+    # 错误令牌：返回 400（明确失败），熔断保持
     bad = await client.post("/api/cost/approve", json={"token": "wrong"})
-    assert bad.json()["blocked"] is True
+    assert bad.status_code == 400
 
-    # 正确令牌
+    # 正确令牌：放行成功，解除熔断
     good = await client.post("/api/cost/approve", json={"token": real_token})
+    assert good.status_code == 200
     assert good.json()["blocked"] is False
 
 

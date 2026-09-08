@@ -1,13 +1,18 @@
 """抓取与校对 API。"""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crawler.fetcher import UnsafeUrlError
 from app.db import get_session
 from app.models.competitor import Competitor, DataStatus
 from app.schemas.competitor import CompetitorOut
 from app.services.fetch_service import CostLimitExceeded, create_draft_from_url
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/fetch", tags=["fetch"])
 
@@ -38,8 +43,15 @@ async def fetch_competitor(
                 "message": "LLM 调用预估费用已超过限额，是否同意继续本次调用？",
             },
         ) from exc
+    except UnsafeUrlError as exc:
+        # URL 未通过 SSRF 校验，返回明确的 400
+        raise HTTPException(status_code=400, detail=f"URL 不合法: {exc}") from exc
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"抓取或提炼失败: {exc}") from exc
+        # 内部异常不外透细节，记录日志后返回通用提示
+        logger.exception("抓取或提炼失败: %s", payload.url)
+        raise HTTPException(
+            status_code=502, detail="抓取或提炼失败，请稍后重试"
+        ) from exc
 
 
 @router.post("/{competitor_id}/approve", response_model=CompetitorOut)

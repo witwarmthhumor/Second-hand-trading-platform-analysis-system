@@ -5,7 +5,7 @@
 - POST /api/cost/reset   ：重置累计（清零重新累计）
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.ai.cost import get_cost_tracker
@@ -33,9 +33,17 @@ async def cost_status() -> CostStatus:
 
 @router.post("/approve", response_model=CostStatus)
 async def approve_call(payload: ApproveRequest) -> CostStatus:
-    """用户同意后放行一次 LLM 调用。token 无效或未熔断时返回 false（保持原状）。"""
+    """用户同意后放行一次 LLM 调用。
+
+    token 无效或当前未熔断时返回 400（明确失败），避免调用方误判为放行成功。
+    """
     tracker = get_cost_tracker()
-    tracker.approve(payload.token)
+    ok = tracker.approve(payload.token)
+    if not ok:
+        raise HTTPException(
+            status_code=400,
+            detail="审批令牌无效或当前无需放行（未熔断）",
+        )
     return CostStatus(**tracker.status())
 
 

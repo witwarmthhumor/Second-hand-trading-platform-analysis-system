@@ -4,13 +4,14 @@
 供建库脚本与问答服务共用。
 
 持久化策略：Chroma 存向量 + 原文；BM25 需要的分词结果与 doc_id 列表
-单独 pickle 到 ``vector_store/bm25_index.pkl``，保证服务重启后可完整恢复
-混合检索（而非退化为纯向量）。
+单独以 JSON 序列化到 ``vector_store/bm25_index.json``，保证服务重启后可完整
+恢复混合检索（而非退化为纯向量）。用 JSON 而非 pickle，避免不可信反序列化
+带来的 RCE 隐患（数据本身只是字符串列表，无需 pickle）。
 """
 
 from __future__ import annotations
 
-import pickle
+import json
 from typing import Any
 
 import chromadb
@@ -27,7 +28,7 @@ from app.rag.config import (
     VECTOR_STORE_DIR,
 )
 
-_BM25_PKL = VECTOR_STORE_DIR / "bm25_index.pkl"
+_BM25_JSON = VECTOR_STORE_DIR / "bm25_index.json"
 
 
 # ---------------------------------------------------------------------------
@@ -79,6 +80,7 @@ class HybridRetriever:
     """向量 + BM25 + RRF 混合检索，封装 Chroma 建库与查询。"""
 
     def __init__(self) -> None:
+        # chromadb 未提供完整类型桩，标注 Any 保留类型检查入口；实际为 PersistentClient
         self._client: Any = chromadb.PersistentClient(path=str(VECTOR_STORE_DIR))
         self._collection: Any = None
         self._bm25: BM25Index | None = None
@@ -90,7 +92,7 @@ class HybridRetriever:
     def build(self, chunks: list, embeddings: list[list[float]]) -> int:
         """用分块 + embedding 重建 Chroma 库与 BM25 索引，返回入库 chunk 数。
 
-        幂等：同名集合先删后建；BM25 分词结果 pickle 落盘供重启恢复。
+        幂等：同名集合先删后建；BM25 分词结果 JSON 落盘供重启恢复。
         """
         import contextlib
 
@@ -111,10 +113,12 @@ class HybridRetriever:
                 documents=texts[i:end],
             )
 
-        # 持久化 BM25 所需的分词结果与 doc_id 列表
+        # 持久化 BM25 所需的分词结果与 doc_id 列表（JSON，非 pickle）
         VECTOR_STORE_DIR.mkdir(parents=True, exist_ok=True)
-        with open(_BM25_PKL, "wb") as f:
-            pickle.dump({"doc_ids": doc_ids, "tokens": tokens}, f)
+        _BM25_JSON.write_text(
+            json.dumps({"doc_ids": doc_ids, "tokens": tokens}, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
         self._collection = col
         self._doc_ids = doc_ids
@@ -134,11 +138,10 @@ class HybridRetriever:
             return False
 
         self._collection = col
-        # 恢复 BM25 索引（分词结果 pickle 存在才完整恢复，否则退化为纯向量）
-        if _BM25_PKL.exists():
+        # 恢复 BM25 索引（分词结果 JSON 存在才完整恢复，否则退化为纯向量）
+        if _BM25_JSON.exists():
             try:
-                with open(_BM25_PKL, "rb") as f:
-                    data = pickle.load(f)
+                data = json.loads(_BM25_JSON.read_text(encoding="utf-8"))
                 self._doc_ids = data["doc_ids"]
                 self._bm25 = BM25Index(data["tokens"])
             except Exception:
