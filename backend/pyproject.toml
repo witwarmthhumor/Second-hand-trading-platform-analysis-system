@@ -1,7 +1,7 @@
 [project]
 name = "competitor-analysis-backend"
 version = "0.1.0"
-description = "古玩·近代钱币 竞品分析系统 - 后端"
+description = "二手交易平台分析系统 - 后端"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
@@ -12,6 +12,12 @@ dependencies = [
     "pydantic-settings>=2.3",
     "alembic>=1.13",
     "beautifulsoup4>=4.12",
+    # ---- RAG 检索依赖（二手交易知识库问答）----
+    "chromadb>=1.5",
+    "rank-bm25>=0.2.2",
+    "jieba>=0.42",
+    "numpy>=2.0",
+    "pyyaml>=6.0",
 ]
 
 [dependency-groups]

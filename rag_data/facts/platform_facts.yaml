@@ -1,0 +1,91 @@
+# =============================================================================
+# RAGreflow 事实底座 · platform_facts.yaml
+# 唯一事实源：全库所有「规则性数字」（费率/时限/阈值/扣分节点）只允许来自本文件。
+# 生成器只准引用，不准改写；修改本文件必须全库重新校验。
+# 品牌为虚构品牌，所有数字均为虚构示例数据。
+# =============================================================================
+
+platform:
+  name: 回流二手
+  en_name: RAGreflow
+  version_batch: "v3.2"
+  demo_notice: 本文档为 RAGreflow 演示知识库虚构文件
+
+trade:
+  seller_ship_deadline_hours: 48        # 卖家发货时限
+  auto_confirm_days_normal: 10          # 普通快递自动确认收货
+  auto_confirm_days_inspected: 15       # 走平台验货的自动确认
+  after_sale_window_days: 15            # 确认收货后售后窗口
+  buyer_cancel_unpaid_hours: 24         # 未付款订单自动关闭
+  face_to_face_allowed: true
+
+inspection:
+  report_deadline_hours: 48             # 验机仓签收后出报告时限
+  recheck_apply_hours: 72               # 对报告有异议申请复检时限
+  buyer_bear_shipping_when_pass: true   # 验货通过后寄回买家的运费由买家承担
+  categories_required: [手机, 平板电脑, 笔记本电脑, 相机与镜头, 智能手表与穿戴, 游戏主机与游戏, 奢侈品箱包, 腕表, 黄金珠宝]
+  # ↑ 强制走平台验货的品类（9 个），是 14 个手册品类的子集，键名与 category_mapping 保持一致
+
+fee:
+  charge_target: seller
+  rates_by_category:                    # 技术服务费（按成交额，向卖家收取）
+    手机数码: 0.010
+    电脑办公: 0.015
+    相机影音: 0.020
+    奢侈品: 0.030
+    服饰鞋包: 0.020
+    图书音像: 0.010
+    家居家电: 0.015
+    其他: 0.020
+  min_fee_yuan: 0.1
+  settlement: T+1                       # 确认收货后货款入账
+  withdraw_arrive: T+1                  # 提现到账
+  deposit_yuan:
+    personal_seller: 0
+    pro_seller: 500
+
+category_mapping:                     # 品类口径唯一对应表：手册品类(14+1) ↔ 费率类目(8) ↔ 强制验货(9)
+  # 键 = D 类手册品类名（与种子 CSV 的 series=D-xxx 后缀一致）；fee_group 取 rates_by_category 的键
+  手机:             {fee_group: 手机数码, must_inspect: true}
+  平板电脑:         {fee_group: 手机数码, must_inspect: true}
+  笔记本电脑:       {fee_group: 电脑办公, must_inspect: true}
+  台式机与配件:     {fee_group: 电脑办公, must_inspect: false}
+  相机与镜头:       {fee_group: 相机影音, must_inspect: true}
+  智能手表与穿戴:   {fee_group: 手机数码, must_inspect: true}
+  游戏主机与游戏:   {fee_group: 手机数码, must_inspect: true}
+  无线耳机与音频:   {fee_group: 手机数码, must_inspect: false}
+  奢侈品箱包:       {fee_group: 奢侈品,   must_inspect: true}
+  腕表:             {fee_group: 奢侈品,   must_inspect: true}
+  黄金珠宝:         {fee_group: 奢侈品,   must_inspect: true}
+  运动鞋服:         {fee_group: 服饰鞋包, must_inspect: false}
+  图书:             {fee_group: 图书音像, must_inspect: false}
+  小家电:           {fee_group: 家居家电, must_inspect: false}
+  跨品类通用:       {fee_group: 按商品实际所属品类取费率, must_inspect: false}
+
+penalty:                              # 违规扣分累计制：周期 365 天滚动清零，累计 48 分封顶
+  cycle_days: 365                     # 扣分周期，到期清零
+  cap_score: 48                       # 单周期累计扣分上限
+  warn_at: 12                         # 累计达 12 分：站内警告
+  limit_traffic_days_at_24: 7         # 累计达 24 分：限流 7 天
+  ban_days_at_36: 30                  # 累计达 36 分：封禁 30 天
+  permanent_ban_at: 48                # 累计达 48 分：永久封禁
+
+credit:
+  initial_score: 800
+  min_score: 350
+  max_score: 950
+  shop_score_dimensions: [商品质量分, 服务态度分, 物流履约分, 纠纷率]
+
+arbitration:
+  first_response_minutes: 3
+  platform_intervene_deadline_hours: 72
+  complex_case_workdays: 5
+  evidence_types: [订单快照, 商品图片视频, 聊天记录, 物流凭证, 质检报告, 付款凭证]
+
+grades:                               # 全平台统一成色框架（grading_facts 细化到品类）
+  - {code: N,  name: 全新,    desc: 未拆封未使用，配件包装齐全}
+  - {code: S,  name: 99新,   desc: 极少使用痕迹，功能全部正常，无维修史}
+  - {code: A,  name: 95新,   desc: 轻微使用痕迹，无功能缺陷，无拆修}
+  - {code: B,  name: 9成新,  desc: 正常使用痕迹，允许极轻微外观瑕疵}
+  - {code: C,  name: 8成新,  desc: 明显使用痕迹或轻微磕碰，功能正常}
+  - {code: D,  name: 7成新及以下, desc: 较重磨损/局部功能瑕疵，必须显著披露}

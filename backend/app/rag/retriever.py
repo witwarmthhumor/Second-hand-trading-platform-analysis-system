@@ -1,0 +1,223 @@
+"""混合检索：Chroma 向量 + BM25（jieba 分词 + glossary 词典）+ RRF 融合。
+
+迁移自 RAGreflow-second-hand 的 ``retrieval_eval/__main__.py``，抽成可复用类，
+供建库脚本与问答服务共用。
+
+持久化策略：Chroma 存向量 + 原文；BM25 需要的分词结果与 doc_id 列表
+单独 pickle 到 ``vector_store/bm25_index.pkl``，保证服务重启后可完整恢复
+混合检索（而非退化为纯向量）。
+"""
+
+from __future__ import annotations
+
+import pickle
+from typing import Any
+
+import chromadb
+import jieba
+import yaml
+from rank_bm25 import BM25Okapi
+
+from app.rag.config import (
+    CHROMA_ADD_BATCH,
+    CHROMA_COLLECTION,
+    FACTS_DIR,
+    QUERY_N_RESULTS,
+    RRF_K,
+    VECTOR_STORE_DIR,
+)
+
+_BM25_PKL = VECTOR_STORE_DIR / "bm25_index.pkl"
+
+
+# ---------------------------------------------------------------------------
+# BM25
+# ---------------------------------------------------------------------------
+
+
+def _tokenize(text: str) -> list[str]:
+    return [t for t in jieba.cut(text) if t.strip()]
+
+
+def _load_glossary_terms() -> list[str]:
+    """glossary.yaml 的同义词词条加入 jieba 词典，避免「担保交易」等被切碎。"""
+    g = FACTS_DIR / "glossary.yaml"
+    if not g.exists():
+        return []
+    data = yaml.safe_load(g.read_text(encoding="utf-8")) or {}
+    terms = list((data.get("synonyms") or {}).keys())
+    for v in (data.get("synonyms") or {}).values():
+        terms.extend(v)
+    return terms
+
+
+def _add_glossary_to_jieba() -> None:
+    """glossary 词条加入 jieba 自定义词典（幂等）。"""
+    for term in _load_glossary_terms():
+        jieba.add_word(term, freq=1000)
+
+
+class BM25Index:
+    """BM25Okapi + jieba 分词，glossary 词条加入自定义词典。"""
+
+    def __init__(self, docs_tokens: list[list[str]]):
+        _add_glossary_to_jieba()
+        self._bm25 = BM25Okapi(docs_tokens)
+
+    def search(self, query: str, top_n: int) -> list[tuple[int, float]]:
+        scores = self._bm25.get_scores(_tokenize(query))
+        ranked = sorted(enumerate(scores), key=lambda x: -x[1])[:top_n]
+        return [(i, float(s)) for i, s in ranked if s > 0]
+
+
+# ---------------------------------------------------------------------------
+# 混合检索器
+# ---------------------------------------------------------------------------
+
+
+class HybridRetriever:
+    """向量 + BM25 + RRF 混合检索，封装 Chroma 建库与查询。"""
+
+    def __init__(self) -> None:
+        self._client: Any = chromadb.PersistentClient(path=str(VECTOR_STORE_DIR))
+        self._collection: Any = None
+        self._bm25: BM25Index | None = None
+        self._doc_ids: list[str] = []
+        self._ready = False
+
+    # ---- 建库 ----
+
+    def build(self, chunks: list, embeddings: list[list[float]]) -> int:
+        """用分块 + embedding 重建 Chroma 库与 BM25 索引，返回入库 chunk 数。
+
+        幂等：同名集合先删后建；BM25 分词结果 pickle 落盘供重启恢复。
+        """
+        import contextlib
+
+        texts = [c.text for c in chunks]
+        doc_ids = [c.doc_id for c in chunks]
+        tokens = [_tokenize(t) for t in texts]
+
+        with contextlib.suppress(Exception):
+            self._client.delete_collection(CHROMA_COLLECTION)
+        col = self._client.get_or_create_collection(
+            CHROMA_COLLECTION, metadata={"hnsw:space": "cosine"}
+        )
+        for i in range(0, len(chunks), CHROMA_ADD_BATCH):
+            end = min(i + CHROMA_ADD_BATCH, len(chunks))
+            col.add(
+                ids=[f"c{k}" for k in range(i, end)],
+                embeddings=embeddings[i:end],
+                documents=texts[i:end],
+            )
+
+        # 持久化 BM25 所需的分词结果与 doc_id 列表
+        VECTOR_STORE_DIR.mkdir(parents=True, exist_ok=True)
+        with open(_BM25_PKL, "wb") as f:
+            pickle.dump({"doc_ids": doc_ids, "tokens": tokens}, f)
+
+        self._collection = col
+        self._doc_ids = doc_ids
+        self._bm25 = BM25Index(tokens)
+        self._ready = True
+        return len(chunks)
+
+    # ---- 加载已有库 ----
+
+    def load(self) -> bool:
+        """加载已持久化的 Chroma 库与 BM25 索引；库不存在返回 False。"""
+        if not VECTOR_STORE_DIR.exists():
+            return False
+        try:
+            col = self._client.get_collection(CHROMA_COLLECTION)
+        except Exception:
+            return False
+
+        self._collection = col
+        # 恢复 BM25 索引（分词结果 pickle 存在才完整恢复，否则退化为纯向量）
+        if _BM25_PKL.exists():
+            try:
+                with open(_BM25_PKL, "rb") as f:
+                    data = pickle.load(f)
+                self._doc_ids = data["doc_ids"]
+                self._bm25 = BM25Index(data["tokens"])
+            except Exception:
+                self._bm25 = None
+                self._doc_ids = []
+        else:
+            self._bm25 = None
+            self._doc_ids = []
+        self._ready = True
+        return True
+
+    # ---- 查询 ----
+
+    @property
+    def is_ready(self) -> bool:
+        return self._ready
+
+    def search(self, query: str, top_k: int) -> list[dict]:
+        """混合检索，返回 top_k 条结果，每项含 doc_id/title/text/rrf_score/vector_sim。"""
+        if self._collection is None:
+            raise RuntimeError("向量库未就绪，请先运行 build_vector_store.py")
+
+        from app.rag.embedding import query_embedding
+
+        qemb = query_embedding(query)
+
+        # ① 向量检索
+        vres = self._collection.query(query_embeddings=[qemb], n_results=QUERY_N_RESULTS)
+        v_scores: dict[int, float] = {}
+        v_texts: dict[int, str] = {}
+        for cid, dist, doc in zip(
+            vres["ids"][0], vres["distances"][0], vres["documents"][0], strict=False
+        ):
+            pos = int(cid[1:])  # "c123" -> 123
+            v_scores[pos] = 1.0 - float(dist)  # cosine distance → similarity
+            v_texts[pos] = doc
+
+        # ② BM25 检索（索引存在时）
+        b_scores: dict[int, float] = {}
+        if self._bm25 is not None:
+            for i, s in self._bm25.search(query, top_n=QUERY_N_RESULTS):
+                b_scores[i] = s
+                if i not in v_texts:
+                    v_texts[i] = self._collection.get(ids=[f"c{i}"])["documents"][0]
+
+        # ③ RRF 融合（k=60）
+        rrf: dict[int, float] = {}
+        for rank, pos in enumerate(
+            sorted(v_scores, key=lambda k: -v_scores[k])[:QUERY_N_RESULTS], 1
+        ):
+            rrf[pos] = rrf.get(pos, 0.0) + 1.0 / (RRF_K + rank)
+        for rank, pos in enumerate(
+            sorted(b_scores, key=lambda k: -b_scores[k])[:QUERY_N_RESULTS], 1
+        ):
+            rrf[pos] = rrf.get(pos, 0.0) + 1.0 / (RRF_K + rank)
+
+        ranked = sorted(rrf.items(), key=lambda x: -x[1])[:top_k]
+        results: list[dict] = []
+        for pos, score in ranked:
+            results.append(
+                {
+                    "doc_id": self._doc_ids[pos] if pos < len(self._doc_ids) else f"c{pos}",
+                    "text": v_texts.get(pos, ""),
+                    "rrf_score": round(score, 6),
+                    "vector_sim": round(v_scores.get(pos, 0.0), 4),
+                }
+            )
+        return results
+
+
+# 全局单例（进程内复用，避免重复建 BM25/加载 Chroma）
+_retriever: HybridRetriever | None = None
+
+
+def get_retriever() -> HybridRetriever:
+    """惰性单例；首次访问时若库已存在则自动加载。"""
+    global _retriever
+    if _retriever is None:
+        _retriever = HybridRetriever()
+        if not _retriever.load():
+            _retriever = HybridRetriever()  # 库未建，保持未就绪状态
+    return _retriever

@@ -420,11 +420,43 @@ async function saveDims() {
   }
 }
 
+// —— RAG 知识库问答 ——
+const ragQuestion = ref('')
+const ragAnswer = ref(null) // { answer, mode, sources }
+const ragLoading = ref(false)
+const ragReady = ref(null) // null=未知, true/false
+
+async function loadRagStatus() {
+  try {
+    const r = await competitorApi.ragStatus()
+    ragReady.value = r.ready
+  } catch (e) {
+    ragReady.value = false
+  }
+}
+
+async function doAsk() {
+  const q = ragQuestion.value.trim()
+  if (!q) {
+    ElMessage.warning('请输入问题')
+    return
+  }
+  ragLoading.value = true
+  try {
+    ragAnswer.value = await competitorApi.ragAsk(q)
+  } catch (e) {
+    ElMessage.error(e.message)
+  } finally {
+    ragLoading.value = false
+  }
+}
+
 onMounted(() => {
   fetchList()
   fetchPending()
   loadDims()
   loadCostStatus()
+  loadRagStatus()
 })
 </script>
 
@@ -440,6 +472,7 @@ onMounted(() => {
         <el-tab-pane label="待校对" name="pending" />
         <el-tab-pane label="录入竞品" name="form" />
         <el-tab-pane label="对比" name="compare" />
+        <el-tab-pane label="知识库问答" name="rag" />
         <el-tab-pane label="设置" name="settings" />
       </el-tabs>
     </el-header>
@@ -702,6 +735,55 @@ onMounted(() => {
         <el-empty v-else-if="!compareLoading" description="请在列表页勾选至少 2 个竞品进行对比" />
       </div>
 
+      <!-- 知识库问答页 -->
+      <div v-else-if="activeTab === 'rag'" class="rag-wrap">
+        <el-alert
+          v-if="ragReady === false"
+          title="知识库尚未就绪，请先在后端运行建库脚本（scripts/build_vector_store.py）生成向量库。"
+          type="warning"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 16px"
+        />
+        <div class="card">
+          <h3 class="card-title">二手交易知识库问答</h3>
+          <p class="rag-tip">
+            基于二手交易知识库（规则制度 / 买卖指南 / 验货质检 / 售后仲裁 / 案例 / 公告，共约 1000 篇语料）
+            的检索式问答。命中知识库时直接返回原文并标注来源；未命中时由大模型兜底回答。
+          </p>
+          <div class="rag-input">
+            <el-input
+              v-model="ragQuestion"
+              placeholder="例如：忘记密码怎么办 / 卖家入驻需要什么资质 / 验机流程是什么"
+              clearable
+              @keyup.enter="doAsk"
+            />
+            <el-button type="primary" :loading="ragLoading" @click="doAsk">提问</el-button>
+          </div>
+        </div>
+
+        <div v-if="ragAnswer" class="card rag-answer">
+          <div class="rag-mode">
+            <el-tag :type="ragAnswer.mode === 'hit' ? 'success' : 'warning'" size="small">
+              {{ ragAnswer.mode === 'hit' ? '知识库命中' : '大模型兜底' }}
+            </el-tag>
+            <span class="rag-q">Q：{{ ragAnswer.question }}</span>
+          </div>
+          <div class="rag-body">{{ ragAnswer.answer }}</div>
+          <div v-if="ragAnswer.sources && ragAnswer.sources.length" class="rag-sources">
+            <h4>来源参考</h4>
+            <ul>
+              <li v-for="(s, i) in ragAnswer.sources" :key="i">
+                <el-tag size="small" type="info">{{ s.doc_id }}</el-tag>
+                <b>{{ s.title }}</b>
+                <span class="rag-score">相关度 {{ (s.score * 100).toFixed(1) }}%</span>
+                <p>{{ s.text }}</p>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
       <!-- 设置页 -->
       <div v-else-if="activeTab === 'settings'" class="form-wrap">
         <h3 class="section">评分维度配置</h3>
@@ -871,6 +953,72 @@ body {
 .radar {
   width: 100%;
   height: 420px;
+}
+.rag-wrap {
+  max-width: 900px;
+}
+.rag-tip {
+  color: #909399;
+  font-size: 13px;
+  margin: 0 0 16px;
+  line-height: 1.6;
+}
+.rag-input {
+  display: flex;
+  gap: 10px;
+}
+.rag-answer {
+  border-left: 3px solid #409eff;
+}
+.rag-mode {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.rag-q {
+  color: #303133;
+  font-weight: 600;
+}
+.rag-body {
+  white-space: pre-wrap;
+  line-height: 1.8;
+  color: #303133;
+  background: #f5f7fa;
+  border-radius: 4px;
+  padding: 14px 16px;
+}
+.rag-sources {
+  margin-top: 16px;
+  border-top: 1px dashed #ebeef5;
+  padding-top: 12px;
+}
+.rag-sources h4 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #909399;
+}
+.rag-sources ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.rag-sources li {
+  margin-bottom: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.rag-sources li p {
+  margin: 4px 0 0;
+  color: #606266;
+  background: #fafafa;
+  padding: 8px 10px;
+  border-radius: 4px;
+}
+.rag-score {
+  color: #909399;
+  font-size: 12px;
+  margin-left: 8px;
 }
 .dims-list {
   margin-bottom: 12px;

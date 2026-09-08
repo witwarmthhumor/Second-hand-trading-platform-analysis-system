@@ -14,6 +14,7 @@ venv/
 node_modules/
 dist/
 .vite/
+vite.config.js.timestamp-*.mjs
 
 # 数据库数据卷（Docker）
 pgdata/
@@ -33,6 +34,7 @@ backend/reports/
 
 # RAG 向量库与缓存（建库产物，不入库；语料 canonical/faq_source/facts 入库）
 rag_data/vector_store/
+rag_data/emb_cache/
 rag_data/*.npy
 
 # IDE / 编辑器

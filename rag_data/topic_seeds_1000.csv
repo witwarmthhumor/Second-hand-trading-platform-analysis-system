@@ -1,0 +1,1001 @@
+﻿id,l1_category,series,title,template_type,target_format,target_words,facts_dependency,filename
+A-001,平台规则制度,A1 账户与入驻,用户注册规则,rule,PDF,1000-1800字,platform_facts,A-001_用户注册规则.pdf
+A-002,平台规则制度,A1 账户与入驻,用户名与头像规范,rule,PDF,1000-1800字,platform_facts,A-002_用户名与头像规范.pdf
+A-003,平台规则制度,A1 账户与入驻,实名认证规则,rule,PDF,1000-1800字,platform_facts,A-003_实名认证规则.pdf
+A-004,平台规则制度,A1 账户与入驻,个人卖家入驻标准,rule,PDF,1000-1800字,platform_facts,A-004_个人卖家入驻标准.pdf
+A-005,平台规则制度,A1 账户与入驻,专业卖家认证规则,rule,PDF,1000-1800字,platform_facts,A-005_专业卖家认证规则.pdf
+A-006,平台规则制度,A1 账户与入驻,企业卖家入驻与资质要求,rule,PDF,1000-1800字,platform_facts,A-006_企业卖家入驻与资质要求.pdf
+A-007,平台规则制度,A1 账户与入驻,学生认证规则与权益,rule,PDF,1000-1800字,platform_facts,A-007_学生认证规则与权益.pdf
+A-008,平台规则制度,A1 账户与入驻,人脸验证操作与失败处理,rule,PDF,1000-1800字,platform_facts,A-008_人脸验证操作与失败处理.pdf
+A-009,平台规则制度,A1 账户与入驻,实名信息变更规则,rule,PDF,1000-1800字,platform_facts,A-009_实名信息变更规则.pdf
+A-010,平台规则制度,A1 账户与入驻,账号唯一性与多账号管理,rule,PDF,1000-1800字,platform_facts,A-010_账号唯一性与多账号管理.pdf
+A-011,平台规则制度,A1 账户与入驻,账号注销规则与冷静期,rule,PDF,1000-1800字,platform_facts,A-011_账号注销规则与冷静期.pdf
+A-012,平台规则制度,A1 账户与入驻,手机号换绑规则,rule,PDF,1000-1800字,platform_facts,A-012_手机号换绑规则.pdf
+A-013,平台规则制度,A1 账户与入驻,密码与登录安全要求,rule,PDF,1000-1800字,platform_facts,A-013_密码与登录安全要求.pdf
+A-014,平台规则制度,A1 账户与入驻,第三方账号绑定规则,rule,PDF,1000-1800字,platform_facts,A-014_第三方账号绑定规则.pdf
+A-015,平台规则制度,A1 账户与入驻,卖家资质年审规则,rule,PDF,1000-1800字,platform_facts,A-015_卖家资质年审规则.pdf
+A-016,平台规则制度,A1 账户与入驻,资质材料造假处理规则,rule,PDF,1000-1800字,platform_facts,A-016_资质材料造假处理规则.pdf
+A-017,平台规则制度,A1 账户与入驻,未成年人使用与交易限制,rule,PDF,1000-1800字,platform_facts,A-017_未成年人使用与交易限制.pdf
+A-018,平台规则制度,A1 账户与入驻,企业卖家主体变更规则,rule,PDF,1000-1800字,platform_facts,A-018_企业卖家主体变更规则.pdf
+A-019,平台规则制度,A1 账户与入驻,账户异常状态说明,rule,PDF,1000-1800字,platform_facts,A-019_账户异常状态说明.pdf
+A-020,平台规则制度,A1 账户与入驻,用户信息维护规范,rule,PDF,1000-1800字,platform_facts,A-020_用户信息维护规范.pdf
+A-021,平台规则制度,A2 交易基础规则,担保交易总则,rule,PDF,1000-1800字,platform_facts,A-021_担保交易总则.pdf
+A-022,平台规则制度,A2 交易基础规则,商品下单规则,rule,PDF,1000-1800字,platform_facts,A-022_商品下单规则.pdf
+A-023,平台规则制度,A2 交易基础规则,议价与改价规则,rule,PDF,1000-1800字,platform_facts,A-023_议价与改价规则.pdf
+A-024,平台规则制度,A2 交易基础规则,订单备注与约定效力,rule,PDF,1000-1800字,platform_facts,A-024_订单备注与约定效力.pdf
+A-025,平台规则制度,A2 交易基础规则,合并付款规则,rule,PDF,1000-1800字,platform_facts,A-025_合并付款规则.pdf
+A-026,平台规则制度,A2 交易基础规则,订单自动关闭规则,rule,PDF,1000-1800字,platform_facts,A-026_订单自动关闭规则.pdf
+A-027,平台规则制度,A2 交易基础规则,卖家发货时限规则,rule,PDF,1000-1800字,platform_facts,A-027_卖家发货时限规则.pdf
+A-028,平台规则制度,A2 交易基础规则,虚假发货认定规则,rule,PDF,1000-1800字,platform_facts,A-028_虚假发货认定规则.pdf
+A-029,平台规则制度,A2 交易基础规则,物流单号填写规范,rule,PDF,1000-1800字,platform_facts,A-029_物流单号填写规范.pdf
+A-030,平台规则制度,A2 交易基础规则,买家收货确认规则,rule,PDF,1000-1800字,platform_facts,A-030_买家收货确认规则.pdf
+A-031,平台规则制度,A2 交易基础规则,自动确认收货时限规则,rule,PDF,1000-1800字,platform_facts,A-031_自动确认收货时限规则.pdf
+A-032,平台规则制度,A2 交易基础规则,延长收货规则,rule,PDF,1000-1800字,platform_facts,A-032_延长收货规则.pdf
+A-033,平台规则制度,A2 交易基础规则,同城当面交易规则,rule,PDF,1000-1800字,platform_facts,A-033_同城当面交易规则.pdf
+A-034,平台规则制度,A2 交易基础规则,验货服务使用规则,rule,PDF,1000-1800字,platform_facts,A-034_验货服务使用规则.pdf
+A-035,平台规则制度,A2 交易基础规则,平台验机仓流转规则,rule,PDF,1000-1800字,platform_facts,A-035_平台验机仓流转规则.pdf
+A-036,平台规则制度,A2 交易基础规则,交易取消规则,rule,PDF,1000-1800字,platform_facts,A-036_交易取消规则.pdf
+A-037,平台规则制度,A2 交易基础规则,交易关闭与资金处理,rule,PDF,1000-1800字,platform_facts,A-037_交易关闭与资金处理.pdf
+A-038,平台规则制度,A2 交易基础规则,多件商品交易规则,rule,PDF,1000-1800字,platform_facts,A-038_多件商品交易规则.pdf
+A-039,平台规则制度,A2 交易基础规则,定金与预留规则,rule,PDF,1000-1800字,platform_facts,A-039_定金与预留规则.pdf
+A-040,平台规则制度,A2 交易基础规则,赠品与配件认定规则,rule,PDF,1000-1800字,platform_facts,A-040_赠品与配件认定规则.pdf
+A-041,平台规则制度,A2 交易基础规则,商品快照规则,rule,PDF,1000-1800字,platform_facts,A-041_商品快照规则.pdf
+A-042,平台规则制度,A2 交易基础规则,聊天记录作为凭证规则,rule,PDF,1000-1800字,platform_facts,A-042_聊天记录作为凭证规则.pdf
+A-043,平台规则制度,A2 交易基础规则,价格错误与异常订单处理,rule,PDF,1000-1800字,platform_facts,A-043_价格错误与异常订单处理.pdf
+A-044,平台规则制度,A2 交易基础规则,竞价玩法规则,rule,PDF,1000-1800字,platform_facts,A-044_竞价玩法规则.pdf
+A-045,平台规则制度,A2 交易基础规则,一口价与可议价标识规则,rule,PDF,1000-1800字,platform_facts,A-045_一口价与可议价标识规则.pdf
+A-046,平台规则制度,A2 交易基础规则,交易评价时效规则,rule,PDF,1000-1800字,platform_facts,A-046_交易评价时效规则.pdf
+A-047,平台规则制度,A2 交易基础规则,售后窗口期规则,rule,PDF,1000-1800字,platform_facts,A-047_售后窗口期规则.pdf
+A-048,平台规则制度,A2 交易基础规则,跨品类交易差异规则,rule,PDF,1000-1800字,platform_facts,A-048_跨品类交易差异规则.pdf
+A-049,平台规则制度,A2 交易基础规则,批量采购交易规则,rule,PDF,1000-1800字,platform_facts,A-049_批量采购交易规则.pdf
+A-050,平台规则制度,A2 交易基础规则,交易规则名词解释,rule,PDF,1000-1800字,platform_facts,A-050_交易规则名词解释.pdf
+A-051,平台规则制度,A3 费用与结算,技术服务费总则,rule,PDF,1000-1800字,platform_facts,A-051_技术服务费总则.pdf
+A-052,平台规则制度,A3 费用与结算,手机数码品类费率细则,rule,PDF,1000-1800字,platform_facts,A-052_手机数码品类费率细则.pdf
+A-053,平台规则制度,A3 费用与结算,电脑办公品类费率细则,rule,PDF,1000-1800字,platform_facts,A-053_电脑办公品类费率细则.pdf
+A-054,平台规则制度,A3 费用与结算,相机影音品类费率细则,rule,PDF,1000-1800字,platform_facts,A-054_相机影音品类费率细则.pdf
+A-055,平台规则制度,A3 费用与结算,奢侈品品类费率细则,rule,PDF,1000-1800字,platform_facts,A-055_奢侈品品类费率细则.pdf
+A-056,平台规则制度,A3 费用与结算,服饰鞋包品类费率细则,rule,PDF,1000-1800字,platform_facts,A-056_服饰鞋包品类费率细则.pdf
+A-057,平台规则制度,A3 费用与结算,图书音像品类费率细则,rule,PDF,1000-1800字,platform_facts,A-057_图书音像品类费率细则.pdf
+A-058,平台规则制度,A3 费用与结算,家居家电品类费率细则,rule,PDF,1000-1800字,platform_facts,A-058_家居家电品类费率细则.pdf
+A-059,平台规则制度,A3 费用与结算,其他品类费率细则,rule,PDF,1000-1800字,platform_facts,A-059_其他品类费率细则.pdf
+A-060,平台规则制度,A3 费用与结算,服务费计算示例集,rule,PDF,1000-1800字,platform_facts,A-060_服务费计算示例集.pdf
+A-061,平台规则制度,A3 费用与结算,服务费减免与优惠规则,rule,PDF,1000-1800字,platform_facts,A-061_服务费减免与优惠规则.pdf
+A-062,平台规则制度,A3 费用与结算,卖家账单明细规则,rule,PDF,1000-1800字,platform_facts,A-062_卖家账单明细规则.pdf
+A-063,平台规则制度,A3 费用与结算,货款结算周期规则,rule,PDF,1000-1800字,platform_facts,A-063_货款结算周期规则.pdf
+A-064,平台规则制度,A3 费用与结算,担保资金冻结与解冻规则,rule,PDF,1000-1800字,platform_facts,A-064_担保资金冻结与解冻规则.pdf
+A-065,平台规则制度,A3 费用与结算,提现规则,rule,PDF,1000-1800字,platform_facts,A-065_提现规则.pdf
+A-066,平台规则制度,A3 费用与结算,提现到账时效规则,rule,PDF,1000-1800字,platform_facts,A-066_提现到账时效规则.pdf
+A-067,平台规则制度,A3 费用与结算,提现失败处理规则,rule,PDF,1000-1800字,platform_facts,A-067_提现失败处理规则.pdf
+A-068,平台规则制度,A3 费用与结算,退款资金原路退回规则,rule,PDF,1000-1800字,platform_facts,A-068_退款资金原路退回规则.pdf
+A-069,平台规则制度,A3 费用与结算,信用卡与花呗支付退款规则,rule,PDF,1000-1800字,platform_facts,A-069_信用卡与花呗支付退款规则.pdf
+A-070,平台规则制度,A3 费用与结算,发票申请规则,rule,PDF,1000-1800字,platform_facts,A-070_发票申请规则.pdf
+A-071,平台规则制度,A3 费用与结算,电子发票开具规则,rule,PDF,1000-1800字,platform_facts,A-071_电子发票开具规则.pdf
+A-072,平台规则制度,A3 费用与结算,违约金规则,rule,PDF,1000-1800字,platform_facts,A-072_违约金规则.pdf
+A-073,平台规则制度,A3 费用与结算,保证金规则,rule,PDF,1000-1800字,platform_facts,A-073_保证金规则.pdf
+A-074,平台规则制度,A3 费用与结算,对账差异处理规则,rule,PDF,1000-1800字,platform_facts,A-074_对账差异处理规则.pdf
+A-075,平台规则制度,A3 费用与结算,费用规则名词解释,rule,PDF,1000-1800字,platform_facts,A-075_费用规则名词解释.pdf
+A-076,平台规则制度,A4 禁售与限售,禁售商品管理总纲,rule,PDF,1000-1800字,platform_facts,A-076_禁售商品管理总纲.pdf
+A-077,平台规则制度,A4 禁售与限售,限售商品管理总纲,rule,PDF,1000-1800字,platform_facts,A-077_限售商品管理总纲.pdf
+A-078,平台规则制度,A4 禁售与限售,商品发布资质要求总纲,rule,PDF,1000-1800字,platform_facts,A-078_商品发布资质要求总纲.pdf
+A-079,平台规则制度,A4 禁售与限售,盗抢机黑机与ID锁设备禁售细则,rule,PDF,1000-1800字,platform_facts,A-079_盗抢机黑机与ID锁设备禁售细则.pdf
+A-080,平台规则制度,A4 禁售与限售,假冒伪劣与山寨商品禁售细则,rule,PDF,1000-1800字,platform_facts,A-080_假冒伪劣与山寨商品禁售细则.pdf
+A-081,平台规则制度,A4 禁售与限售,医疗器械与药品禁售细则,rule,PDF,1000-1800字,platform_facts,A-081_医疗器械与药品禁售细则.pdf
+A-082,平台规则制度,A4 禁售与限售,保健食品限售细则,rule,PDF,1000-1800字,platform_facts,A-082_保健食品限售细则.pdf
+A-083,平台规则制度,A4 禁售与限售,烟草电子烟与烟具禁售细则,rule,PDF,1000-1800字,platform_facts,A-083_烟草电子烟与烟具禁售细则.pdf
+A-084,平台规则制度,A4 禁售与限售,酒类商品限售细则,rule,PDF,1000-1800字,platform_facts,A-084_酒类商品限售细则.pdf
+A-085,平台规则制度,A4 禁售与限售,食品经营资质与保质期要求,rule,PDF,1000-1800字,platform_facts,A-085_食品经营资质与保质期要求.pdf
+A-086,平台规则制度,A4 禁售与限售,野生动物及制品禁售细则,rule,PDF,1000-1800字,platform_facts,A-086_野生动物及制品禁售细则.pdf
+A-087,平台规则制度,A4 禁售与限售,军警用品与制式装备禁售细则,rule,PDF,1000-1800字,platform_facts,A-087_军警用品与制式装备禁售细则.pdf
+A-088,平台规则制度,A4 禁售与限售,管制刀具与危险器具禁售细则,rule,PDF,1000-1800字,platform_facts,A-088_管制刀具与危险器具禁售细则.pdf
+A-089,平台规则制度,A4 禁售与限售,易燃易爆与危化品禁售细则,rule,PDF,1000-1800字,platform_facts,A-089_易燃易爆与危化品禁售细则.pdf
+A-090,平台规则制度,A4 禁售与限售,个人隐私信息与账号资料禁售细则,rule,PDF,1000-1800字,platform_facts,A-090_个人隐私信息与账号资料禁售细则.pdf
+A-091,平台规则制度,A4 禁售与限售,手机卡流量卡物联卡禁售细则,rule,PDF,1000-1800字,platform_facts,A-091_手机卡流量卡物联卡禁售细则.pdf
+A-092,平台规则制度,A4 禁售与限售,游戏账号与虚拟财产限售细则,rule,PDF,1000-1800字,platform_facts,A-092_游戏账号与虚拟财产限售细则.pdf
+A-093,平台规则制度,A4 禁售与限售,软件激活码与盗版资源禁售细则,rule,PDF,1000-1800字,platform_facts,A-093_软件激活码与盗版资源禁售细则.pdf
+A-094,平台规则制度,A4 禁售与限售,音像图书盗版禁售细则,rule,PDF,1000-1800字,platform_facts,A-094_音像图书盗版禁售细则.pdf
+A-095,平台规则制度,A4 禁售与限售,票务与代金券限售细则,rule,PDF,1000-1800字,platform_facts,A-095_票务与代金券限售细则.pdf
+A-096,平台规则制度,A4 禁售与限售,货币与纪念币禁售细则,rule,PDF,1000-1800字,platform_facts,A-096_货币与纪念币禁售细则.pdf
+A-097,平台规则制度,A4 禁售与限售,金融产品与POS机禁售细则,rule,PDF,1000-1800字,platform_facts,A-097_金融产品与POS机禁售细则.pdf
+A-098,平台规则制度,A4 禁售与限售,封建迷信用品禁售细则,rule,PDF,1000-1800字,platform_facts,A-098_封建迷信用品禁售细则.pdf
+A-099,平台规则制度,A4 禁售与限售,色情低俗与成人用品限售细则,rule,PDF,1000-1800字,platform_facts,A-099_色情低俗与成人用品限售细则.pdf
+A-100,平台规则制度,A4 禁售与限售,赌博相关工具禁售细则,rule,PDF,1000-1800字,platform_facts,A-100_赌博相关工具禁售细则.pdf
+A-101,平台规则制度,A4 禁售与限售,黑客与作弊器材禁售细则,rule,PDF,1000-1800字,platform_facts,A-101_黑客与作弊器材禁售细则.pdf
+A-102,平台规则制度,A4 禁售与限售,改装车辆与报废车件禁售细则,rule,PDF,1000-1800字,platform_facts,A-102_改装车辆与报废车件禁售细则.pdf
+A-103,平台规则制度,A4 禁售与限售,电子烟油与新型烟草禁售细则,rule,PDF,1000-1800字,platform_facts,A-103_电子烟油与新型烟草禁售细则.pdf
+A-104,平台规则制度,A4 禁售与限售,化妆品临期与小样发布细则,rule,PDF,1000-1800字,platform_facts,A-104_化妆品临期与小样发布细则.pdf
+A-105,平台规则制度,A4 禁售与限售,宠物活体交易限制细则,rule,PDF,1000-1800字,platform_facts,A-105_宠物活体交易限制细则.pdf
+A-106,平台规则制度,A4 禁售与限售,跨境商品与海关限制细则,rule,PDF,1000-1800字,platform_facts,A-106_跨境商品与海关限制细则.pdf
+A-107,平台规则制度,A4 禁售与限售,文物与古董限售细则,rule,PDF,1000-1800字,platform_facts,A-107_文物与古董限售细则.pdf
+A-108,平台规则制度,A4 禁售与限售,金银贵金属交易资质细则,rule,PDF,1000-1800字,platform_facts,A-108_金银贵金属交易资质细则.pdf
+A-109,平台规则制度,A4 禁售与限售,无人机与无线电设备限售细则,rule,PDF,1000-1800字,platform_facts,A-109_无人机与无线电设备限售细则.pdf
+A-110,平台规则制度,A4 禁售与限售,电动自行车电池安全发布细则,rule,PDF,1000-1800字,platform_facts,A-110_电动自行车电池安全发布细则.pdf
+A-111,平台规则制度,A4 禁售与限售,窃听偷拍设备禁售细则,rule,PDF,1000-1800字,platform_facts,A-111_窃听偷拍设备禁售细则.pdf
+A-112,平台规则制度,A4 禁售与限售,发票与票据禁售细则,rule,PDF,1000-1800字,platform_facts,A-112_发票与票据禁售细则.pdf
+A-113,平台规则制度,A4 禁售与限售,网络信息服务账号限售细则,rule,PDF,1000-1800字,platform_facts,A-113_网络信息服务账号限售细则.pdf
+A-114,平台规则制度,A4 禁售与限售,培训课程转卖规则,rule,PDF,1000-1800字,platform_facts,A-114_培训课程转卖规则.pdf
+A-115,平台规则制度,A4 禁售与限售,会员代充与共享账号限售细则,rule,PDF,1000-1800字,platform_facts,A-115_会员代充与共享账号限售细则.pdf
+A-116,平台规则制度,A4 禁售与限售,盲盒与福袋发布规则,rule,PDF,1000-1800字,platform_facts,A-116_盲盒与福袋发布规则.pdf
+A-117,平台规则制度,A4 禁售与限售,样品与试用装发布细则,rule,PDF,1000-1800字,platform_facts,A-117_样品与试用装发布细则.pdf
+A-118,平台规则制度,A4 禁售与限售,违禁出版物禁售细则,rule,PDF,1000-1800字,platform_facts,A-118_违禁出版物禁售细则.pdf
+A-119,平台规则制度,A4 禁售与限售,危险品运输限制细则,rule,PDF,1000-1800字,platform_facts,A-119_危险品运输限制细则.pdf
+A-120,平台规则制度,A4 禁售与限售,限售品牌商品清单管理细则,rule,PDF,1000-1800字,platform_facts,A-120_限售品牌商品清单管理细则.pdf
+A-121,平台规则制度,A5 违规处罚与申诉,违规行为分类总则,rule,PDF,1000-1800字,platform_facts,A-121_违规行为分类总则.pdf
+A-122,平台规则制度,A5 违规处罚与申诉,违规扣分规则,rule,PDF,1000-1800字,platform_facts,A-122_违规扣分规则.pdf
+A-123,平台规则制度,A5 违规处罚与申诉,违规节点与处罚阶梯,rule,PDF,1000-1800字,platform_facts,A-123_违规节点与处罚阶梯.pdf
+A-124,平台规则制度,A5 违规处罚与申诉,商品下架与删除规则,rule,PDF,1000-1800字,platform_facts,A-124_商品下架与删除规则.pdf
+A-125,平台规则制度,A5 违规处罚与申诉,搜索降权规则,rule,PDF,1000-1800字,platform_facts,A-125_搜索降权规则.pdf
+A-126,平台规则制度,A5 违规处罚与申诉,账号限流规则,rule,PDF,1000-1800字,platform_facts,A-126_账号限流规则.pdf
+A-127,平台规则制度,A5 违规处罚与申诉,账号封禁规则,rule,PDF,1000-1800字,platform_facts,A-127_账号封禁规则.pdf
+A-128,平台规则制度,A5 违规处罚与申诉,永久封禁认定标准,rule,PDF,1000-1800字,platform_facts,A-128_永久封禁认定标准.pdf
+A-129,平台规则制度,A5 违规处罚与申诉,保证金扣罚规则,rule,PDF,1000-1800字,platform_facts,A-129_保证金扣罚规则.pdf
+A-130,平台规则制度,A5 违规处罚与申诉,刷单炒信认定与处罚,rule,PDF,1000-1800字,platform_facts,A-130_刷单炒信认定与处罚.pdf
+A-131,平台规则制度,A5 违规处罚与申诉,虚假交易治理规则,rule,PDF,1000-1800字,platform_facts,A-131_虚假交易治理规则.pdf
+A-132,平台规则制度,A5 违规处罚与申诉,站外引流处罚规则,rule,PDF,1000-1800字,platform_facts,A-132_站外引流处罚规则.pdf
+A-133,平台规则制度,A5 违规处罚与申诉,恶意退款治理规则,rule,PDF,1000-1800字,platform_facts,A-133_恶意退款治理规则.pdf
+A-134,平台规则制度,A5 违规处罚与申诉,敲诈勒索交易对方处理规则,rule,PDF,1000-1800字,platform_facts,A-134_敲诈勒索交易对方处理规则.pdf
+A-135,平台规则制度,A5 违规处罚与申诉,骚扰与言语违规处理,rule,PDF,1000-1800字,platform_facts,A-135_骚扰与言语违规处理.pdf
+A-136,平台规则制度,A5 违规处罚与申诉,假货处罚与消费者赔付,rule,PDF,1000-1800字,platform_facts,A-136_假货处罚与消费者赔付.pdf
+A-137,平台规则制度,A5 违规处罚与申诉,违规图片与描述治理,rule,PDF,1000-1800字,platform_facts,A-137_违规图片与描述治理.pdf
+A-138,平台规则制度,A5 违规处罚与申诉,重复铺货治理规则,rule,PDF,1000-1800字,platform_facts,A-138_重复铺货治理规则.pdf
+A-139,平台规则制度,A5 违规处罚与申诉,价格违规治理,rule,PDF,1000-1800字,platform_facts,A-139_价格违规治理.pdf
+A-140,平台规则制度,A5 违规处罚与申诉,违规行为合并处理规则,rule,PDF,1000-1800字,platform_facts,A-140_违规行为合并处理规则.pdf
+A-141,平台规则制度,A5 违规处罚与申诉,申诉总则与时效,rule,PDF,1000-1800字,platform_facts,A-141_申诉总则与时效.pdf
+A-142,平台规则制度,A5 违规处罚与申诉,线上申诉操作规则,rule,PDF,1000-1800字,platform_facts,A-142_线上申诉操作规则.pdf
+A-143,平台规则制度,A5 违规处罚与申诉,申诉证据材料要求,rule,PDF,1000-1800字,platform_facts,A-143_申诉证据材料要求.pdf
+A-144,平台规则制度,A5 违规处罚与申诉,处罚复核规则,rule,PDF,1000-1800字,platform_facts,A-144_处罚复核规则.pdf
+A-145,平台规则制度,A5 违规处罚与申诉,误判申诉撤销处理,rule,PDF,1000-1800字,platform_facts,A-145_误判申诉撤销处理.pdf
+A-146,平台规则制度,A5 违规处罚与申诉,处罚期间在途交易处理,rule,PDF,1000-1800字,platform_facts,A-146_处罚期间在途交易处理.pdf
+A-147,平台规则制度,A5 违规处罚与申诉,信用修复规则,rule,PDF,1000-1800字,platform_facts,A-147_信用修复规则.pdf
+A-148,平台规则制度,A5 违规处罚与申诉,累犯加重规则,rule,PDF,1000-1800字,platform_facts,A-148_累犯加重规则.pdf
+A-149,平台规则制度,A5 违规处罚与申诉,团伙作弊认定规则,rule,PDF,1000-1800字,platform_facts,A-149_团伙作弊认定规则.pdf
+A-150,平台规则制度,A5 违规处罚与申诉,违规记录保留规则,rule,PDF,1000-1800字,platform_facts,A-150_违规记录保留规则.pdf
+A-151,平台规则制度,A5 违规处罚与申诉,主动报备与从轻规则,rule,PDF,1000-1800字,platform_facts,A-151_主动报备与从轻规则.pdf
+A-152,平台规则制度,A5 违规处罚与申诉,买家违规处理规则,rule,PDF,1000-1800字,platform_facts,A-152_买家违规处理规则.pdf
+A-153,平台规则制度,A5 违规处罚与申诉,卖家违规处理规则,rule,PDF,1000-1800字,platform_facts,A-153_卖家违规处理规则.pdf
+A-154,平台规则制度,A5 违规处罚与申诉,违规处罚名词解释,rule,PDF,1000-1800字,platform_facts,A-154_违规处罚名词解释.pdf
+A-155,平台规则制度,A5 违规处罚与申诉,申诉结果执行规则,rule,PDF,1000-1800字,platform_facts,A-155_申诉结果执行规则.pdf
+A-156,平台规则制度,A6 信用与评价,信用分体系总则,rule,PDF,1000-1800字,platform_facts,A-156_信用分体系总则.pdf
+A-157,平台规则制度,A6 信用与评价,信用分加分规则,rule,PDF,1000-1800字,platform_facts,A-157_信用分加分规则.pdf
+A-158,平台规则制度,A6 信用与评价,信用分扣减规则,rule,PDF,1000-1800字,platform_facts,A-158_信用分扣减规则.pdf
+A-159,平台规则制度,A6 信用与评价,信用等级与权益,rule,PDF,1000-1800字,platform_facts,A-159_信用等级与权益.pdf
+A-160,平台规则制度,A6 信用与评价,卖家店铺分构成,rule,PDF,1000-1800字,platform_facts,A-160_卖家店铺分构成.pdf
+A-161,平台规则制度,A6 信用与评价,商品质量分规则,rule,MD,1000-1800字,platform_facts,A-161_商品质量分规则.md
+A-162,平台规则制度,A6 信用与评价,服务态度分规则,rule,MD,1000-1800字,platform_facts,A-162_服务态度分规则.md
+A-163,平台规则制度,A6 信用与评价,物流履约分规则,rule,MD,1000-1800字,platform_facts,A-163_物流履约分规则.md
+A-164,平台规则制度,A6 信用与评价,回复率与回复时长考核,rule,MD,1000-1800字,platform_facts,A-164_回复率与回复时长考核.md
+A-165,平台规则制度,A6 信用与评价,纠纷率考核规则,rule,MD,1000-1800字,platform_facts,A-165_纠纷率考核规则.md
+A-166,平台规则制度,A6 信用与评价,评价发布规则,rule,MD,1000-1800字,platform_facts,A-166_评价发布规则.md
+A-167,平台规则制度,A6 信用与评价,好评中评差评认定,rule,MD,1000-1800字,platform_facts,A-167_好评中评差评认定.md
+A-168,平台规则制度,A6 信用与评价,追评规则,rule,MD,1000-1800字,platform_facts,A-168_追评规则.md
+A-169,平台规则制度,A6 信用与评价,评价图片视频规范,rule,MD,1000-1800字,platform_facts,A-169_评价图片视频规范.md
+A-170,平台规则制度,A6 信用与评价,恶意评价认定,rule,MD,1000-1800字,platform_facts,A-170_恶意评价认定.md
+A-171,平台规则制度,A6 信用与评价,评价申诉与删除,rule,MD,1000-1800字,platform_facts,A-171_评价申诉与删除.md
+A-172,平台规则制度,A6 信用与评价,卖家回复评价规则,rule,MD,1000-1800字,platform_facts,A-172_卖家回复评价规则.md
+A-173,平台规则制度,A6 信用与评价,评价折叠与排序,rule,MD,1000-1800字,platform_facts,A-173_评价折叠与排序.md
+A-174,平台规则制度,A6 信用与评价,刷好评治理规则,rule,MD,1000-1800字,platform_facts,A-174_刷好评治理规则.md
+A-181,平台规则制度,A7 信息安全与隐私,隐私政策摘要,rule,MD,1000-1800字,platform_facts,A-181_隐私政策摘要.md
+D-001,验货质检手册,D-手机,手机质检流程总览,inspection,PDF,1200-2200字,grading_facts,D-001_手机质检流程总览.pdf
+D-081,验货质检手册,D-台式机与配件,主板质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-081_主板质检分册：检测要点与典型问题.pdf
+D-161,验货质检手册,D-游戏主机与游戏,游戏主机与游戏拒收与必拒情形清单,inspection,PDF,1200-2200字,grading_facts,D-161_游戏主机与游戏拒收与必拒情形清单.pdf
+D-241,验货质检手册,D-黄金珠宝,镶嵌牢固度质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-241_镶嵌牢固度质检分册：检测要点与典型问题.md
+B-001,买家指南,B1 新手上路,注册与登录,guide,MD,800-1400字,mixed,B-001_注册与登录.md
+B-056,买家指南,B3 支付与担保,付款后卖家能看到什么,guide,MD,800-1400字,mixed,B-056_付款后卖家能看到什么.md
+B-111,买家指南,B6 退款与维权,仅退款与退货退款区别,guide,MD,800-1400字,mixed,B-111_仅退款与退货退款区别.md
+B-166,买家指南,B7 防骗与安全,假平台短信,guide,MD,800-1400字,mixed,B-166_假平台短信.md
+C-001,卖家指南,C1 入驻与开店,卖家入驻流程,guide,MD,800-1400字,mixed,C-001_卖家入驻流程.md
+C-051,卖家指南,C2 商品发布,支持验货设置,guide,MD,800-1400字,mixed,C-051_支持验货设置.md
+C-101,卖家指南,C4 售后与纠纷,运费争议,guide,MD,800-1400字,mixed,C-101_运费争议.md
+C-151,卖家指南,C6 财务,提现失败处理,guide,MD,800-1400字,mixed,C-151_提现失败处理.md
+E-001,售后仲裁SOP,E1 工单体系,工单分类标准,sop,MD,1000-1800字,mixed,E-001_工单分类标准.md
+E-046,售后仲裁SOP,E4 升级与敏感,群体投诉应对,sop,DOCX,1000-1800字,mixed,E-046_群体投诉应对.docx
+E-091,售后仲裁SOP,E6 质控与复盘,客服培训,sop,MD,1000-1800字,mixed,E-091_客服培训.md
+E-136,售后仲裁SOP,E2 分场景仲裁,ID锁未退出客服处理话术,sop,DOCX,800-1400字,none,E-136_ID锁未退出客服处理话术.docx
+CASE-001,真实场景案例库,F1 买家侧案例,戴森吹风机｜发错型号，买家部分胜诉折价退款,case,MD,500-900字,none,CASE-001_戴森吹风机｜发错型号，买家部分胜诉折价退款.md
+CASE-051,真实场景案例库,F1 买家侧案例,华为Mate40｜配件缺失，平台介入后调解退货,case,MD,500-900字,none,CASE-051_华为Mate40｜配件缺失，平台介入后调解退货.md
+CASE-101,真实场景案例库,F2 卖家侧案例,卖家遭遇买家持续骚扰议价（涉及AJ1球鞋），调解双方各担一半,case,MD,500-900字,none,CASE-101_卖家遭遇买家持续骚扰议价（涉及AJ1球鞋），调解双方各担一半.md
+CASE-151,真实场景案例库,F3 反诈案例,站外微信引流案：典型作案链路复盘,case,MD,500-900字,none,CASE-151_站外微信引流案：典型作案链路复盘.md
+NEWS-001,公告与课程,G1 平台公告,验货服务升级公告,news,MD,400-1000字,none,NEWS-001_验货服务升级公告.md
+NEWS-027,公告与课程,G1 平台公告,春节假期服务安排,news,MD,400-1000字,none,NEWS-027_春节假期服务安排.md
+NEWS-054,公告与课程,G3 卖家课程,卖家第9课 曝光机制拆解,news,MD,400-1000字,none,NEWS-054_卖家第9课 曝光机制拆解.md
+FAQ-001,结构化FAQ,H1 账户登录,登录失败排查,faq,JSON,15-25条QA/文件,mixed,FAQ-001_登录失败排查.json
+FAQ-002,结构化FAQ,H1 账户登录,验证码问题,faq,XLSX,15-25条QA/文件,mixed,FAQ-002_验证码问题.xlsx
+FAQ-003,结构化FAQ,H1 账户登录,密码找回,faq,CSV,15-25条QA/文件,mixed,FAQ-003_密码找回.csv
+FAQ-004,结构化FAQ,H1 账户登录,扫码登录,faq,CSV,15-25条QA/文件,mixed,FAQ-004_扫码登录.csv
+FAQ-005,结构化FAQ,H1 账户登录,登录设备管理专题,faq,XLSX,15-25条QA/文件,mixed,FAQ-005_登录设备管理专题.xlsx
+FAQ-006,结构化FAQ,H1 账户登录,账号锁定与解锁,faq,XLSX,15-25条QA/文件,mixed,FAQ-006_账号锁定与解锁.xlsx
+FAQ-007,结构化FAQ,H1 账户登录,免登录有效期,faq,JSON,15-25条QA/文件,mixed,FAQ-007_免登录有效期.json
+FAQ-008,结构化FAQ,H1 账户登录,第三方登录绑定,faq,JSON,15-25条QA/文件,mixed,FAQ-008_第三方登录绑定.json
+FAQ-009,结构化FAQ,H2 注册认证,注册流程,faq,XLSX,15-25条QA/文件,mixed,FAQ-009_注册流程.xlsx
+FAQ-010,结构化FAQ,H2 注册认证,实名认证入口,faq,CSV,15-25条QA/文件,mixed,FAQ-010_实名认证入口.csv
+FAQ-049,结构化FAQ,H6 物流,发货时效,faq,CSV,15-25条QA/文件,mixed,FAQ-049_发货时效.csv
+FAQ-050,结构化FAQ,H6 物流,物流跟踪,faq,CSV,15-25条QA/文件,mixed,FAQ-050_物流跟踪.csv
+FAQ-051,结构化FAQ,H6 物流,物流停滞处理,faq,XLSX,15-25条QA/文件,mixed,FAQ-051_物流停滞处理.xlsx
+FAQ-052,结构化FAQ,H6 物流,丢件处理,faq,JSON,15-25条QA/文件,mixed,FAQ-052_丢件处理.json
+FAQ-053,结构化FAQ,H6 物流,破损处理,faq,XLSX,15-25条QA/文件,mixed,FAQ-053_破损处理.xlsx
+FAQ-054,结构化FAQ,H6 物流,代收签收,faq,JSON,15-25条QA/文件,mixed,FAQ-054_代收签收.json
+FAQ-055,结构化FAQ,H6 物流,拒签流程,faq,JSON,15-25条QA/文件,mixed,FAQ-055_拒签流程.json
+FAQ-056,结构化FAQ,H6 物流,保价规则,faq,CSV,15-25条QA/文件,mixed,FAQ-056_保价规则.csv
+FAQ-103,结构化FAQ,H12 信用评价,信用分构成,faq,JSON,15-25条QA/文件,mixed,FAQ-103_信用分构成.json
+FAQ-104,结构化FAQ,H12 信用评价,店铺分,faq,CSV,15-25条QA/文件,mixed,FAQ-104_店铺分.csv
+FAQ-105,结构化FAQ,H12 信用评价,评价规则,faq,XLSX,15-25条QA/文件,mixed,FAQ-105_评价规则.xlsx
+FAQ-106,结构化FAQ,H12 信用评价,差评处理,faq,JSON,15-25条QA/文件,mixed,FAQ-106_差评处理.json
+FAQ-107,结构化FAQ,H12 信用评价,恶意评价,faq,XLSX,15-25条QA/文件,mixed,FAQ-107_恶意评价.xlsx
+FAQ-108,结构化FAQ,H12 信用评价,评价申诉,faq,JSON,15-25条QA/文件,mixed,FAQ-108_评价申诉.json
+A-175,平台规则制度,A6 信用与评价,信用分更新频率,rule,MD,1000-1800字,platform_facts,A-175_信用分更新频率.md
+A-176,平台规则制度,A6 信用与评价,高信用卖家权益,rule,MD,1000-1800字,platform_facts,A-176_高信用卖家权益.md
+A-177,平台规则制度,A6 信用与评价,低信用限制措施,rule,MD,1000-1800字,platform_facts,A-177_低信用限制措施.md
+A-178,平台规则制度,A6 信用与评价,信用分与流量关系,rule,MD,1000-1800字,platform_facts,A-178_信用分与流量关系.md
+A-179,平台规则制度,A6 信用与评价,交易对手信用查看指南,rule,MD,1000-1800字,platform_facts,A-179_交易对手信用查看指南.md
+A-180,平台规则制度,A6 信用与评价,信用体系名词解释,rule,MD,1000-1800字,platform_facts,A-180_信用体系名词解释.md
+A-182,平台规则制度,A7 信息安全与隐私,个人信息收集范围,rule,MD,1000-1800字,platform_facts,A-182_个人信息收集范围.md
+A-183,平台规则制度,A7 信息安全与隐私,个人信息使用规则,rule,MD,1000-1800字,platform_facts,A-183_个人信息使用规则.md
+A-184,平台规则制度,A7 信息安全与隐私,位置信息授权说明,rule,MD,1000-1800字,platform_facts,A-184_位置信息授权说明.md
+A-185,平台规则制度,A7 信息安全与隐私,通讯录与相册授权说明,rule,MD,1000-1800字,platform_facts,A-185_通讯录与相册授权说明.md
+A-186,平台规则制度,A7 信息安全与隐私,聊天内容保护规则,rule,MD,1000-1800字,platform_facts,A-186_聊天内容保护规则.md
+A-187,平台规则制度,A7 信息安全与隐私,交易信息留存规则,rule,MD,1000-1800字,platform_facts,A-187_交易信息留存规则.md
+A-188,平台规则制度,A7 信息安全与隐私,个人信息查询与复制,rule,MD,1000-1800字,platform_facts,A-188_个人信息查询与复制.md
+A-189,平台规则制度,A7 信息安全与隐私,个人信息更正规则,rule,MD,1000-1800字,platform_facts,A-189_个人信息更正规则.md
+A-190,平台规则制度,A7 信息安全与隐私,账号注销与信息删除,rule,MD,1000-1800字,platform_facts,A-190_账号注销与信息删除.md
+A-191,平台规则制度,A7 信息安全与隐私,第三方信息共享规则,rule,MD,1000-1800字,platform_facts,A-191_第三方信息共享规则.md
+A-192,平台规则制度,A7 信息安全与隐私,Cookie与设备标识说明,rule,MD,1000-1800字,platform_facts,A-192_Cookie与设备标识说明.md
+A-193,平台规则制度,A7 信息安全与隐私,信息安全事件处置,rule,MD,1000-1800字,platform_facts,A-193_信息安全事件处置.md
+A-194,平台规则制度,A7 信息安全与隐私,密码与支付密码安全,rule,MD,1000-1800字,platform_facts,A-194_密码与支付密码安全.md
+A-195,平台规则制度,A7 信息安全与隐私,反诈信息保护规则,rule,MD,1000-1800字,platform_facts,A-195_反诈信息保护规则.md
+A-196,平台规则制度,A7 信息安全与隐私,黑名单与屏蔽规则,rule,MD,1000-1800字,platform_facts,A-196_黑名单与屏蔽规则.md
+A-197,平台规则制度,A7 信息安全与隐私,实名认证信息保护,rule,MD,1000-1800字,platform_facts,A-197_实名认证信息保护.md
+A-198,平台规则制度,A7 信息安全与隐私,人脸信息存储规则,rule,MD,1000-1800字,platform_facts,A-198_人脸信息存储规则.md
+A-199,平台规则制度,A7 信息安全与隐私,未成年人隐私保护,rule,MD,1000-1800字,platform_facts,A-199_未成年人隐私保护.md
+A-200,平台规则制度,A7 信息安全与隐私,隐私投诉处理流程,rule,MD,1000-1800字,platform_facts,A-200_隐私投诉处理流程.md
+A-201,平台规则制度,A8 专项治理,刷单炒信专项治理公告,rule,MD,1000-1800字,platform_facts,A-201_刷单炒信专项治理公告.md
+A-202,平台规则制度,A8 专项治理,站外引流专项治理,rule,MD,1000-1800字,platform_facts,A-202_站外引流专项治理.md
+A-203,平台规则制度,A8 专项治理,回收诈骗专项治理,rule,MD,1000-1800字,platform_facts,A-203_回收诈骗专项治理.md
+A-204,平台规则制度,A8 专项治理,冒充客服专项治理,rule,MD,1000-1800字,platform_facts,A-204_冒充客服专项治理.md
+A-205,平台规则制度,A8 专项治理,恶意退货专项治理,rule,MD,1000-1800字,platform_facts,A-205_恶意退货专项治理.md
+A-206,平台规则制度,A8 专项治理,职业索赔治理规则,rule,MD,1000-1800字,platform_facts,A-206_职业索赔治理规则.md
+A-207,平台规则制度,A8 专项治理,虚假质检报告治理,rule,MD,1000-1800字,platform_facts,A-207_虚假质检报告治理.md
+A-208,平台规则制度,A8 专项治理,低价诱导专项治理,rule,MD,1000-1800字,platform_facts,A-208_低价诱导专项治理.md
+A-209,平台规则制度,A8 专项治理,违禁品暗语专项治理,rule,MD,1000-1800字,platform_facts,A-209_违禁品暗语专项治理.md
+A-210,平台规则制度,A8 专项治理,团伙欺诈专项治理,rule,MD,1000-1800字,platform_facts,A-210_团伙欺诈专项治理.md
+A-211,平台规则制度,A8 专项治理,黄牛囤货治理规则,rule,MD,1000-1800字,platform_facts,A-211_黄牛囤货治理规则.md
+A-212,平台规则制度,A8 专项治理,自动下单脚本治理,rule,MD,1000-1800字,platform_facts,A-212_自动下单脚本治理.md
+A-213,平台规则制度,A8 专项治理,评价敲诈专项治理,rule,MD,1000-1800字,platform_facts,A-213_评价敲诈专项治理.md
+A-214,平台规则制度,A8 专项治理,假货专项整治,rule,MD,1000-1800字,platform_facts,A-214_假货专项整治.md
+A-215,平台规则制度,A8 专项治理,盗版资源专项清理,rule,MD,1000-1800字,platform_facts,A-215_盗版资源专项清理.md
+A-216,平台规则制度,A8 专项治理,网络黑产协同治理,rule,MD,1000-1800字,platform_facts,A-216_网络黑产协同治理.md
+A-217,平台规则制度,A8 专项治理,未成年人交易专项治理,rule,MD,1000-1800字,platform_facts,A-217_未成年人交易专项治理.md
+A-218,平台规则制度,A8 专项治理,节假日交易秩序专项,rule,MD,1000-1800字,platform_facts,A-218_节假日交易秩序专项.md
+A-219,平台规则制度,A8 专项治理,大促期间违规从严规则,rule,MD,1000-1800字,platform_facts,A-219_大促期间违规从严规则.md
+A-220,平台规则制度,A8 专项治理,专项治理举报奖励规则,rule,MD,1000-1800字,platform_facts,A-220_专项治理举报奖励规则.md
+A-221,平台规则制度,A9 综合规则,平台规则体系总览,rule,MD,1000-1800字,platform_facts,A-221_平台规则体系总览.md
+A-222,平台规则制度,A9 综合规则,规则制定与发布程序,rule,MD,1000-1800字,platform_facts,A-222_规则制定与发布程序.md
+A-223,平台规则制度,A9 综合规则,规则修订与版本管理,rule,MD,1000-1800字,platform_facts,A-223_规则修订与版本管理.md
+A-224,平台规则制度,A9 综合规则,规则生效与溯及力,rule,MD,1000-1800字,platform_facts,A-224_规则生效与溯及力.md
+A-225,平台规则制度,A9 综合规则,新旧规则衔接办法,rule,MD,1000-1800字,platform_facts,A-225_新旧规则衔接办法.md
+A-226,平台规则制度,A9 综合规则,规则解释权与适用顺序,rule,MD,1000-1800字,platform_facts,A-226_规则解释权与适用顺序.md
+A-227,平台规则制度,A9 综合规则,用户协议要点解读,rule,MD,1000-1800字,platform_facts,A-227_用户协议要点解读.md
+A-228,平台规则制度,A9 综合规则,交易主体权利义务,rule,MD,1000-1800字,platform_facts,A-228_交易主体权利义务.md
+A-229,平台规则制度,A9 综合规则,平台责任边界,rule,MD,1000-1800字,platform_facts,A-229_平台责任边界.md
+A-230,平台规则制度,A9 综合规则,不可抗力规则,rule,MD,1000-1800字,platform_facts,A-230_不可抗力规则.md
+A-231,平台规则制度,A9 综合规则,争议解决途径,rule,MD,1000-1800字,platform_facts,A-231_争议解决途径.md
+A-232,平台规则制度,A9 综合规则,调解与仲裁规则,rule,MD,1000-1800字,platform_facts,A-232_调解与仲裁规则.md
+A-233,平台规则制度,A9 综合规则,司法协助配合规则,rule,MD,1000-1800字,platform_facts,A-233_司法协助配合规则.md
+A-234,平台规则制度,A9 综合规则,异地交易管辖说明,rule,MD,1000-1800字,platform_facts,A-234_异地交易管辖说明.md
+A-235,平台规则制度,A9 综合规则,规则名词术语总表,rule,MD,1000-1800字,platform_facts,A-235_规则名词术语总表.md
+A-236,平台规则制度,A9 综合规则,卖家规则速查手册,rule,MD,1000-1800字,platform_facts,A-236_卖家规则速查手册.md
+A-237,平台规则制度,A9 综合规则,买家规则速查手册,rule,MD,1000-1800字,platform_facts,A-237_买家规则速查手册.md
+A-238,平台规则制度,A9 综合规则,规则培训与考试,rule,MD,1000-1800字,platform_facts,A-238_规则培训与考试.md
+A-239,平台规则制度,A9 综合规则,规则违规预警机制,rule,MD,1000-1800字,platform_facts,A-239_规则违规预警机制.md
+A-240,平台规则制度,A9 综合规则,年度规则更新汇编说明,rule,MD,1000-1800字,platform_facts,A-240_年度规则更新汇编说明.md
+D-002,验货质检手册,D-手机,手机外观检测标准,inspection,PDF,1200-2200字,grading_facts,D-002_手机外观检测标准.pdf
+D-003,验货质检手册,D-手机,手机功能检测项清单,inspection,PDF,1200-2200字,grading_facts,D-003_手机功能检测项清单.pdf
+D-004,验货质检手册,D-手机,手机成色分级判定标准,inspection,PDF,1200-2200字,grading_facts,D-004_手机成色分级判定标准.pdf
+D-005,验货质检手册,D-手机,手机拆修与维修史识别,inspection,PDF,1200-2200字,grading_facts,D-005_手机拆修与维修史识别.pdf
+D-006,验货质检手册,D-手机,手机进水暗病与隐性故障识别,inspection,PDF,1200-2200字,grading_facts,D-006_手机进水暗病与隐性故障识别.pdf
+D-007,验货质检手册,D-手机,手机拒收与必拒情形清单,inspection,PDF,1200-2200字,grading_facts,D-007_手机拒收与必拒情形清单.pdf
+D-008,验货质检手册,D-手机,手机质检报告字段解读,inspection,PDF,1200-2200字,grading_facts,D-008_手机质检报告字段解读.pdf
+D-009,验货质检手册,D-手机,手机瑕疵描述术语与分级话术,inspection,PDF,1200-2200字,grading_facts,D-009_手机瑕疵描述术语与分级话术.pdf
+D-010,验货质检手册,D-手机,手机常见质检争议与判定,inspection,PDF,1200-2200字,grading_facts,D-010_手机常见质检争议与判定.pdf
+D-011,验货质检手册,D-手机,苹果iPhone质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-011_苹果iPhone质检分册：检测要点与典型问题.pdf
+D-012,验货质检手册,D-手机,华为质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-012_华为质检分册：检测要点与典型问题.pdf
+D-013,验货质检手册,D-手机,荣耀质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-013_荣耀质检分册：检测要点与典型问题.pdf
+D-014,验货质检手册,D-手机,小米质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-014_小米质检分册：检测要点与典型问题.pdf
+D-015,验货质检手册,D-手机,Redmi质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-015_Redmi质检分册：检测要点与典型问题.pdf
+D-016,验货质检手册,D-手机,OPPO质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-016_OPPO质检分册：检测要点与典型问题.pdf
+D-017,验货质检手册,D-手机,vivo质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-017_vivo质检分册：检测要点与典型问题.pdf
+D-018,验货质检手册,D-手机,三星质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-018_三星质检分册：检测要点与典型问题.md
+D-019,验货质检手册,D-手机,一加质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-019_一加质检分册：检测要点与典型问题.md
+D-020,验货质检手册,D-手机,realme质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-020_realme质检分册：检测要点与典型问题.md
+D-021,验货质检手册,D-手机,iQOO质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-021_iQOO质检分册：检测要点与典型问题.md
+D-022,验货质检手册,D-手机,折叠屏专项质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-022_折叠屏专项质检分册：检测要点与典型问题.md
+D-023,验货质检手册,D-平板电脑,平板电脑质检流程总览,inspection,PDF,1200-2200字,grading_facts,D-023_平板电脑质检流程总览.pdf
+D-024,验货质检手册,D-平板电脑,平板电脑外观检测标准,inspection,PDF,1200-2200字,grading_facts,D-024_平板电脑外观检测标准.pdf
+D-025,验货质检手册,D-平板电脑,平板电脑功能检测项清单,inspection,PDF,1200-2200字,grading_facts,D-025_平板电脑功能检测项清单.pdf
+D-026,验货质检手册,D-平板电脑,平板电脑成色分级判定标准,inspection,PDF,1200-2200字,grading_facts,D-026_平板电脑成色分级判定标准.pdf
+D-027,验货质检手册,D-平板电脑,平板电脑拆修与维修史识别,inspection,PDF,1200-2200字,grading_facts,D-027_平板电脑拆修与维修史识别.pdf
+D-028,验货质检手册,D-平板电脑,平板电脑进水暗病与隐性故障识别,inspection,PDF,1200-2200字,grading_facts,D-028_平板电脑进水暗病与隐性故障识别.pdf
+D-029,验货质检手册,D-平板电脑,平板电脑拒收与必拒情形清单,inspection,PDF,1200-2200字,grading_facts,D-029_平板电脑拒收与必拒情形清单.pdf
+D-030,验货质检手册,D-平板电脑,平板电脑质检报告字段解读,inspection,PDF,1200-2200字,grading_facts,D-030_平板电脑质检报告字段解读.pdf
+D-031,验货质检手册,D-平板电脑,平板电脑瑕疵描述术语与分级话术,inspection,PDF,1200-2200字,grading_facts,D-031_平板电脑瑕疵描述术语与分级话术.pdf
+D-032,验货质检手册,D-平板电脑,平板电脑常见质检争议与判定,inspection,PDF,1200-2200字,grading_facts,D-032_平板电脑常见质检争议与判定.pdf
+D-033,验货质检手册,D-平板电脑,iPad质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-033_iPad质检分册：检测要点与典型问题.pdf
+D-034,验货质检手册,D-平板电脑,华为MatePad质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-034_华为MatePad质检分册：检测要点与典型问题.pdf
+D-035,验货质检手册,D-平板电脑,小米平板质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-035_小米平板质检分册：检测要点与典型问题.pdf
+D-036,验货质检手册,D-平板电脑,荣耀平板质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-036_荣耀平板质检分册：检测要点与典型问题.pdf
+D-037,验货质检手册,D-平板电脑,三星Tab质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-037_三星Tab质检分册：检测要点与典型问题.pdf
+D-038,验货质检手册,D-平板电脑,联想小新平板质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-038_联想小新平板质检分册：检测要点与典型问题.pdf
+D-039,验货质检手册,D-平板电脑,OPPO Pad质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-039_OPPO Pad质检分册：检测要点与典型问题.pdf
+D-040,验货质检手册,D-平板电脑,vivo Pad质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-040_vivo Pad质检分册：检测要点与典型问题.md
+D-041,验货质检手册,D-平板电脑,微软Surface质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-041_微软Surface质检分册：检测要点与典型问题.md
+D-042,验货质检手册,D-平板电脑,学习平板质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-042_学习平板质检分册：检测要点与典型问题.md
+D-043,验货质检手册,D-平板电脑,平板笔与键盘配件质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-043_平板笔与键盘配件质检分册：检测要点与典型问题.md
+D-044,验货质检手册,D-平板电脑,安卓平板通用质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-044_安卓平板通用质检分册：检测要点与典型问题.md
+D-045,验货质检手册,D-笔记本电脑,笔记本电脑质检流程总览,inspection,PDF,1200-2200字,grading_facts,D-045_笔记本电脑质检流程总览.pdf
+D-046,验货质检手册,D-笔记本电脑,笔记本电脑外观检测标准,inspection,PDF,1200-2200字,grading_facts,D-046_笔记本电脑外观检测标准.pdf
+D-047,验货质检手册,D-笔记本电脑,笔记本电脑功能检测项清单,inspection,PDF,1200-2200字,grading_facts,D-047_笔记本电脑功能检测项清单.pdf
+D-048,验货质检手册,D-笔记本电脑,笔记本电脑成色分级判定标准,inspection,PDF,1200-2200字,grading_facts,D-048_笔记本电脑成色分级判定标准.pdf
+D-049,验货质检手册,D-笔记本电脑,笔记本电脑拆修与维修史识别,inspection,PDF,1200-2200字,grading_facts,D-049_笔记本电脑拆修与维修史识别.pdf
+D-050,验货质检手册,D-笔记本电脑,笔记本电脑进水暗病与隐性故障识别,inspection,PDF,1200-2200字,grading_facts,D-050_笔记本电脑进水暗病与隐性故障识别.pdf
+D-051,验货质检手册,D-笔记本电脑,笔记本电脑拒收与必拒情形清单,inspection,PDF,1200-2200字,grading_facts,D-051_笔记本电脑拒收与必拒情形清单.pdf
+D-052,验货质检手册,D-笔记本电脑,笔记本电脑质检报告字段解读,inspection,PDF,1200-2200字,grading_facts,D-052_笔记本电脑质检报告字段解读.pdf
+D-053,验货质检手册,D-笔记本电脑,笔记本电脑瑕疵描述术语与分级话术,inspection,PDF,1200-2200字,grading_facts,D-053_笔记本电脑瑕疵描述术语与分级话术.pdf
+D-054,验货质检手册,D-笔记本电脑,笔记本电脑常见质检争议与判定,inspection,PDF,1200-2200字,grading_facts,D-054_笔记本电脑常见质检争议与判定.pdf
+D-055,验货质检手册,D-笔记本电脑,MacBook Air质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-055_MacBook Air质检分册：检测要点与典型问题.pdf
+D-056,验货质检手册,D-笔记本电脑,MacBook Pro质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-056_MacBook Pro质检分册：检测要点与典型问题.pdf
+D-057,验货质检手册,D-笔记本电脑,ThinkPad质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-057_ThinkPad质检分册：检测要点与典型问题.pdf
+D-058,验货质检手册,D-笔记本电脑,联想小新质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-058_联想小新质检分册：检测要点与典型问题.pdf
+D-059,验货质检手册,D-笔记本电脑,华为MateBook质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-059_华为MateBook质检分册：检测要点与典型问题.pdf
+D-060,验货质检手册,D-笔记本电脑,戴尔质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-060_戴尔质检分册：检测要点与典型问题.pdf
+D-061,验货质检手册,D-笔记本电脑,惠普质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-061_惠普质检分册：检测要点与典型问题.pdf
+D-062,验货质检手册,D-笔记本电脑,华硕质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-062_华硕质检分册：检测要点与典型问题.md
+D-063,验货质检手册,D-笔记本电脑,游戏本专项质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-063_游戏本专项质检分册：检测要点与典型问题.md
+D-064,验货质检手册,D-笔记本电脑,轻薄本专项质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-064_轻薄本专项质检分册：检测要点与典型问题.md
+D-065,验货质检手册,D-笔记本电脑,二合一笔记本质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-065_二合一笔记本质检分册：检测要点与典型问题.md
+D-066,验货质检手册,D-笔记本电脑,电池与循环次数专项质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-066_电池与循环次数专项质检分册：检测要点与典型问题.md
+D-067,验货质检手册,D-台式机与配件,台式机与配件质检流程总览,inspection,PDF,1200-2200字,grading_facts,D-067_台式机与配件质检流程总览.pdf
+D-068,验货质检手册,D-台式机与配件,台式机与配件外观检测标准,inspection,PDF,1200-2200字,grading_facts,D-068_台式机与配件外观检测标准.pdf
+D-069,验货质检手册,D-台式机与配件,台式机与配件功能检测项清单,inspection,PDF,1200-2200字,grading_facts,D-069_台式机与配件功能检测项清单.pdf
+D-070,验货质检手册,D-台式机与配件,台式机与配件成色分级判定标准,inspection,PDF,1200-2200字,grading_facts,D-070_台式机与配件成色分级判定标准.pdf
+D-071,验货质检手册,D-台式机与配件,台式机与配件拆修与维修史识别,inspection,PDF,1200-2200字,grading_facts,D-071_台式机与配件拆修与维修史识别.pdf
+D-072,验货质检手册,D-台式机与配件,台式机与配件进水暗病与隐性故障识别,inspection,PDF,1200-2200字,grading_facts,D-072_台式机与配件进水暗病与隐性故障识别.pdf
+D-073,验货质检手册,D-台式机与配件,台式机与配件拒收与必拒情形清单,inspection,PDF,1200-2200字,grading_facts,D-073_台式机与配件拒收与必拒情形清单.pdf
+D-074,验货质检手册,D-台式机与配件,台式机与配件质检报告字段解读,inspection,PDF,1200-2200字,grading_facts,D-074_台式机与配件质检报告字段解读.pdf
+D-075,验货质检手册,D-台式机与配件,台式机与配件瑕疵描述术语与分级话术,inspection,PDF,1200-2200字,grading_facts,D-075_台式机与配件瑕疵描述术语与分级话术.pdf
+D-076,验货质检手册,D-台式机与配件,台式机与配件常见质检争议与判定,inspection,PDF,1200-2200字,grading_facts,D-076_台式机与配件常见质检争议与判定.pdf
+D-077,验货质检手册,D-台式机与配件,品牌整机质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-077_品牌整机质检分册：检测要点与典型问题.pdf
+D-078,验货质检手册,D-台式机与配件,DIY组装机质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-078_DIY组装机质检分册：检测要点与典型问题.pdf
+D-079,验货质检手册,D-台式机与配件,CPU质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-079_CPU质检分册：检测要点与典型问题.pdf
+D-080,验货质检手册,D-台式机与配件,显卡质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-080_显卡质检分册：检测要点与典型问题.pdf
+D-082,验货质检手册,D-台式机与配件,内存质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-082_内存质检分册：检测要点与典型问题.pdf
+D-083,验货质检手册,D-台式机与配件,硬盘质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-083_硬盘质检分册：检测要点与典型问题.pdf
+D-084,验货质检手册,D-台式机与配件,显示器质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-084_显示器质检分册：检测要点与典型问题.md
+D-085,验货质检手册,D-台式机与配件,机械键盘质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-085_机械键盘质检分册：检测要点与典型问题.md
+D-086,验货质检手册,D-台式机与配件,电源质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-086_电源质检分册：检测要点与典型问题.md
+D-087,验货质检手册,D-台式机与配件,散热质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-087_散热质检分册：检测要点与典型问题.md
+D-088,验货质检手册,D-台式机与配件,整机老化测试质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-088_整机老化测试质检分册：检测要点与典型问题.md
+D-089,验货质检手册,D-相机与镜头,相机与镜头质检流程总览,inspection,PDF,1200-2200字,grading_facts,D-089_相机与镜头质检流程总览.pdf
+D-090,验货质检手册,D-相机与镜头,相机与镜头外观检测标准,inspection,PDF,1200-2200字,grading_facts,D-090_相机与镜头外观检测标准.pdf
+D-091,验货质检手册,D-相机与镜头,相机与镜头功能检测项清单,inspection,PDF,1200-2200字,grading_facts,D-091_相机与镜头功能检测项清单.pdf
+D-092,验货质检手册,D-相机与镜头,相机与镜头成色分级判定标准,inspection,PDF,1200-2200字,grading_facts,D-092_相机与镜头成色分级判定标准.pdf
+D-093,验货质检手册,D-相机与镜头,相机与镜头拆修与维修史识别,inspection,PDF,1200-2200字,grading_facts,D-093_相机与镜头拆修与维修史识别.pdf
+D-094,验货质检手册,D-相机与镜头,相机与镜头进水暗病与隐性故障识别,inspection,PDF,1200-2200字,grading_facts,D-094_相机与镜头进水暗病与隐性故障识别.pdf
+D-095,验货质检手册,D-相机与镜头,相机与镜头拒收与必拒情形清单,inspection,PDF,1200-2200字,grading_facts,D-095_相机与镜头拒收与必拒情形清单.pdf
+D-096,验货质检手册,D-相机与镜头,相机与镜头质检报告字段解读,inspection,PDF,1200-2200字,grading_facts,D-096_相机与镜头质检报告字段解读.pdf
+D-097,验货质检手册,D-相机与镜头,相机与镜头瑕疵描述术语与分级话术,inspection,PDF,1200-2200字,grading_facts,D-097_相机与镜头瑕疵描述术语与分级话术.pdf
+D-098,验货质检手册,D-相机与镜头,相机与镜头常见质检争议与判定,inspection,PDF,1200-2200字,grading_facts,D-098_相机与镜头常见质检争议与判定.pdf
+D-099,验货质检手册,D-相机与镜头,佳能机身质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-099_佳能机身质检分册：检测要点与典型问题.pdf
+D-100,验货质检手册,D-相机与镜头,尼康机身质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-100_尼康机身质检分册：检测要点与典型问题.pdf
+D-101,验货质检手册,D-相机与镜头,索尼机身质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-101_索尼机身质检分册：检测要点与典型问题.pdf
+D-102,验货质检手册,D-相机与镜头,富士机身质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-102_富士机身质检分册：检测要点与典型问题.pdf
+D-103,验货质检手册,D-相机与镜头,微单与单反区别质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-103_微单与单反区别质检分册：检测要点与典型问题.pdf
+D-104,验货质检手册,D-相机与镜头,镜头霉斑与进灰质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-104_镜头霉斑与进灰质检分册：检测要点与典型问题.pdf
+D-105,验货质检手册,D-相机与镜头,快门次数查验质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-105_快门次数查验质检分册：检测要点与典型问题.pdf
+D-106,验货质检手册,D-相机与镜头,镜头对焦检测质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-106_镜头对焦检测质检分册：检测要点与典型问题.md
+D-107,验货质检手册,D-相机与镜头,闪光灯与配件质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-107_闪光灯与配件质检分册：检测要点与典型问题.md
+D-108,验货质检手册,D-相机与镜头,摄像机质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-108_摄像机质检分册：检测要点与典型问题.md
+D-109,验货质检手册,D-相机与镜头,运动相机质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-109_运动相机质检分册：检测要点与典型问题.md
+D-110,验货质检手册,D-相机与镜头,CCD相机质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-110_CCD相机质检分册：检测要点与典型问题.md
+D-111,验货质检手册,D-智能手表与穿戴,智能手表与穿戴质检流程总览,inspection,PDF,1200-2200字,grading_facts,D-111_智能手表与穿戴质检流程总览.pdf
+D-112,验货质检手册,D-智能手表与穿戴,智能手表与穿戴外观检测标准,inspection,PDF,1200-2200字,grading_facts,D-112_智能手表与穿戴外观检测标准.pdf
+D-113,验货质检手册,D-智能手表与穿戴,智能手表与穿戴功能检测项清单,inspection,PDF,1200-2200字,grading_facts,D-113_智能手表与穿戴功能检测项清单.pdf
+D-114,验货质检手册,D-智能手表与穿戴,智能手表与穿戴成色分级判定标准,inspection,PDF,1200-2200字,grading_facts,D-114_智能手表与穿戴成色分级判定标准.pdf
+D-115,验货质检手册,D-智能手表与穿戴,智能手表与穿戴拆修与维修史识别,inspection,PDF,1200-2200字,grading_facts,D-115_智能手表与穿戴拆修与维修史识别.pdf
+D-116,验货质检手册,D-智能手表与穿戴,智能手表与穿戴进水暗病与隐性故障识别,inspection,PDF,1200-2200字,grading_facts,D-116_智能手表与穿戴进水暗病与隐性故障识别.pdf
+D-117,验货质检手册,D-智能手表与穿戴,智能手表与穿戴拒收与必拒情形清单,inspection,PDF,1200-2200字,grading_facts,D-117_智能手表与穿戴拒收与必拒情形清单.pdf
+D-118,验货质检手册,D-智能手表与穿戴,智能手表与穿戴质检报告字段解读,inspection,PDF,1200-2200字,grading_facts,D-118_智能手表与穿戴质检报告字段解读.pdf
+D-119,验货质检手册,D-智能手表与穿戴,智能手表与穿戴瑕疵描述术语与分级话术,inspection,PDF,1200-2200字,grading_facts,D-119_智能手表与穿戴瑕疵描述术语与分级话术.pdf
+D-120,验货质检手册,D-智能手表与穿戴,智能手表与穿戴常见质检争议与判定,inspection,PDF,1200-2200字,grading_facts,D-120_智能手表与穿戴常见质检争议与判定.pdf
+D-121,验货质检手册,D-智能手表与穿戴,Apple Watch质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-121_Apple Watch质检分册：检测要点与典型问题.pdf
+D-122,验货质检手册,D-智能手表与穿戴,华为手表质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-122_华为手表质检分册：检测要点与典型问题.pdf
+D-123,验货质检手册,D-智能手表与穿戴,小米手环与手表质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-123_小米手环与手表质检分册：检测要点与典型问题.pdf
+D-124,验货质检手册,D-智能手表与穿戴,荣耀手表质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-124_荣耀手表质检分册：检测要点与典型问题.pdf
+D-125,验货质检手册,D-智能手表与穿戴,三星手表质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-125_三星手表质检分册：检测要点与典型问题.pdf
+D-126,验货质检手册,D-智能手表与穿戴,Garmin质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-126_Garmin质检分册：检测要点与典型问题.pdf
+D-127,验货质检手册,D-智能手表与穿戴,表带与表壳检测质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-127_表带与表壳检测质检分册：检测要点与典型问题.pdf
+D-128,验货质检手册,D-智能手表与穿戴,电池健康检测质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-128_电池健康检测质检分册：检测要点与典型问题.md
+D-129,验货质检手册,D-智能手表与穿戴,ECG与血氧功能质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-129_ECG与血氧功能质检分册：检测要点与典型问题.md
+D-130,验货质检手册,D-智能手表与穿戴,防水密封检测质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-130_防水密封检测质检分册：检测要点与典型问题.md
+D-131,验货质检手册,D-智能手表与穿戴,蜂窝版与GPS版质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-131_蜂窝版与GPS版质检分册：检测要点与典型问题.md
+D-132,验货质检手册,D-智能手表与穿戴,配对锁查验质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-132_配对锁查验质检分册：检测要点与典型问题.md
+D-133,验货质检手册,D-无线耳机与音频,无线耳机与音频质检流程总览,inspection,PDF,1200-2200字,grading_facts,D-133_无线耳机与音频质检流程总览.pdf
+D-134,验货质检手册,D-无线耳机与音频,无线耳机与音频外观检测标准,inspection,PDF,1200-2200字,grading_facts,D-134_无线耳机与音频外观检测标准.pdf
+D-135,验货质检手册,D-无线耳机与音频,无线耳机与音频功能检测项清单,inspection,PDF,1200-2200字,grading_facts,D-135_无线耳机与音频功能检测项清单.pdf
+D-136,验货质检手册,D-无线耳机与音频,无线耳机与音频成色分级判定标准,inspection,PDF,1200-2200字,grading_facts,D-136_无线耳机与音频成色分级判定标准.pdf
+D-137,验货质检手册,D-无线耳机与音频,无线耳机与音频拆修与维修史识别,inspection,PDF,1200-2200字,grading_facts,D-137_无线耳机与音频拆修与维修史识别.pdf
+D-138,验货质检手册,D-无线耳机与音频,无线耳机与音频进水暗病与隐性故障识别,inspection,PDF,1200-2200字,grading_facts,D-138_无线耳机与音频进水暗病与隐性故障识别.pdf
+D-139,验货质检手册,D-无线耳机与音频,无线耳机与音频拒收与必拒情形清单,inspection,PDF,1200-2200字,grading_facts,D-139_无线耳机与音频拒收与必拒情形清单.pdf
+D-140,验货质检手册,D-无线耳机与音频,无线耳机与音频质检报告字段解读,inspection,PDF,1200-2200字,grading_facts,D-140_无线耳机与音频质检报告字段解读.pdf
+D-141,验货质检手册,D-无线耳机与音频,无线耳机与音频瑕疵描述术语与分级话术,inspection,PDF,1200-2200字,grading_facts,D-141_无线耳机与音频瑕疵描述术语与分级话术.pdf
+D-142,验货质检手册,D-无线耳机与音频,无线耳机与音频常见质检争议与判定,inspection,PDF,1200-2200字,grading_facts,D-142_无线耳机与音频常见质检争议与判定.pdf
+D-143,验货质检手册,D-无线耳机与音频,AirPods系列质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-143_AirPods系列质检分册：检测要点与典型问题.pdf
+D-144,验货质检手册,D-无线耳机与音频,索尼降噪豆质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-144_索尼降噪豆质检分册：检测要点与典型问题.pdf
+D-145,验货质检手册,D-无线耳机与音频,Bose质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-145_Bose质检分册：检测要点与典型问题.pdf
+D-146,验货质检手册,D-无线耳机与音频,华为FreeBuds质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-146_华为FreeBuds质检分册：检测要点与典型问题.pdf
+D-147,验货质检手册,D-无线耳机与音频,小米耳机质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-147_小米耳机质检分册：检测要点与典型问题.pdf
+D-148,验货质检手册,D-无线耳机与音频,Beats质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-148_Beats质检分册：检测要点与典型问题.pdf
+D-149,验货质检手册,D-无线耳机与音频,头戴式耳机质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-149_头戴式耳机质检分册：检测要点与典型问题.pdf
+D-150,验货质检手册,D-无线耳机与音频,有线HiFi耳机质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-150_有线HiFi耳机质检分册：检测要点与典型问题.md
+D-151,验货质检手册,D-无线耳机与音频,蓝牙音箱质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-151_蓝牙音箱质检分册：检测要点与典型问题.md
+D-152,验货质检手册,D-无线耳机与音频,麦克风质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-152_麦克风质检分册：检测要点与典型问题.md
+D-153,验货质检手册,D-无线耳机与音频,耳机真伪鉴别质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-153_耳机真伪鉴别质检分册：检测要点与典型问题.md
+D-154,验货质检手册,D-无线耳机与音频,降噪功能检测质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-154_降噪功能检测质检分册：检测要点与典型问题.md
+D-155,验货质检手册,D-游戏主机与游戏,游戏主机与游戏质检流程总览,inspection,PDF,1200-2200字,grading_facts,D-155_游戏主机与游戏质检流程总览.pdf
+D-156,验货质检手册,D-游戏主机与游戏,游戏主机与游戏外观检测标准,inspection,PDF,1200-2200字,grading_facts,D-156_游戏主机与游戏外观检测标准.pdf
+D-157,验货质检手册,D-游戏主机与游戏,游戏主机与游戏功能检测项清单,inspection,PDF,1200-2200字,grading_facts,D-157_游戏主机与游戏功能检测项清单.pdf
+D-158,验货质检手册,D-游戏主机与游戏,游戏主机与游戏成色分级判定标准,inspection,PDF,1200-2200字,grading_facts,D-158_游戏主机与游戏成色分级判定标准.pdf
+D-159,验货质检手册,D-游戏主机与游戏,游戏主机与游戏拆修与维修史识别,inspection,PDF,1200-2200字,grading_facts,D-159_游戏主机与游戏拆修与维修史识别.pdf
+D-160,验货质检手册,D-游戏主机与游戏,游戏主机与游戏进水暗病与隐性故障识别,inspection,PDF,1200-2200字,grading_facts,D-160_游戏主机与游戏进水暗病与隐性故障识别.pdf
+D-162,验货质检手册,D-游戏主机与游戏,游戏主机与游戏质检报告字段解读,inspection,PDF,1200-2200字,grading_facts,D-162_游戏主机与游戏质检报告字段解读.pdf
+D-163,验货质检手册,D-游戏主机与游戏,游戏主机与游戏瑕疵描述术语与分级话术,inspection,PDF,1200-2200字,grading_facts,D-163_游戏主机与游戏瑕疵描述术语与分级话术.pdf
+D-164,验货质检手册,D-游戏主机与游戏,游戏主机与游戏常见质检争议与判定,inspection,PDF,1200-2200字,grading_facts,D-164_游戏主机与游戏常见质检争议与判定.pdf
+D-165,验货质检手册,D-游戏主机与游戏,PS5质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-165_PS5质检分册：检测要点与典型问题.pdf
+D-166,验货质检手册,D-游戏主机与游戏,PS4质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-166_PS4质检分册：检测要点与典型问题.pdf
+D-167,验货质检手册,D-游戏主机与游戏,Switch质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-167_Switch质检分册：检测要点与典型问题.pdf
+D-168,验货质检手册,D-游戏主机与游戏,Xbox质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-168_Xbox质检分册：检测要点与典型问题.pdf
+D-169,验货质检手册,D-游戏主机与游戏,Steam Deck质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-169_Steam Deck质检分册：检测要点与典型问题.pdf
+D-170,验货质检手册,D-游戏主机与游戏,复古掌机质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-170_复古掌机质检分册：检测要点与典型问题.pdf
+D-171,验货质检手册,D-游戏主机与游戏,游戏手柄质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-171_游戏手柄质检分册：检测要点与典型问题.pdf
+D-172,验货质检手册,D-游戏主机与游戏,卡带与光盘质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-172_卡带与光盘质检分册：检测要点与典型问题.md
+D-173,验货质检手册,D-游戏主机与游戏,账号与数字版质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-173_账号与数字版质检分册：检测要点与典型问题.md
+D-174,验货质检手册,D-游戏主机与游戏,Ban机查验质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-174_Ban机查验质检分册：检测要点与典型问题.md
+D-175,验货质检手册,D-游戏主机与游戏,手柄漂移检测质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-175_手柄漂移检测质检分册：检测要点与典型问题.md
+D-176,验货质检手册,D-游戏主机与游戏,主机散热与维修史质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-176_主机散热与维修史质检分册：检测要点与典型问题.md
+D-177,验货质检手册,D-奢侈品箱包,奢侈品箱包质检流程总览,inspection,PDF,1200-2200字,grading_facts,D-177_奢侈品箱包质检流程总览.pdf
+D-178,验货质检手册,D-奢侈品箱包,奢侈品箱包外观检测标准,inspection,PDF,1200-2200字,grading_facts,D-178_奢侈品箱包外观检测标准.pdf
+D-179,验货质检手册,D-奢侈品箱包,奢侈品箱包功能检测项清单,inspection,PDF,1200-2200字,grading_facts,D-179_奢侈品箱包功能检测项清单.pdf
+D-180,验货质检手册,D-奢侈品箱包,奢侈品箱包成色分级判定标准,inspection,PDF,1200-2200字,grading_facts,D-180_奢侈品箱包成色分级判定标准.pdf
+D-181,验货质检手册,D-奢侈品箱包,奢侈品箱包拆修与维修史识别,inspection,PDF,1200-2200字,grading_facts,D-181_奢侈品箱包拆修与维修史识别.pdf
+D-182,验货质检手册,D-奢侈品箱包,奢侈品箱包进水暗病与隐性故障识别,inspection,PDF,1200-2200字,grading_facts,D-182_奢侈品箱包进水暗病与隐性故障识别.pdf
+D-183,验货质检手册,D-奢侈品箱包,奢侈品箱包拒收与必拒情形清单,inspection,PDF,1200-2200字,grading_facts,D-183_奢侈品箱包拒收与必拒情形清单.pdf
+D-184,验货质检手册,D-奢侈品箱包,奢侈品箱包质检报告字段解读,inspection,PDF,1200-2200字,grading_facts,D-184_奢侈品箱包质检报告字段解读.pdf
+D-185,验货质检手册,D-奢侈品箱包,奢侈品箱包瑕疵描述术语与分级话术,inspection,PDF,1200-2200字,grading_facts,D-185_奢侈品箱包瑕疵描述术语与分级话术.pdf
+D-186,验货质检手册,D-奢侈品箱包,奢侈品箱包常见质检争议与判定,inspection,PDF,1200-2200字,grading_facts,D-186_奢侈品箱包常见质检争议与判定.pdf
+D-187,验货质检手册,D-奢侈品箱包,LV质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-187_LV质检分册：检测要点与典型问题.pdf
+D-188,验货质检手册,D-奢侈品箱包,Gucci质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-188_Gucci质检分册：检测要点与典型问题.pdf
+D-189,验货质检手册,D-奢侈品箱包,Chanel质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-189_Chanel质检分册：检测要点与典型问题.pdf
+D-190,验货质检手册,D-奢侈品箱包,Dior质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-190_Dior质检分册：检测要点与典型问题.pdf
+D-191,验货质检手册,D-奢侈品箱包,Prada质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-191_Prada质检分册：检测要点与典型问题.pdf
+D-192,验货质检手册,D-奢侈品箱包,Hermès质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-192_Hermès质检分册：检测要点与典型问题.pdf
+D-193,验货质检手册,D-奢侈品箱包,Celine质检分册：检测要点与典型问题,inspection,PDF,1200-2200字,grading_facts,D-193_Celine质检分册：检测要点与典型问题.pdf
+D-194,验货质检手册,D-奢侈品箱包,YSL质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-194_YSL质检分册：检测要点与典型问题.md
+D-195,验货质检手册,D-奢侈品箱包,Burberry质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-195_Burberry质检分册：检测要点与典型问题.md
+D-196,验货质检手册,D-奢侈品箱包,轻奢箱包质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-196_轻奢箱包质检分册：检测要点与典型问题.md
+D-197,验货质检手册,D-奢侈品箱包,箱包五金鉴定质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-197_箱包五金鉴定质检分册：检测要点与典型问题.md
+D-198,验货质检手册,D-奢侈品箱包,皮质老化与护理质检分册：检测要点与典型问题,inspection,MD,1200-2200字,grading_facts,D-198_皮质老化与护理质检分册：检测要点与典型问题.md
+D-199,验货质检手册,D-腕表,腕表质检流程总览,inspection,PDF,1200-2200字,grading_facts,D-199_腕表质检流程总览.pdf
+B-002,买家指南,B1 新手上路,完善个人资料,guide,MD,800-1400字,mixed,B-002_完善个人资料.md
+B-003,买家指南,B1 新手上路,首页与搜索入门,guide,MD,800-1400字,mixed,B-003_首页与搜索入门.md
+B-004,买家指南,B1 新手上路,筛选条件怎么用,guide,MD,800-1400字,mixed,B-004_筛选条件怎么用.md
+B-005,买家指南,B1 新手上路,排序方式解读,guide,MD,800-1400字,mixed,B-005_排序方式解读.md
+B-006,买家指南,B1 新手上路,收藏与想要,guide,MD,800-1400字,mixed,B-006_收藏与想要.md
+B-007,买家指南,B1 新手上路,关注靠谱卖家,guide,MD,800-1400字,mixed,B-007_关注靠谱卖家.md
+B-008,买家指南,B1 新手上路,看懂商品成色标签,guide,MD,800-1400字,mixed,B-008_看懂商品成色标签.md
+B-009,买家指南,B1 新手上路,看懂卖家信用分,guide,MD,800-1400字,mixed,B-009_看懂卖家信用分.md
+B-010,买家指南,B1 新手上路,识别平台质检标识,guide,MD,800-1400字,mixed,B-010_识别平台质检标识.md
+B-011,买家指南,B1 新手上路,商品页要看哪几项,guide,MD,800-1400字,mixed,B-011_商品页要看哪几项.md
+B-012,买家指南,B1 新手上路,怎么判断价格是否合理,guide,MD,800-1400字,mixed,B-012_怎么判断价格是否合理.md
+B-013,买家指南,B1 新手上路,新手第一次买二手流程总览,guide,MD,800-1400字,mixed,B-013_新手第一次买二手流程总览.md
+B-014,买家指南,B1 新手上路,什么是平台担保交易,guide,MD,800-1400字,mixed,B-014_什么是平台担保交易.md
+B-015,买家指南,B1 新手上路,哪些商品建议走验货,guide,MD,800-1400字,mixed,B-015_哪些商品建议走验货.md
+B-016,买家指南,B1 新手上路,避坑意识总览,guide,MD,800-1400字,mixed,B-016_避坑意识总览.md
+B-017,买家指南,B1 新手上路,学会看商品图片,guide,MD,800-1400字,mixed,B-017_学会看商品图片.md
+B-018,买家指南,B1 新手上路,学会看卖家评价,guide,MD,800-1400字,mixed,B-018_学会看卖家评价.md
+B-019,买家指南,B1 新手上路,关注商品降价,guide,MD,800-1400字,mixed,B-019_关注商品降价.md
+B-020,买家指南,B1 新手上路,买家等级与权益,guide,MD,800-1400字,mixed,B-020_买家等级与权益.md
+B-021,买家指南,B2 沟通与下单,怎么向卖家提问,guide,MD,800-1400字,mixed,B-021_怎么向卖家提问.md
+B-022,买家指南,B2 沟通与下单,要求补充实物图,guide,MD,800-1400字,mixed,B-022_要求补充实物图.md
+B-023,买家指南,B2 沟通与下单,询问购买凭证,guide,MD,800-1400字,mixed,B-023_询问购买凭证.md
+B-024,买家指南,B2 沟通与下单,砍价的正确方式,guide,MD,800-1400字,mixed,B-024_砍价的正确方式.md
+B-025,买家指南,B2 沟通与下单,砍价话术示例,guide,MD,800-1400字,mixed,B-025_砍价话术示例.md
+B-026,买家指南,B2 沟通与下单,卖家同意降价怎么改价,guide,MD,800-1400字,mixed,B-026_卖家同意降价怎么改价.md
+B-027,买家指南,B2 沟通与下单,什么情况不要交定金,guide,MD,800-1400字,mixed,B-027_什么情况不要交定金.md
+B-028,买家指南,B2 沟通与下单,预留商品风险,guide,MD,800-1400字,mixed,B-028_预留商品风险.md
+B-029,买家指南,B2 沟通与下单,下单备注怎么写,guide,MD,800-1400字,mixed,B-029_下单备注怎么写.md
+B-030,买家指南,B2 沟通与下单,一次买多件怎么合并,guide,MD,800-1400字,mixed,B-030_一次买多件怎么合并.md
+B-031,买家指南,B2 沟通与下单,优惠券使用,guide,MD,800-1400字,mixed,B-031_优惠券使用.md
+B-032,买家指南,B2 沟通与下单,支持哪些支付方式,guide,MD,800-1400字,mixed,B-032_支持哪些支付方式.md
+B-033,买家指南,B2 沟通与下单,支付失败怎么办,guide,MD,800-1400字,mixed,B-033_支付失败怎么办.md
+B-034,买家指南,B2 沟通与下单,重复扣款怎么办,guide,MD,800-1400字,mixed,B-034_重复扣款怎么办.md
+B-035,买家指南,B2 沟通与下单,下单后能改地址吗,guide,MD,800-1400字,mixed,B-035_下单后能改地址吗.md
+B-036,买家指南,B2 沟通与下单,卖家要求私下交易怎么办,guide,MD,800-1400字,mixed,B-036_卖家要求私下交易怎么办.md
+B-037,买家指南,B2 沟通与下单,拍下后卖家不卖怎么办,guide,MD,800-1400字,mixed,B-037_拍下后卖家不卖怎么办.md
+B-038,买家指南,B2 沟通与下单,怎么看订单状态,guide,MD,800-1400字,mixed,B-038_怎么看订单状态.md
+B-039,买家指南,B2 沟通与下单,取消订单规则,guide,MD,800-1400字,mixed,B-039_取消订单规则.md
+B-040,买家指南,B2 沟通与下单,卖家改价陷阱识别,guide,MD,800-1400字,mixed,B-040_卖家改价陷阱识别.md
+B-041,买家指南,B2 沟通与下单,聊天约定有没有效,guide,MD,800-1400字,mixed,B-041_聊天约定有没有效.md
+B-042,买家指南,B2 沟通与下单,怎么保留沟通证据,guide,MD,800-1400字,mixed,B-042_怎么保留沟通证据.md
+B-043,买家指南,B2 沟通与下单,陌生人发链接怎么办,guide,MD,800-1400字,mixed,B-043_陌生人发链接怎么办.md
+B-044,买家指南,B2 沟通与下单,拼单团购识别,guide,MD,800-1400字,mixed,B-044_拼单团购识别.md
+B-045,买家指南,B2 沟通与下单,下单前最后检查清单,guide,MD,800-1400字,mixed,B-045_下单前最后检查清单.md
+B-046,买家指南,B3 支付与担保,担保交易资金流向,guide,MD,800-1400字,mixed,B-046_担保交易资金流向.md
+B-047,买家指南,B3 支付与担保,钱什么时候打给卖家,guide,MD,800-1400字,mixed,B-047_钱什么时候打给卖家.md
+B-048,买家指南,B3 支付与担保,为什么不能微信直转,guide,MD,800-1400字,mixed,B-048_为什么不能微信直转.md
+B-049,买家指南,B3 支付与担保,平台托管安全说明,guide,MD,800-1400字,mixed,B-049_平台托管安全说明.md
+B-050,买家指南,B3 支付与担保,确认收货前资金状态,guide,MD,800-1400字,mixed,B-050_确认收货前资金状态.md
+B-051,买家指南,B3 支付与担保,银行卡支付限额,guide,MD,800-1400字,mixed,B-051_银行卡支付限额.md
+B-052,买家指南,B3 支付与担保,花呗信用卡分期,guide,MD,800-1400字,mixed,B-052_花呗信用卡分期.md
+B-053,买家指南,B3 支付与担保,零钱余额支付,guide,MD,800-1400字,mixed,B-053_零钱余额支付.md
+B-054,买家指南,B3 支付与担保,支付密码与免密风险,guide,MD,800-1400字,mixed,B-054_支付密码与免密风险.md
+B-055,买家指南,B3 支付与担保,订单价保规则,guide,MD,800-1400字,mixed,B-055_订单价保规则.md
+B-057,买家指南,B3 支付与担保,异常支付安全验证,guide,MD,800-1400字,mixed,B-057_异常支付安全验证.md
+B-058,买家指南,B3 支付与担保,代付风险,guide,MD,800-1400字,mixed,B-058_代付风险.md
+B-059,买家指南,B3 支付与担保,收款账户变更骗局,guide,MD,800-1400字,mixed,B-059_收款账户变更骗局.md
+B-060,买家指南,B3 支付与担保,担保服务是否收费,guide,MD,800-1400字,mixed,B-060_担保服务是否收费.md
+B-061,买家指南,B3 支付与担保,付款后多久不发货可退,guide,MD,800-1400字,mixed,B-061_付款后多久不发货可退.md
+B-062,买家指南,B3 支付与担保,资金冻结是什么意思,guide,MD,800-1400字,mixed,B-062_资金冻结是什么意思.md
+B-063,买家指南,B3 支付与担保,退款回到哪里,guide,MD,800-1400字,mixed,B-063_退款回到哪里.md
+B-064,买家指南,B3 支付与担保,异地与分期支付,guide,MD,800-1400字,mixed,B-064_异地与分期支付.md
+B-065,买家指南,B3 支付与担保,支付凭证保留,guide,MD,800-1400字,mixed,B-065_支付凭证保留.md
+B-066,买家指南,B4 验货与物流,哪些品类必须验货,guide,MD,800-1400字,mixed,B-066_哪些品类必须验货.md
+B-067,买家指南,B4 验货与物流,平台验货流程全解,guide,MD,800-1400字,mixed,B-067_平台验货流程全解.md
+B-068,买家指南,B4 验货与物流,寄出验机仓运费谁出,guide,MD,800-1400字,mixed,B-068_寄出验机仓运费谁出.md
+B-069,买家指南,B4 验货与物流,验货要几天,guide,MD,800-1400字,mixed,B-069_验货要几天.md
+B-070,买家指南,B4 验货与物流,验货不通过怎么办,guide,MD,800-1400字,mixed,B-070_验货不通过怎么办.md
+B-071,买家指南,B4 验货与物流,买家能否要求复检,guide,MD,800-1400字,mixed,B-071_买家能否要求复检.md
+B-072,买家指南,B4 验货与物流,物流方式选择,guide,MD,800-1400字,mixed,B-072_物流方式选择.md
+B-073,买家指南,B4 验货与物流,卖家已发货怎么跟踪,guide,MD,800-1400字,mixed,B-073_卖家已发货怎么跟踪.md
+B-074,买家指南,B4 验货与物流,包裹一直不更新,guide,MD,800-1400字,mixed,B-074_包裹一直不更新.md
+B-075,买家指南,B4 验货与物流,快递被代收点签收,guide,MD,800-1400字,mixed,B-075_快递被代收点签收.md
+B-076,买家指南,B4 验货与物流,当面签收检查步骤,guide,MD,800-1400字,mixed,B-076_当面签收检查步骤.md
+B-077,买家指南,B4 验货与物流,拒签条件与流程,guide,MD,800-1400字,mixed,B-077_拒签条件与流程.md
+B-078,买家指南,B4 验货与物流,包裹外观破损取证,guide,MD,800-1400字,mixed,B-078_包裹外观破损取证.md
+B-079,买家指南,B4 验货与物流,快递丢件处理,guide,MD,800-1400字,mixed,B-079_快递丢件处理.md
+B-080,买家指南,B4 验货与物流,包裹被调包防范,guide,MD,800-1400字,mixed,B-080_包裹被调包防范.md
+B-081,买家指南,B4 验货与物流,保价有没有必要,guide,MD,800-1400字,mixed,B-081_保价有没有必要.md
+B-082,买家指南,B4 验货与物流,拒收后退款流程,guide,MD,800-1400字,mixed,B-082_拒收后退款流程.md
+B-083,买家指南,B4 验货与物流,节假日物流时效,guide,MD,800-1400字,mixed,B-083_节假日物流时效.md
+B-084,买家指南,B4 验货与物流,同城面交注意事项,guide,MD,800-1400字,mixed,B-084_同城面交注意事项.md
+B-085,买家指南,B4 验货与物流,自提柜收货风险,guide,MD,800-1400字,mixed,B-085_自提柜收货风险.md
+B-086,买家指南,B4 验货与物流,物流显示签收但没收到,guide,MD,800-1400字,mixed,B-086_物流显示签收但没收到.md
+B-087,买家指南,B4 验货与物流,贵重物品物流建议,guide,MD,800-1400字,mixed,B-087_贵重物品物流建议.md
+B-088,买家指南,B4 验货与物流,退货物流怎么寄,guide,MD,800-1400字,mixed,B-088_退货物流怎么寄.md
+B-089,买家指南,B4 验货与物流,退货运费谁承担,guide,MD,800-1400字,mixed,B-089_退货运费谁承担.md
+B-090,买家指南,B4 验货与物流,物流凭证保留,guide,MD,800-1400字,mixed,B-090_物流凭证保留.md
+B-091,买家指南,B5 收货与评价,确认收货操作,guide,MD,800-1400字,mixed,B-091_确认收货操作.md
+B-092,买家指南,B5 收货与评价,建议试用多久再确认,guide,MD,800-1400字,mixed,B-092_建议试用多久再确认.md
+B-093,买家指南,B5 收货与评价,被诱导提前确认收货,guide,MD,800-1400字,mixed,B-093_被诱导提前确认收货.md
+B-094,买家指南,B5 收货与评价,自动确认前提醒,guide,MD,800-1400字,mixed,B-094_自动确认前提醒.md
+B-095,买家指南,B5 收货与评价,确认后还能售后吗,guide,MD,800-1400字,mixed,B-095_确认后还能售后吗.md
+B-096,买家指南,B5 收货与评价,商品一致怎么评价,guide,MD,800-1400字,mixed,B-096_商品一致怎么评价.md
+B-097,买家指南,B5 收货与评价,怎么写有用的评价,guide,MD,800-1400字,mixed,B-097_怎么写有用的评价.md
+B-098,买家指南,B5 收货与评价,评价晒图规范,guide,MD,800-1400字,mixed,B-098_评价晒图规范.md
+B-099,买家指南,B5 收货与评价,追评怎么写,guide,MD,800-1400字,mixed,B-099_追评怎么写.md
+B-100,买家指南,B5 收货与评价,修改与删除评价,guide,MD,800-1400字,mixed,B-100_修改与删除评价.md
+B-101,买家指南,B5 收货与评价,遇到差评威胁,guide,MD,800-1400字,mixed,B-101_遇到差评威胁.md
+B-102,买家指南,B5 收货与评价,卖家求改好评怎么办,guide,MD,800-1400字,mixed,B-102_卖家求改好评怎么办.md
+B-103,买家指南,B5 收货与评价,评价对其他买家的帮助,guide,MD,800-1400字,mixed,B-103_评价对其他买家的帮助.md
+B-104,买家指南,B5 收货与评价,满意如何关注卖家,guide,MD,800-1400字,mixed,B-104_满意如何关注卖家.md
+B-105,买家指南,B5 收货与评价,发票与保修卡交接,guide,MD,800-1400字,mixed,B-105_发票与保修卡交接.md
+B-106,买家指南,B5 收货与评价,配件清点清单,guide,MD,800-1400字,mixed,B-106_配件清点清单.md
+B-107,买家指南,B5 收货与评价,二手物品使用前清洁,guide,MD,800-1400字,mixed,B-107_二手物品使用前清洁.md
+B-108,买家指南,B5 收货与评价,发现小瑕疵怎么办,guide,MD,800-1400字,mixed,B-108_发现小瑕疵怎么办.md
+B-109,买家指南,B5 收货与评价,售后窗口期计算,guide,MD,800-1400字,mixed,B-109_售后窗口期计算.md
+B-110,买家指南,B5 收货与评价,交易完成后的维权途径,guide,MD,800-1400字,mixed,B-110_交易完成后的维权途径.md
+B-112,买家指南,B6 退款与维权,退款申请入口,guide,MD,800-1400字,mixed,B-112_退款申请入口.md
+B-113,买家指南,B6 退款与维权,退款原因怎么选,guide,MD,800-1400字,mixed,B-113_退款原因怎么选.md
+B-114,买家指南,B6 退款与维权,描述不符如何认定,guide,MD,800-1400字,mixed,B-114_描述不符如何认定.md
+B-115,买家指南,B6 退款与维权,功能故障售后流程,guide,MD,800-1400字,mixed,B-115_功能故障售后流程.md
+B-116,买家指南,B6 退款与维权,买到假货怎么办,guide,MD,800-1400字,mixed,B-116_买到假货怎么办.md
+B-117,买家指南,B6 退款与维权,卖家失联怎么办,guide,MD,800-1400字,mixed,B-117_卖家失联怎么办.md
+B-118,买家指南,B6 退款与维权,卖家发错货,guide,MD,800-1400字,mixed,B-118_卖家发错货.md
+B-119,买家指南,B6 退款与维权,收到商品少配件,guide,MD,800-1400字,mixed,B-119_收到商品少配件.md
+C-002,卖家指南,C1 入驻与开店,个人与专业卖家区别,guide,MD,800-1400字,mixed,C-002_个人与专业卖家区别.md
+C-003,卖家指南,C1 入驻与开店,专业卖家认证,guide,MD,800-1400字,mixed,C-003_专业卖家认证.md
+C-004,卖家指南,C1 入驻与开店,企业卖家入驻,guide,MD,800-1400字,mixed,C-004_企业卖家入驻.md
+C-005,卖家指南,C1 入驻与开店,学生卖家政策,guide,MD,800-1400字,mixed,C-005_学生卖家政策.md
+C-006,卖家指南,C1 入驻与开店,卖家服务协议,guide,MD,800-1400字,mixed,C-006_卖家服务协议.md
+C-007,卖家指南,C1 入驻与开店,开店必备资料,guide,MD,800-1400字,mixed,C-007_开店必备资料.md
+C-008,卖家指南,C1 入驻与开店,实名认证失败处理,guide,MD,800-1400字,mixed,C-008_实名认证失败处理.md
+C-009,卖家指南,C1 入驻与开店,经营类目选择,guide,MD,800-1400字,mixed,C-009_经营类目选择.md
+C-010,卖家指南,C1 入驻与开店,店铺命名规范,guide,MD,800-1400字,mixed,C-010_店铺命名规范.md
+C-011,卖家指南,C1 入驻与开店,店铺简介与头像,guide,MD,800-1400字,mixed,C-011_店铺简介与头像.md
+C-012,卖家指南,C1 入驻与开店,卖家等级成长,guide,MD,800-1400字,mixed,C-012_卖家等级成长.md
+C-013,卖家指南,C1 入驻与开店,多店铺管理,guide,MD,800-1400字,mixed,C-013_多店铺管理.md
+C-014,卖家指南,C1 入驻与开店,店铺转让规则,guide,MD,800-1400字,mixed,C-014_店铺转让规则.md
+C-015,卖家指南,C1 入驻与开店,关店与保证金退回,guide,MD,800-1400字,mixed,C-015_关店与保证金退回.md
+C-016,卖家指南,C2 商品发布,发布入口与流程,guide,MD,800-1400字,mixed,C-016_发布入口与流程.md
+C-017,卖家指南,C2 商品发布,标题撰写规则,guide,MD,800-1400字,mixed,C-017_标题撰写规则.md
+C-018,卖家指南,C2 商品发布,标题关键词技巧,guide,MD,800-1400字,mixed,C-018_标题关键词技巧.md
+C-019,卖家指南,C2 商品发布,违禁词排查,guide,MD,800-1400字,mixed,C-019_违禁词排查.md
+C-020,卖家指南,C2 商品发布,主图拍摄要求,guide,MD,800-1400字,mixed,C-020_主图拍摄要求.md
+C-021,卖家指南,C2 商品发布,辅图拍摄数量,guide,MD,800-1400字,mixed,C-021_辅图拍摄数量.md
+C-022,卖家指南,C2 商品发布,视频拍摄技巧,guide,MD,800-1400字,mixed,C-022_视频拍摄技巧.md
+C-023,卖家指南,C2 商品发布,图片去水印与真实感,guide,MD,800-1400字,mixed,C-023_图片去水印与真实感.md
+C-024,卖家指南,C2 商品发布,手机品类拍摄要点,guide,MD,800-1400字,mixed,C-024_手机品类拍摄要点.md
+C-025,卖家指南,C2 商品发布,笔记本品类拍摄要点,guide,MD,800-1400字,mixed,C-025_笔记本品类拍摄要点.md
+C-026,卖家指南,C2 商品发布,相机品类拍摄要点,guide,MD,800-1400字,mixed,C-026_相机品类拍摄要点.md
+C-027,卖家指南,C2 商品发布,服饰鞋包拍摄要点,guide,MD,800-1400字,mixed,C-027_服饰鞋包拍摄要点.md
+C-028,卖家指南,C2 商品发布,奢品拍摄要点,guide,MD,800-1400字,mixed,C-028_奢品拍摄要点.md
+C-029,卖家指南,C2 商品发布,图书拍摄要点,guide,MD,800-1400字,mixed,C-029_图书拍摄要点.md
+C-030,卖家指南,C2 商品发布,描述模板结构,guide,MD,800-1400字,mixed,C-030_描述模板结构.md
+C-031,卖家指南,C2 商品发布,成色如实描述,guide,MD,800-1400字,mixed,C-031_成色如实描述.md
+C-032,卖家指南,C2 商品发布,瑕疵披露义务,guide,MD,800-1400字,mixed,C-032_瑕疵披露义务.md
+C-033,卖家指南,C2 商品发布,规格参数填写,guide,MD,800-1400字,mixed,C-033_规格参数填写.md
+C-034,卖家指南,C2 商品发布,定价方法,guide,MD,800-1400字,mixed,C-034_定价方法.md
+C-035,卖家指南,C2 商品发布,折旧率参考,guide,MD,800-1400字,mixed,C-035_折旧率参考.md
+C-036,卖家指南,C2 商品发布,行情对比定价,guide,MD,800-1400字,mixed,C-036_行情对比定价.md
+C-037,卖家指南,C2 商品发布,定价过高的影响,guide,MD,800-1400字,mixed,C-037_定价过高的影响.md
+C-038,卖家指南,C2 商品发布,库存与单件发布,guide,MD,800-1400字,mixed,C-038_库存与单件发布.md
+C-039,卖家指南,C2 商品发布,发布类目选择,guide,MD,800-1400字,mixed,C-039_发布类目选择.md
+C-040,卖家指南,C2 商品发布,发布失败原因,guide,MD,800-1400字,mixed,C-040_发布失败原因.md
+C-041,卖家指南,C2 商品发布,审核驳回高频原因,guide,MD,800-1400字,mixed,C-041_审核驳回高频原因.md
+C-042,卖家指南,C2 商品发布,审核时效,guide,MD,800-1400字,mixed,C-042_审核时效.md
+C-043,卖家指南,C2 商品发布,商品被下架原因,guide,MD,800-1400字,mixed,C-043_商品被下架原因.md
+C-044,卖家指南,C2 商品发布,违禁品发布后果,guide,MD,800-1400字,mixed,C-044_违禁品发布后果.md
+C-045,卖家指南,C2 商品发布,重复铺货判定,guide,MD,800-1400字,mixed,C-045_重复铺货判定.md
+C-046,卖家指南,C2 商品发布,擦亮与重新发布,guide,MD,800-1400字,mixed,C-046_擦亮与重新发布.md
+C-047,卖家指南,C2 商品发布,草稿箱使用,guide,MD,800-1400字,mixed,C-047_草稿箱使用.md
+C-048,卖家指南,C2 商品发布,定时发布,guide,MD,800-1400字,mixed,C-048_定时发布.md
+C-049,卖家指南,C2 商品发布,系列商品管理,guide,MD,800-1400字,mixed,C-049_系列商品管理.md
+C-050,卖家指南,C2 商品发布,包邮与运费设置,guide,MD,800-1400字,mixed,C-050_包邮与运费设置.md
+C-052,卖家指南,C2 商品发布,保修凭证上传,guide,MD,800-1400字,mixed,C-052_保修凭证上传.md
+C-053,卖家指南,C2 商品发布,配件清单填写,guide,MD,800-1400字,mixed,C-053_配件清单填写.md
+C-054,卖家指南,C2 商品发布,商品快照认知,guide,MD,800-1400字,mixed,C-054_商品快照认知.md
+C-055,卖家指南,C2 商品发布,发布质量分提升,guide,MD,800-1400字,mixed,C-055_发布质量分提升.md
+C-056,卖家指南,C3 交易处理,接单确认,guide,MD,800-1400字,mixed,C-056_接单确认.md
+C-057,卖家指南,C3 交易处理,议价应对话术,guide,MD,800-1400字,mixed,C-057_议价应对话术.md
+C-058,卖家指南,C3 交易处理,拒绝不合理砍价,guide,MD,800-1400字,mixed,C-058_拒绝不合理砍价.md
+C-059,卖家指南,C3 交易处理,改价操作,guide,MD,800-1400字,mixed,C-059_改价操作.md
+C-060,卖家指南,C3 交易处理,订单备注处理,guide,MD,800-1400字,mixed,C-060_订单备注处理.md
+C-061,卖家指南,C3 交易处理,发货时限要求,guide,MD,800-1400字,mixed,C-061_发货时限要求.md
+C-062,卖家指南,C3 交易处理,延迟发货后果,guide,MD,800-1400字,mixed,C-062_延迟发货后果.md
+C-063,卖家指南,C3 交易处理,虚假发货风险,guide,MD,800-1400字,mixed,C-063_虚假发货风险.md
+C-064,卖家指南,C3 交易处理,备货检查,guide,MD,800-1400字,mixed,C-064_备货检查.md
+C-065,卖家指南,C3 交易处理,发货前影像留存,guide,MD,800-1400字,mixed,C-065_发货前影像留存.md
+C-066,卖家指南,C3 交易处理,手机数码打包规范,guide,MD,800-1400字,mixed,C-066_手机数码打包规范.md
+C-067,卖家指南,C3 交易处理,电脑相机打包规范,guide,MD,800-1400字,mixed,C-067_电脑相机打包规范.md
+C-068,卖家指南,C3 交易处理,服饰图书打包规范,guide,MD,800-1400字,mixed,C-068_服饰图书打包规范.md
+C-069,卖家指南,C3 交易处理,奢品贵重打包规范,guide,MD,800-1400字,mixed,C-069_奢品贵重打包规范.md
+C-070,卖家指南,C3 交易处理,快递选择,guide,MD,800-1400字,mixed,C-070_快递选择.md
+C-071,卖家指南,C3 交易处理,保价建议,guide,MD,800-1400字,mixed,C-071_保价建议.md
+C-072,卖家指南,C3 交易处理,面单填写,guide,MD,800-1400字,mixed,C-072_面单填写.md
+C-073,卖家指南,C3 交易处理,单号录入,guide,MD,800-1400字,mixed,C-073_单号录入.md
+C-074,卖家指南,C3 交易处理,同城面交规范,guide,MD,800-1400字,mixed,C-074_同城面交规范.md
+C-075,卖家指南,C3 交易处理,验货仓发货流程,guide,MD,800-1400字,mixed,C-075_验货仓发货流程.md
+C-076,卖家指南,C3 交易处理,买家要求改地址,guide,MD,800-1400字,mixed,C-076_买家要求改地址.md
+C-077,卖家指南,C3 交易处理,买家催货回复,guide,MD,800-1400字,mixed,C-077_买家催货回复.md
+C-078,卖家指南,C3 交易处理,部分发货,guide,MD,800-1400字,mixed,C-078_部分发货.md
+C-079,卖家指南,C3 交易处理,发货后售后预判,guide,MD,800-1400字,mixed,C-079_发货后售后预判.md
+C-080,卖家指南,C3 交易处理,交易完成确认,guide,MD,800-1400字,mixed,C-080_交易完成确认.md
+C-081,卖家指南,C4 售后与纠纷,售后响应时效,guide,MD,800-1400字,mixed,C-081_售后响应时效.md
+C-082,卖家指南,C4 售后与纠纷,退款申请怎么看,guide,MD,800-1400字,mixed,C-082_退款申请怎么看.md
+C-083,卖家指南,C4 售后与纠纷,同意退款前检查,guide,MD,800-1400字,mixed,C-083_同意退款前检查.md
+C-084,卖家指南,C4 售后与纠纷,协商话术,guide,MD,800-1400字,mixed,C-084_协商话术.md
+C-085,卖家指南,C4 售后与纠纷,描述不符争议,guide,MD,800-1400字,mixed,C-085_描述不符争议.md
+C-086,卖家指南,C4 售后与纠纷,功能故障争议,guide,MD,800-1400字,mixed,C-086_功能故障争议.md
+C-087,卖家指南,C4 售后与纠纷,成色争议,guide,MD,800-1400字,mixed,C-087_成色争议.md
+C-088,卖家指南,C4 售后与纠纷,买家掉包防范,guide,MD,800-1400字,mixed,C-088_买家掉包防范.md
+C-089,卖家指南,C4 售后与纠纷,退货验收流程,guide,MD,800-1400字,mixed,C-089_退货验收流程.md
+C-090,卖家指南,C4 售后与纠纷,退回商品异常举证,guide,MD,800-1400字,mixed,C-090_退回商品异常举证.md
+C-091,卖家指南,C4 售后与纠纷,恶意退货识别,guide,MD,800-1400字,mixed,C-091_恶意退货识别.md
+C-092,卖家指南,C4 售后与纠纷,仅退款滥用应对,guide,MD,800-1400字,mixed,C-092_仅退款滥用应对.md
+C-093,卖家指南,C4 售后与纠纷,平台介入应对,guide,MD,800-1400字,mixed,C-093_平台介入应对.md
+C-094,卖家指南,C4 售后与纠纷,仲裁举证清单,guide,MD,800-1400字,mixed,C-094_仲裁举证清单.md
+C-095,卖家指南,C4 售后与纠纷,申诉材料准备,guide,MD,800-1400字,mixed,C-095_申诉材料准备.md
+C-096,卖家指南,C4 售后与纠纷,卖家败诉常见原因,guide,MD,800-1400字,mixed,C-096_卖家败诉常见原因.md
+C-097,卖家指南,C4 售后与纠纷,胜诉关键证据,guide,MD,800-1400字,mixed,C-097_胜诉关键证据.md
+C-098,卖家指南,C4 售后与纠纷,假货指控应对,guide,MD,800-1400字,mixed,C-098_假货指控应对.md
+C-099,卖家指南,C4 售后与纠纷,买家威胁差评,guide,MD,800-1400字,mixed,C-099_买家威胁差评.md
+C-100,卖家指南,C4 售后与纠纷,差评申诉,guide,MD,800-1400字,mixed,C-100_差评申诉.md
+C-102,卖家指南,C4 售后与纠纷,赔偿协商,guide,MD,800-1400字,mixed,C-102_赔偿协商.md
+C-103,卖家指南,C4 售后与纠纷,保证金赔付,guide,MD,800-1400字,mixed,C-103_保证金赔付.md
+C-104,卖家指南,C4 售后与纠纷,售后数据指标,guide,MD,800-1400字,mixed,C-104_售后数据指标.md
+C-105,卖家指南,C4 售后与纠纷,降低纠纷率方法,guide,MD,800-1400字,mixed,C-105_降低纠纷率方法.md
+C-106,卖家指南,C4 售后与纠纷,手机品类售后要点,guide,MD,800-1400字,mixed,C-106_手机品类售后要点.md
+C-107,卖家指南,C4 售后与纠纷,奢品售后要点,guide,MD,800-1400字,mixed,C-107_奢品售后要点.md
+C-108,卖家指南,C4 售后与纠纷,图书售后要点,guide,MD,800-1400字,mixed,C-108_图书售后要点.md
+C-109,卖家指南,C4 售后与纠纷,客服介入流程,guide,MD,800-1400字,mixed,C-109_客服介入流程.md
+E-002,售后仲裁SOP,E1 工单体系,工单优先级定义,sop,MD,1000-1800字,mixed,E-002_工单优先级定义.md
+E-003,售后仲裁SOP,E1 工单体系,工单状态流转,sop,MD,1000-1800字,mixed,E-003_工单状态流转.md
+E-004,售后仲裁SOP,E1 工单体系,首响时限标准,sop,MD,1000-1800字,mixed,E-004_首响时限标准.md
+E-005,售后仲裁SOP,E1 工单体系,解决时限标准,sop,MD,1000-1800字,mixed,E-005_解决时限标准.md
+E-006,售后仲裁SOP,E1 工单体系,工单转派规则,sop,DOCX,1000-1800字,mixed,E-006_工单转派规则.docx
+E-007,售后仲裁SOP,E1 工单体系,并单与拆单,sop,DOCX,1000-1800字,mixed,E-007_并单与拆单.docx
+E-008,售后仲裁SOP,E1 工单体系,工单标签体系,sop,DOCX,1000-1800字,mixed,E-008_工单标签体系.docx
+E-009,售后仲裁SOP,E1 工单体系,客服工作台操作,sop,DOCX,1000-1800字,mixed,E-009_客服工作台操作.docx
+E-010,售后仲裁SOP,E1 工单体系,工单升级触发,sop,DOCX,1000-1800字,mixed,E-010_工单升级触发.docx
+E-011,售后仲裁SOP,E1 工单体系,自动化工单规则,sop,DOCX,1000-1800字,mixed,E-011_自动化工单规则.docx
+E-012,售后仲裁SOP,E1 工单体系,重复来电识别,sop,DOCX,1000-1800字,mixed,E-012_重复来电识别.docx
+E-013,售后仲裁SOP,E1 工单体系,跨部门协同,sop,DOCX,1000-1800字,mixed,E-013_跨部门协同.docx
+E-014,售后仲裁SOP,E1 工单体系,工单关闭规范,sop,DOCX,1000-1800字,mixed,E-014_工单关闭规范.docx
+E-015,售后仲裁SOP,E1 工单体系,客户回访,sop,DOCX,1000-1800字,mixed,E-015_客户回访.docx
+E-016,售后仲裁SOP,E1 工单体系,SLA考核口径,sop,DOCX,1000-1800字,mixed,E-016_SLA考核口径.docx
+E-017,售后仲裁SOP,E1 工单体系,工单积压预警,sop,DOCX,1000-1800字,mixed,E-017_工单积压预警.docx
+E-018,售后仲裁SOP,E1 工单体系,夜班工单处理,sop,DOCX,1000-1800字,mixed,E-018_夜班工单处理.docx
+E-019,售后仲裁SOP,E1 工单体系,节假日排班,sop,DOCX,1000-1800字,mixed,E-019_节假日排班.docx
+E-020,售后仲裁SOP,E1 工单体系,工单质检标准,sop,DOCX,1000-1800字,mixed,E-020_工单质检标准.docx
+E-021,售后仲裁SOP,E3 赔付与执行,先行赔付条件,sop,DOCX,1000-1800字,mixed,E-021_先行赔付条件.docx
+E-022,售后仲裁SOP,E3 赔付与执行,赔付资金来源,sop,DOCX,1000-1800字,mixed,E-022_赔付资金来源.docx
+E-023,售后仲裁SOP,E3 赔付与执行,保证金扣款流程,sop,DOCX,1000-1800字,mixed,E-023_保证金扣款流程.docx
+E-024,售后仲裁SOP,E3 赔付与执行,货款追回,sop,DOCX,1000-1800字,mixed,E-024_货款追回.docx
+E-025,售后仲裁SOP,E3 赔付与执行,原路退回操作,sop,DOCX,1000-1800字,mixed,E-025_原路退回操作.docx
+E-026,售后仲裁SOP,E3 赔付与执行,赔付到账异常,sop,DOCX,1000-1800字,mixed,E-026_赔付到账异常.docx
+E-027,售后仲裁SOP,E3 赔付与执行,赔付审批权限,sop,DOCX,1000-1800字,mixed,E-027_赔付审批权限.docx
+E-028,售后仲裁SOP,E3 赔付与执行,超额赔付升级,sop,DOCX,1000-1800字,mixed,E-028_超额赔付升级.docx
+E-029,售后仲裁SOP,E3 赔付与执行,赔付台账,sop,DOCX,1000-1800字,mixed,E-029_赔付台账.docx
+E-030,售后仲裁SOP,E3 赔付与执行,卖家追偿,sop,DOCX,1000-1800字,mixed,E-030_卖家追偿.docx
+E-031,售后仲裁SOP,E3 赔付与执行,保险理赔对接,sop,DOCX,1000-1800字,mixed,E-031_保险理赔对接.docx
+E-032,售后仲裁SOP,E3 赔付与执行,退款链路异常处理,sop,DOCX,1000-1800字,mixed,E-032_退款链路异常处理.docx
+E-033,售后仲裁SOP,E3 赔付与执行,资金冻结操作,sop,DOCX,1000-1800字,mixed,E-033_资金冻结操作.docx
+E-034,售后仲裁SOP,E3 赔付与执行,解冻审批,sop,DOCX,1000-1800字,mixed,E-034_解冻审批.docx
+E-035,售后仲裁SOP,E3 赔付与执行,坏账处理,sop,DOCX,1000-1800字,mixed,E-035_坏账处理.docx
+E-036,售后仲裁SOP,E3 赔付与执行,财务对账,sop,DOCX,1000-1800字,mixed,E-036_财务对账.docx
+E-037,售后仲裁SOP,E3 赔付与执行,赔付凭证,sop,DOCX,1000-1800字,mixed,E-037_赔付凭证.docx
+E-038,售后仲裁SOP,E3 赔付与执行,执行回访,sop,DOCX,1000-1800字,mixed,E-038_执行回访.docx
+E-039,售后仲裁SOP,E3 赔付与执行,赔付数据分析,sop,DOCX,1000-1800字,mixed,E-039_赔付数据分析.docx
+E-040,售后仲裁SOP,E3 赔付与执行,异常赔付追责,sop,DOCX,1000-1800字,mixed,E-040_异常赔付追责.docx
+E-041,售后仲裁SOP,E4 升级与敏感,升级矩阵总则,sop,DOCX,1000-1800字,mixed,E-041_升级矩阵总则.docx
+E-042,售后仲裁SOP,E4 升级与敏感,普通升级条件,sop,DOCX,1000-1800字,mixed,E-042_普通升级条件.docx
+E-043,售后仲裁SOP,E4 升级与敏感,紧急升级条件,sop,DOCX,1000-1800字,mixed,E-043_紧急升级条件.docx
+E-044,售后仲裁SOP,E4 升级与敏感,主管介入标准,sop,DOCX,1000-1800字,mixed,E-044_主管介入标准.docx
+E-045,售后仲裁SOP,E4 升级与敏感,重复投诉处理,sop,DOCX,1000-1800字,mixed,E-045_重复投诉处理.docx
+E-047,售后仲裁SOP,E4 升级与敏感,媒体舆情应对,sop,DOCX,1000-1800字,mixed,E-047_媒体舆情应对.docx
+E-048,售后仲裁SOP,E4 升级与敏感,法律函件接收,sop,DOCX,1000-1800字,mixed,E-048_法律函件接收.docx
+E-049,售后仲裁SOP,E4 升级与敏感,12315转办处理,sop,DOCX,1000-1800字,mixed,E-049_12315转办处理.docx
+E-050,售后仲裁SOP,E4 升级与敏感,报警协同,sop,DOCX,1000-1800字,mixed,E-050_报警协同.docx
+E-051,售后仲裁SOP,E4 升级与敏感,极端情绪安抚,sop,DOCX,1000-1800字,mixed,E-051_极端情绪安抚.docx
+E-052,售后仲裁SOP,E4 升级与敏感,自伤倾向处置,sop,DOCX,1000-1800字,mixed,E-052_自伤倾向处置.docx
+E-053,售后仲裁SOP,E4 升级与敏感,反诈案件协同,sop,DOCX,1000-1800字,mixed,E-053_反诈案件协同.docx
+E-054,售后仲裁SOP,E4 升级与敏感,未成年人保护升级,sop,DOCX,1000-1800字,mixed,E-054_未成年人保护升级.docx
+E-055,售后仲裁SOP,E4 升级与敏感,特殊人群关怀,sop,DOCX,1000-1800字,mixed,E-055_特殊人群关怀.docx
+E-056,售后仲裁SOP,E4 升级与敏感,外部律师对接,sop,DOCX,1000-1800字,mixed,E-056_外部律师对接.docx
+E-057,售后仲裁SOP,E4 升级与敏感,监管协查,sop,DOCX,1000-1800字,mixed,E-057_监管协查.docx
+E-058,售后仲裁SOP,E4 升级与敏感,公关口径,sop,DOCX,1000-1800字,mixed,E-058_公关口径.docx
+E-059,售后仲裁SOP,E4 升级与敏感,升级记录规范,sop,DOCX,1000-1800字,mixed,E-059_升级记录规范.docx
+E-060,售后仲裁SOP,E4 升级与敏感,复盘会议,sop,DOCX,1000-1800字,mixed,E-060_复盘会议.docx
+E-061,售后仲裁SOP,E4 升级与敏感,敏感词预警,sop,DOCX,1000-1800字,mixed,E-061_敏感词预警.docx
+E-062,售后仲裁SOP,E4 升级与敏感,通话上报,sop,DOCX,1000-1800字,mixed,E-062_通话上报.docx
+E-063,售后仲裁SOP,E4 升级与敏感,站内舆情监控,sop,DOCX,1000-1800字,mixed,E-063_站内舆情监控.docx
+E-064,售后仲裁SOP,E4 升级与敏感,升级SLA,sop,DOCX,1000-1800字,mixed,E-064_升级SLA.docx
+E-065,售后仲裁SOP,E4 升级与敏感,事后回访,sop,DOCX,1000-1800字,mixed,E-065_事后回访.docx
+E-066,售后仲裁SOP,E5 质检争议复核,验机报告异议受理,sop,DOCX,1000-1800字,mixed,E-066_验机报告异议受理.docx
+E-067,售后仲裁SOP,E5 质检争议复核,二次复检流程,sop,DOCX,1000-1800字,mixed,E-067_二次复检流程.docx
+E-068,售后仲裁SOP,E5 质检争议复核,复检取样规范,sop,DOCX,1000-1800字,mixed,E-068_复检取样规范.docx
+E-069,售后仲裁SOP,E5 质检争议复核,复检项目清单,sop,DOCX,1000-1800字,mixed,E-069_复检项目清单.docx
+E-070,售后仲裁SOP,E5 质检争议复核,复检结论出具,sop,DOCX,1000-1800字,mixed,E-070_复检结论出具.docx
+E-071,售后仲裁SOP,E5 质检争议复核,原检错误追责,sop,DOCX,1000-1800字,mixed,E-071_原检错误追责.docx
+E-072,售后仲裁SOP,E5 质检争议复核,手机复检差异处理,sop,DOCX,1000-1800字,mixed,E-072_手机复检差异处理.docx
+E-073,售后仲裁SOP,E5 质检争议复核,奢品复检差异处理,sop,DOCX,1000-1800字,mixed,E-073_奢品复检差异处理.docx
+E-074,售后仲裁SOP,E5 质检争议复核,腕表复检差异处理,sop,DOCX,1000-1800字,mixed,E-074_腕表复检差异处理.docx
+E-075,售后仲裁SOP,E5 质检争议复核,珠宝复检差异处理,sop,DOCX,1000-1800字,mixed,E-075_珠宝复检差异处理.docx
+E-076,售后仲裁SOP,E5 质检争议复核,买卖双方在场复检,sop,DOCX,1000-1800字,mixed,E-076_买卖双方在场复检.docx
+E-077,售后仲裁SOP,E5 质检争议复核,远程视频复检,sop,DOCX,1000-1800字,mixed,E-077_远程视频复检.docx
+E-078,售后仲裁SOP,E5 质检争议复核,复检费用承担,sop,DOCX,1000-1800字,mixed,E-078_复检费用承担.docx
+E-079,售后仲裁SOP,E5 质检争议复核,复检后仲裁衔接,sop,DOCX,1000-1800字,mixed,E-079_复检后仲裁衔接.docx
+E-080,售后仲裁SOP,E5 质检争议复核,质检标准更新,sop,DOCX,1000-1800字,mixed,E-080_质检标准更新.docx
+E-081,售后仲裁SOP,E5 质检争议复核,争议样本库,sop,DOCX,1000-1800字,mixed,E-081_争议样本库.docx
+E-082,售后仲裁SOP,E5 质检争议复核,复检报告模板,sop,DOCX,1000-1800字,mixed,E-082_复检报告模板.docx
+E-083,售后仲裁SOP,E5 质检争议复核,复检时效,sop,DOCX,1000-1800字,mixed,E-083_复检时效.docx
+E-084,售后仲裁SOP,E5 质检争议复核,复检数据统计,sop,DOCX,1000-1800字,mixed,E-084_复检数据统计.docx
+E-085,售后仲裁SOP,E5 质检争议复核,客户告知话术,sop,DOCX,1000-1800字,mixed,E-085_客户告知话术.docx
+E-086,售后仲裁SOP,E6 质控与复盘,仲裁抽检规则,sop,MD,1000-1800字,mixed,E-086_仲裁抽检规则.md
+E-087,售后仲裁SOP,E6 质控与复盘,错案认定,sop,MD,1000-1800字,mixed,E-087_错案认定.md
+E-088,售后仲裁SOP,E6 质控与复盘,错案纠正流程,sop,MD,1000-1800字,mixed,E-088_错案纠正流程.md
+E-089,售后仲裁SOP,E6 质控与复盘,质检评分,sop,MD,1000-1800字,mixed,E-089_质检评分.md
+E-090,售后仲裁SOP,E6 质控与复盘,话术质检,sop,MD,1000-1800字,mixed,E-090_话术质检.md
+E-092,售后仲裁SOP,E6 质控与复盘,典型案例库,sop,MD,1000-1800字,mixed,E-092_典型案例库.md
+E-093,售后仲裁SOP,E6 质控与复盘,周复盘机制,sop,MD,1000-1800字,mixed,E-093_周复盘机制.md
+E-094,售后仲裁SOP,E6 质控与复盘,数据报表,sop,MD,1000-1800字,mixed,E-094_数据报表.md
+E-095,售后仲裁SOP,E6 质控与复盘,改进闭环,sop,MD,1000-1800字,mixed,E-095_改进闭环.md
+E-096,售后仲裁SOP,E6 质控与复盘,培训考核,sop,MD,1000-1800字,mixed,E-096_培训考核.md
+E-097,售后仲裁SOP,E6 质控与复盘,知识库维护,sop,MD,1000-1800字,mixed,E-097_知识库维护.md
+E-098,售后仲裁SOP,E6 质控与复盘,常见错案Top,sop,MD,1000-1800字,mixed,E-098_常见错案Top.md
+E-099,售后仲裁SOP,E6 质控与复盘,优秀工单评选,sop,MD,1000-1800字,mixed,E-099_优秀工单评选.md
+CASE-002,真实场景案例库,F1 买家侧案例,买家反馈游戏本隐瞒拆修史，仲裁平台介入后调解退货,case,MD,500-900字,none,CASE-002_买家反馈游戏本隐瞒拆修史，仲裁平台介入后调解退货.md
+CASE-003,真实场景案例库,F1 买家侧案例,阿迪椰子｜配件缺失，平台支持全额退款,case,MD,500-900字,none,CASE-003_阿迪椰子｜配件缺失，平台支持全额退款.md
+CASE-004,真实场景案例库,F1 买家侧案例,索尼微单｜成色被高估，买家部分胜诉折价退款,case,MD,500-900字,none,CASE-004_索尼微单｜成色被高估，买家部分胜诉折价退款.md
+CASE-005,真实场景案例库,F1 买家侧案例,买家反馈佳能单反买到翻新机，仲裁验货拦截后原路退款,case,MD,500-900字,none,CASE-005_买家反馈佳能单反买到翻新机，仲裁验货拦截后原路退款.md
+CASE-006,真实场景案例库,F1 买家侧案例,小米13交易遭遇验货报告不通过，平台支持全额退款,case,MD,500-900字,none,CASE-006_小米13交易遭遇验货报告不通过，平台支持全额退款.md
+CASE-007,真实场景案例库,F1 买家侧案例,AirPods Pro｜描述与实物不符，买家部分胜诉折价退款,case,MD,500-900字,none,CASE-007_AirPods Pro｜描述与实物不符，买家部分胜诉折价退款.md
+CASE-008,真实场景案例库,F1 买家侧案例,Apple Watch交易遭遇成色被高估，买家部分胜诉折价退款,case,MD,500-900字,none,CASE-008_Apple Watch交易遭遇成色被高估，买家部分胜诉折价退款.md
+CASE-009,真实场景案例库,F1 买家侧案例,精装图书套装交易遭遇电池健康虚标，验货拦截后原路退款,case,MD,500-900字,none,CASE-009_精装图书套装交易遭遇电池健康虚标，验货拦截后原路退款.md
+CASE-010,真实场景案例库,F1 买家侧案例,4K显示器出现ID锁无法退出：验货拦截后原路退款全过程,case,MD,500-900字,none,CASE-010_4K显示器出现ID锁无法退出：验货拦截后原路退款全过程.md
+CASE-011,真实场景案例库,F1 买家侧案例,戴森吹风机｜进水机当靓机出售，平台介入后调解退货,case,MD,500-900字,none,CASE-011_戴森吹风机｜进水机当靓机出售，平台介入后调解退货.md
+CASE-012,真实场景案例库,F1 买家侧案例,买家反馈家用投影仪验货报告不通过，仲裁平台介入后调解退货,case,MD,500-900字,none,CASE-012_买家反馈家用投影仪验货报告不通过，仲裁平台介入后调解退货.md
+CASE-013,真实场景案例库,F1 买家侧案例,足金手链｜验货报告不通过，平台介入后调解退货,case,MD,500-900字,none,CASE-013_足金手链｜验货报告不通过，平台介入后调解退货.md
+CASE-014,真实场景案例库,F1 买家侧案例,买家反馈AirPods Pro快递中途丢件，仲裁平台支持全额退款,case,MD,500-900字,none,CASE-014_买家反馈AirPods Pro快递中途丢件，仲裁平台支持全额退款.md
+CASE-015,真实场景案例库,F1 买家侧案例,游戏本出现物流运输破损：平台支持全额退款全过程,case,MD,500-900字,none,CASE-015_游戏本出现物流运输破损：平台支持全额退款全过程.md
+CASE-016,真实场景案例库,F1 买家侧案例,PS5交易遭遇发货前疑似调包，平台介入后调解退货,case,MD,500-900字,none,CASE-016_PS5交易遭遇发货前疑似调包，平台介入后调解退货.md
+CASE-017,真实场景案例库,F1 买家侧案例,浪琴腕表出现买到扩容机：平台支持全额退款全过程,case,MD,500-900字,none,CASE-017_浪琴腕表出现买到扩容机：平台支持全额退款全过程.md
+CASE-018,真实场景案例库,F1 买家侧案例,MacBook Air交易遭遇验货报告不通过，买家部分胜诉折价退款,case,MD,500-900字,none,CASE-018_MacBook Air交易遭遇验货报告不通过，买家部分胜诉折价退款.md
+CASE-019,真实场景案例库,F1 买家侧案例,Switch OLED出现快递中途丢件：平台支持全额退款全过程,case,MD,500-900字,none,CASE-019_Switch OLED出现快递中途丢件：平台支持全额退款全过程.md
+CASE-020,真实场景案例库,F1 买家侧案例,iPhone12出现隐瞒拆修史：平台介入后调解退货全过程,case,MD,500-900字,none,CASE-020_iPhone12出现隐瞒拆修史：平台介入后调解退货全过程.md
+CASE-021,真实场景案例库,F1 买家侧案例,精装图书套装出现发货前疑似调包：买家部分胜诉折价退款全过程,case,MD,500-900字,none,CASE-021_精装图书套装出现发货前疑似调包：买家部分胜诉折价退款全过程.md
+CASE-022,真实场景案例库,F1 买家侧案例,机械键盘｜描述与实物不符，验货拦截后原路退款,case,MD,500-900字,none,CASE-022_机械键盘｜描述与实物不符，验货拦截后原路退款.md
+CASE-023,真实场景案例库,F1 买家侧案例,买家反馈独立显卡买到翻新机，仲裁平台支持全额退款,case,MD,500-900字,none,CASE-023_买家反馈独立显卡买到翻新机，仲裁平台支持全额退款.md
+CASE-024,真实场景案例库,F1 买家侧案例,ThinkPad X1交易遭遇隐瞒拆修史，验货拦截后原路退款,case,MD,500-900字,none,CASE-024_ThinkPad X1交易遭遇隐瞒拆修史，验货拦截后原路退款.md
+CASE-025,真实场景案例库,F1 买家侧案例,买家反馈三星折叠屏屏幕存在暗斑，仲裁平台支持全额退款,case,MD,500-900字,none,CASE-025_买家反馈三星折叠屏屏幕存在暗斑，仲裁平台支持全额退款.md
+CASE-026,真实场景案例库,F1 买家侧案例,华为Mate40交易遭遇ID锁无法退出，平台支持全额退款,case,MD,500-900字,none,CASE-026_华为Mate40交易遭遇ID锁无法退出，平台支持全额退款.md
+CASE-027,真实场景案例库,F1 买家侧案例,iPad Air交易遭遇ID锁无法退出，平台支持全额退款,case,MD,500-900字,none,CASE-027_iPad Air交易遭遇ID锁无法退出，平台支持全额退款.md
+CASE-028,真实场景案例库,F1 买家侧案例,iPhone13Pro交易遭遇描述与实物不符，买家部分胜诉折价退款,case,MD,500-900字,none,CASE-028_iPhone13Pro交易遭遇描述与实物不符，买家部分胜诉折价退款.md
+CASE-029,真实场景案例库,F1 买家侧案例,佳能单反｜卖家失联不发货，买家部分胜诉折价退款,case,MD,500-900字,none,CASE-029_佳能单反｜卖家失联不发货，买家部分胜诉折价退款.md
+CASE-030,真实场景案例库,F1 买家侧案例,足金手链出现发错型号：验货拦截后原路退款全过程,case,MD,500-900字,none,CASE-030_足金手链出现发错型号：验货拦截后原路退款全过程.md
+CASE-031,真实场景案例库,F1 买家侧案例,买家反馈索尼微单配件缺失，仲裁平台介入后调解退货,case,MD,500-900字,none,CASE-031_买家反馈索尼微单配件缺失，仲裁平台介入后调解退货.md
+CASE-032,真实场景案例库,F1 买家侧案例,买家反馈戴森吹风机描述与实物不符，仲裁买家部分胜诉折价退款,case,MD,500-900字,none,CASE-032_买家反馈戴森吹风机描述与实物不符，仲裁买家部分胜诉折价退款.md
+CASE-033,真实场景案例库,F1 买家侧案例,买家反馈精装图书套装物流运输破损，仲裁验货拦截后原路退款,case,MD,500-900字,none,CASE-033_买家反馈精装图书套装物流运输破损，仲裁验货拦截后原路退款.md
+CASE-034,真实场景案例库,F1 买家侧案例,WiFi6路由器交易遭遇ID锁无法退出，验货拦截后原路退款,case,MD,500-900字,none,CASE-034_WiFi6路由器交易遭遇ID锁无法退出，验货拦截后原路退款.md
+CASE-035,真实场景案例库,F1 买家侧案例,PS5交易遭遇功能故障频发，验货拦截后原路退款,case,MD,500-900字,none,CASE-035_PS5交易遭遇功能故障频发，验货拦截后原路退款.md
+CASE-036,真实场景案例库,F1 买家侧案例,iPad Air出现买到翻新机：买家部分胜诉折价退款全过程,case,MD,500-900字,none,CASE-036_iPad Air出现买到翻新机：买家部分胜诉折价退款全过程.md
+CASE-037,真实场景案例库,F1 买家侧案例,买家反馈阿迪椰子验货报告不通过，仲裁买家部分胜诉折价退款,case,MD,500-900字,none,CASE-037_买家反馈阿迪椰子验货报告不通过，仲裁买家部分胜诉折价退款.md
+CASE-038,真实场景案例库,F1 买家侧案例,足金手链｜卖家失联不发货，买家部分胜诉折价退款,case,MD,500-900字,none,CASE-038_足金手链｜卖家失联不发货，买家部分胜诉折价退款.md
+CASE-039,真实场景案例库,F1 买家侧案例,阿迪椰子｜配件缺失，平台介入后调解退货,case,MD,500-900字,none,CASE-039_阿迪椰子｜配件缺失，平台介入后调解退货.md
+CASE-040,真实场景案例库,F1 买家侧案例,买家反馈Switch OLED买到扩容机，仲裁因证据不足未获支持,case,MD,500-900字,none,CASE-040_买家反馈Switch OLED买到扩容机，仲裁因证据不足未获支持.md
+CASE-041,真实场景案例库,F1 买家侧案例,小米13交易遭遇买到扩容机，买家部分胜诉折价退款,case,MD,500-900字,none,CASE-041_小米13交易遭遇买到扩容机，买家部分胜诉折价退款.md
+CASE-042,真实场景案例库,F1 买家侧案例,买家反馈AirPods Pro屏幕存在暗斑，仲裁买家部分胜诉折价退款,case,MD,500-900字,none,CASE-042_买家反馈AirPods Pro屏幕存在暗斑，仲裁买家部分胜诉折价退款.md
+CASE-043,真实场景案例库,F1 买家侧案例,AJ1球鞋交易遭遇发货前疑似调包，平台介入后调解退货,case,MD,500-900字,none,CASE-043_AJ1球鞋交易遭遇发货前疑似调包，平台介入后调解退货.md
+CASE-044,真实场景案例库,F1 买家侧案例,MacBook Air｜验货报告不通过，买家部分胜诉折价退款,case,MD,500-900字,none,CASE-044_MacBook Air｜验货报告不通过，买家部分胜诉折价退款.md
+CASE-045,真实场景案例库,F1 买家侧案例,买家反馈浪琴腕表描述与实物不符，仲裁平台支持全额退款,case,MD,500-900字,none,CASE-045_买家反馈浪琴腕表描述与实物不符，仲裁平台支持全额退款.md
+CASE-046,真实场景案例库,F1 买家侧案例,精装图书套装｜验货报告不通过，平台介入后调解退货,case,MD,500-900字,none,CASE-046_精装图书套装｜验货报告不通过，平台介入后调解退货.md
+CASE-047,真实场景案例库,F1 买家侧案例,佳能单反｜描述与实物不符，验货拦截后原路退款,case,MD,500-900字,none,CASE-047_佳能单反｜描述与实物不符，验货拦截后原路退款.md
+CASE-048,真实场景案例库,F1 买家侧案例,三星折叠屏｜屏幕存在暗斑，因证据不足未获支持,case,MD,500-900字,none,CASE-048_三星折叠屏｜屏幕存在暗斑，因证据不足未获支持.md
+CASE-049,真实场景案例库,F1 买家侧案例,游戏本出现买到翻新机：因证据不足未获支持全过程,case,MD,500-900字,none,CASE-049_游戏本出现买到翻新机：因证据不足未获支持全过程.md
+CASE-050,真实场景案例库,F1 买家侧案例,索尼微单交易遭遇买到翻新机，验货拦截后原路退款,case,MD,500-900字,none,CASE-050_索尼微单交易遭遇买到翻新机，验货拦截后原路退款.md
+CASE-052,真实场景案例库,F1 买家侧案例,半自动咖啡机出现描述与实物不符：买家部分胜诉折价退款全过程,case,MD,500-900字,none,CASE-052_半自动咖啡机出现描述与实物不符：买家部分胜诉折价退款全过程.md
+CASE-053,真实场景案例库,F1 买家侧案例,戴森吹风机｜功能故障频发，因证据不足未获支持,case,MD,500-900字,none,CASE-053_戴森吹风机｜功能故障频发，因证据不足未获支持.md
+CASE-054,真实场景案例库,F1 买家侧案例,独立显卡｜发货前疑似调包，买家部分胜诉折价退款,case,MD,500-900字,none,CASE-054_独立显卡｜发货前疑似调包，买家部分胜诉折价退款.md
+CASE-055,真实场景案例库,F1 买家侧案例,LV手提包交易遭遇配件缺失，平台介入后调解退货,case,MD,500-900字,none,CASE-055_LV手提包交易遭遇配件缺失，平台介入后调解退货.md
+CASE-056,真实场景案例库,F1 买家侧案例,AJ1球鞋交易遭遇隐瞒拆修史，验货拦截后原路退款,case,MD,500-900字,none,CASE-056_AJ1球鞋交易遭遇隐瞒拆修史，验货拦截后原路退款.md
+CASE-057,真实场景案例库,F1 买家侧案例,小米13交易遭遇电池健康虚标，平台支持全额退款,case,MD,500-900字,none,CASE-057_小米13交易遭遇电池健康虚标，平台支持全额退款.md
+CASE-058,真实场景案例库,F1 买家侧案例,独立显卡出现屏幕存在暗斑：买家部分胜诉折价退款全过程,case,MD,500-900字,none,CASE-058_独立显卡出现屏幕存在暗斑：买家部分胜诉折价退款全过程.md
+CASE-059,真实场景案例库,F1 买家侧案例,iPad Air出现发错型号：买家部分胜诉折价退款全过程,case,MD,500-900字,none,CASE-059_iPad Air出现发错型号：买家部分胜诉折价退款全过程.md
+CASE-060,真实场景案例库,F1 买家侧案例,买家反馈4K显示器发错型号，仲裁验货拦截后原路退款,case,MD,500-900字,none,CASE-060_买家反馈4K显示器发错型号，仲裁验货拦截后原路退款.md
+CASE-061,真实场景案例库,F1 买家侧案例,家用投影仪出现进水机当靓机出售：因证据不足未获支持全过程,case,MD,500-900字,none,CASE-061_家用投影仪出现进水机当靓机出售：因证据不足未获支持全过程.md
+CASE-062,真实场景案例库,F1 买家侧案例,Apple Watch出现进水机当靓机出售：验货拦截后原路退款全过程,case,MD,500-900字,none,CASE-062_Apple Watch出现进水机当靓机出售：验货拦截后原路退款全过程.md
+CASE-063,真实场景案例库,F1 买家侧案例,MacBook Air出现买到扩容机：因证据不足未获支持全过程,case,MD,500-900字,none,CASE-063_MacBook Air出现买到扩容机：因证据不足未获支持全过程.md
+CASE-064,真实场景案例库,F1 买家侧案例,LV手提包交易遭遇发货前疑似调包，验货拦截后原路退款,case,MD,500-900字,none,CASE-064_LV手提包交易遭遇发货前疑似调包，验货拦截后原路退款.md
+CASE-065,真实场景案例库,F1 买家侧案例,游戏本｜进水机当靓机出售，验货拦截后原路退款,case,MD,500-900字,none,CASE-065_游戏本｜进水机当靓机出售，验货拦截后原路退款.md
+CASE-066,真实场景案例库,F1 买家侧案例,戴森吹风机｜验货报告不通过，平台介入后调解退货,case,MD,500-900字,none,CASE-066_戴森吹风机｜验货报告不通过，平台介入后调解退货.md
+CASE-067,真实场景案例库,F1 买家侧案例,WiFi6路由器｜卖家拒绝退货，买家部分胜诉折价退款,case,MD,500-900字,none,CASE-067_WiFi6路由器｜卖家拒绝退货，买家部分胜诉折价退款.md
+CASE-068,真实场景案例库,F1 买家侧案例,小米13交易遭遇屏幕存在暗斑，验货拦截后原路退款,case,MD,500-900字,none,CASE-068_小米13交易遭遇屏幕存在暗斑，验货拦截后原路退款.md
+CASE-069,真实场景案例库,F1 买家侧案例,浪琴腕表交易遭遇发货前疑似调包，验货拦截后原路退款,case,MD,500-900字,none,CASE-069_浪琴腕表交易遭遇发货前疑似调包，验货拦截后原路退款.md
+CASE-070,真实场景案例库,F1 买家侧案例,索尼微单｜买到翻新机，平台介入后调解退货,case,MD,500-900字,none,CASE-070_索尼微单｜买到翻新机，平台介入后调解退货.md
+CASE-071,真实场景案例库,F2 卖家侧案例,卖家遭遇职业索赔施压（涉及ThinkPad X1），卖家申诉成功恢复货款,case,MD,500-900字,none,CASE-071_卖家遭遇职业索赔施压（涉及ThinkPad X1），卖家申诉成功恢复货款.md
+CASE-072,真实场景案例库,F2 卖家侧案例,卖家遭遇职业索赔施压（涉及浪琴腕表），平台支持卖家,case,MD,500-900字,none,CASE-072_卖家遭遇职业索赔施压（涉及浪琴腕表），平台支持卖家.md
+CASE-073,真实场景案例库,F2 卖家侧案例,卖家遭遇买家差评敲诈（涉及LV手提包），进入二次仲裁改判,case,MD,500-900字,none,CASE-073_卖家遭遇买家差评敲诈（涉及LV手提包），进入二次仲裁改判.md
+CASE-074,真实场景案例库,F2 卖家侧案例,MacBook Air｜退回空包裹，调解双方各担一半,case,MD,500-900字,none,CASE-074_MacBook Air｜退回空包裹，调解双方各担一半.md
+CASE-075,真实场景案例库,F2 卖家侧案例,WiFi6路由器订单退回空包裹，进入二次仲裁改判,case,MD,500-900字,none,CASE-075_WiFi6路由器订单退回空包裹，进入二次仲裁改判.md
+CASE-076,真实场景案例库,F2 卖家侧案例,滥用无理由退货纠纷：4K显示器卖家调解双方各担一半,case,MD,500-900字,none,CASE-076_滥用无理由退货纠纷：4K显示器卖家调解双方各担一半.md
+CASE-077,真实场景案例库,F2 卖家侧案例,WiFi6路由器订单职业索赔施压，卖家申诉成功恢复货款,case,MD,500-900字,none,CASE-077_WiFi6路由器订单职业索赔施压，卖家申诉成功恢复货款.md
+CASE-078,真实场景案例库,F2 卖家侧案例,Switch OLED订单退回商品人为损坏，进入二次仲裁改判,case,MD,500-900字,none,CASE-078_Switch OLED订单退回商品人为损坏，进入二次仲裁改判.md
+CASE-079,真实场景案例库,F2 卖家侧案例,职业索赔施压纠纷：半自动咖啡机卖家卖家申诉成功恢复货款,case,MD,500-900字,none,CASE-079_职业索赔施压纠纷：半自动咖啡机卖家卖家申诉成功恢复货款.md
+CASE-080,真实场景案例库,F2 卖家侧案例,买家持续骚扰议价纠纷：LV手提包卖家进入二次仲裁改判,case,MD,500-900字,none,CASE-080_买家持续骚扰议价纠纷：LV手提包卖家进入二次仲裁改判.md
+CASE-081,真实场景案例库,F2 卖家侧案例,AJ1球鞋订单退回空包裹，调解双方各担一半,case,MD,500-900字,none,CASE-081_AJ1球鞋订单退回空包裹，调解双方各担一半.md
+CASE-082,真实场景案例库,F2 卖家侧案例,机械键盘订单退回商品被掉包，进入二次仲裁改判,case,MD,500-900字,none,CASE-082_机械键盘订单退回商品被掉包，进入二次仲裁改判.md
+CASE-083,真实场景案例库,F2 卖家侧案例,ThinkPad X1订单恶意批量下单，平台支持卖家,case,MD,500-900字,none,CASE-083_ThinkPad X1订单恶意批量下单，平台支持卖家.md
+CASE-084,真实场景案例库,F2 卖家侧案例,滥用无理由退货纠纷：iPad Air卖家调解双方各担一半,case,MD,500-900字,none,CASE-084_滥用无理由退货纠纷：iPad Air卖家调解双方各担一半.md
+CASE-085,真实场景案例库,F2 卖家侧案例,家用投影仪｜退回空包裹，平台支持卖家,case,MD,500-900字,none,CASE-085_家用投影仪｜退回空包裹，平台支持卖家.md
+CASE-086,真实场景案例库,F2 卖家侧案例,卖家遭遇滥用无理由退货（涉及4K显示器），平台支持卖家,case,MD,500-900字,none,CASE-086_卖家遭遇滥用无理由退货（涉及4K显示器），平台支持卖家.md
+CASE-087,真实场景案例库,F2 卖家侧案例,ThinkPad X1｜拍下后恶意不付款，进入二次仲裁改判,case,MD,500-900字,none,CASE-087_ThinkPad X1｜拍下后恶意不付款，进入二次仲裁改判.md
+CASE-088,真实场景案例库,F2 卖家侧案例,游戏本｜买家拒签后索赔，平台支持卖家,case,MD,500-900字,none,CASE-088_游戏本｜买家拒签后索赔，平台支持卖家.md
+CASE-089,真实场景案例库,F2 卖家侧案例,滥用无理由退货纠纷：阿迪椰子卖家卖家申诉成功恢复货款,case,MD,500-900字,none,CASE-089_滥用无理由退货纠纷：阿迪椰子卖家卖家申诉成功恢复货款.md
+CASE-090,真实场景案例库,F2 卖家侧案例,职业索赔施压纠纷：戴森吹风机卖家平台支持卖家,case,MD,500-900字,none,CASE-090_职业索赔施压纠纷：戴森吹风机卖家平台支持卖家.md
+CASE-091,真实场景案例库,F2 卖家侧案例,PS5订单退回商品人为损坏，平台支持卖家,case,MD,500-900字,none,CASE-091_PS5订单退回商品人为损坏，平台支持卖家.md
+CASE-092,真实场景案例库,F2 卖家侧案例,卖家遭遇拍下后恶意不付款（涉及精装图书套装），卖家申诉成功恢复货款,case,MD,500-900字,none,CASE-092_卖家遭遇拍下后恶意不付款（涉及精装图书套装），卖家申诉成功恢复货款.md
+CASE-093,真实场景案例库,F2 卖家侧案例,买家恶意仅退款纠纷：阿迪椰子卖家进入二次仲裁改判,case,MD,500-900字,none,CASE-093_买家恶意仅退款纠纷：阿迪椰子卖家进入二次仲裁改判.md
+CASE-094,真实场景案例库,F2 卖家侧案例,Apple Watch｜职业索赔施压，平台支持卖家,case,MD,500-900字,none,CASE-094_Apple Watch｜职业索赔施压，平台支持卖家.md
+CASE-095,真实场景案例库,F2 卖家侧案例,买家持续骚扰议价纠纷：Switch OLED卖家进入二次仲裁改判,case,MD,500-900字,none,CASE-095_买家持续骚扰议价纠纷：Switch OLED卖家进入二次仲裁改判.md
+CASE-096,真实场景案例库,F2 卖家侧案例,卖家遭遇退回空包裹（涉及佳能单反），进入二次仲裁改判,case,MD,500-900字,none,CASE-096_卖家遭遇退回空包裹（涉及佳能单反），进入二次仲裁改判.md
+CASE-097,真实场景案例库,F2 卖家侧案例,家用投影仪订单买家持续骚扰议价，进入二次仲裁改判,case,MD,500-900字,none,CASE-097_家用投影仪订单买家持续骚扰议价，进入二次仲裁改判.md
+CASE-098,真实场景案例库,F2 卖家侧案例,职业索赔施压纠纷：半自动咖啡机卖家进入二次仲裁改判,case,MD,500-900字,none,CASE-098_职业索赔施压纠纷：半自动咖啡机卖家进入二次仲裁改判.md
+CASE-099,真实场景案例库,F2 卖家侧案例,买家持续骚扰议价纠纷：独立显卡卖家进入二次仲裁改判,case,MD,500-900字,none,CASE-099_买家持续骚扰议价纠纷：独立显卡卖家进入二次仲裁改判.md
+CASE-100,真实场景案例库,F2 卖家侧案例,iPad Air｜买家恶意仅退款，卖家申诉成功恢复货款,case,MD,500-900字,none,CASE-100_iPad Air｜买家恶意仅退款，卖家申诉成功恢复货款.md
+CASE-102,真实场景案例库,F2 卖家侧案例,LV手提包｜虚构质量问题，进入二次仲裁改判,case,MD,500-900字,none,CASE-102_LV手提包｜虚构质量问题，进入二次仲裁改判.md
+CASE-103,真实场景案例库,F2 卖家侧案例,戴森吹风机｜退回商品被掉包，卖家申诉成功恢复货款,case,MD,500-900字,none,CASE-103_戴森吹风机｜退回商品被掉包，卖家申诉成功恢复货款.md
+CASE-104,真实场景案例库,F2 卖家侧案例,精装图书套装订单职业索赔施压，平台支持卖家,case,MD,500-900字,none,CASE-104_精装图书套装订单职业索赔施压，平台支持卖家.md
+CASE-105,真实场景案例库,F2 卖家侧案例,卖家遭遇买家差评敲诈（涉及Gucci钱包），平台支持卖家,case,MD,500-900字,none,CASE-105_卖家遭遇买家差评敲诈（涉及Gucci钱包），平台支持卖家.md
+CASE-106,真实场景案例库,F2 卖家侧案例,卖家遭遇伪造聊天记录（涉及戴森吹风机），平台支持卖家,case,MD,500-900字,none,CASE-106_卖家遭遇伪造聊天记录（涉及戴森吹风机），平台支持卖家.md
+CASE-107,真实场景案例库,F2 卖家侧案例,卖家遭遇拍下后恶意不付款（涉及游戏本），平台支持卖家,case,MD,500-900字,none,CASE-107_卖家遭遇拍下后恶意不付款（涉及游戏本），平台支持卖家.md
+CASE-108,真实场景案例库,F2 卖家侧案例,MacBook Air订单退回空包裹，调解双方各担一半,case,MD,500-900字,none,CASE-108_MacBook Air订单退回空包裹，调解双方各担一半.md
+CASE-109,真实场景案例库,F2 卖家侧案例,退回商品人为损坏纠纷：MacBook Air卖家进入二次仲裁改判,case,MD,500-900字,none,CASE-109_退回商品人为损坏纠纷：MacBook Air卖家进入二次仲裁改判.md
+NEWS-002,公告与课程,G1 平台公告,智能搜索升级上线,news,MD,400-1000字,none,NEWS-002_智能搜索升级上线.md
+NEWS-003,公告与课程,G1 平台公告,会话收藏功能上线,news,MD,400-1000字,none,NEWS-003_会话收藏功能上线.md
+NEWS-004,公告与课程,G1 平台公告,卖家数据看板2.0上线,news,MD,400-1000字,none,NEWS-004_卖家数据看板2.0上线.md
+NEWS-005,公告与课程,G1 平台公告,成色标签体系升级,news,MD,400-1000字,none,NEWS-005_成色标签体系升级.md
+NEWS-006,公告与课程,G1 平台公告,在线客服通道升级,news,MD,400-1000字,none,NEWS-006_在线客服通道升级.md
+NEWS-007,公告与课程,G1 平台公告,以旧换新通道上线,news,MD,400-1000字,none,NEWS-007_以旧换新通道上线.md
+NEWS-008,公告与课程,G1 平台公告,寄卖服务试点上线,news,MD,400-1000字,none,NEWS-008_寄卖服务试点上线.md
+NEWS-009,公告与课程,G1 平台公告,批量回收功能上线,news,MD,400-1000字,none,NEWS-009_批量回收功能上线.md
+NEWS-010,公告与课程,G1 平台公告,质检仓新增城市公告,news,MD,400-1000字,none,NEWS-010_质检仓新增城市公告.md
+NEWS-011,公告与课程,G1 平台公告,技术服务费规则修订公告,news,MD,400-1000字,none,NEWS-011_技术服务费规则修订公告.md
+NEWS-012,公告与课程,G1 平台公告,禁售目录更新公告,news,MD,400-1000字,none,NEWS-012_禁售目录更新公告.md
+NEWS-013,公告与课程,G1 平台公告,违规扣分规则修订,news,MD,400-1000字,none,NEWS-013_违规扣分规则修订.md
+NEWS-014,公告与课程,G1 平台公告,担保交易规则修订,news,MD,400-1000字,none,NEWS-014_担保交易规则修订.md
+NEWS-015,公告与课程,G1 平台公告,申诉时效调整公告,news,MD,400-1000字,none,NEWS-015_申诉时效调整公告.md
+NEWS-016,公告与课程,G1 平台公告,信用分规则更新,news,MD,400-1000字,none,NEWS-016_信用分规则更新.md
+NEWS-017,公告与课程,G1 平台公告,退货规则细化公告,news,MD,400-1000字,none,NEWS-017_退货规则细化公告.md
+NEWS-018,公告与课程,G1 平台公告,验货标准修订公告,news,MD,400-1000字,none,NEWS-018_验货标准修订公告.md
+NEWS-019,公告与课程,G1 平台公告,保证金规则调整,news,MD,400-1000字,none,NEWS-019_保证金规则调整.md
+NEWS-020,公告与课程,G1 平台公告,规则年度汇编发布,news,MD,400-1000字,none,NEWS-020_规则年度汇编发布.md
+NEWS-021,公告与课程,G1 平台公告,开学季数码换新活动,news,MD,400-1000字,none,NEWS-021_开学季数码换新活动.md
+NEWS-022,公告与课程,G1 平台公告,年终换机节活动,news,MD,400-1000字,none,NEWS-022_年终换机节活动.md
+NEWS-023,公告与课程,G1 平台公告,618二手好物节,news,MD,400-1000字,none,NEWS-023_618二手好物节.md
+NEWS-024,公告与课程,G1 平台公告,双11省心购活动,news,MD,400-1000字,none,NEWS-024_双11省心购活动.md
+NEWS-025,公告与课程,G1 平台公告,春节物流安排公告,news,MD,400-1000字,none,NEWS-025_春节物流安排公告.md
+NEWS-026,公告与课程,G1 平台公告,国庆假期客服与物流安排,news,MD,400-1000字,none,NEWS-026_国庆假期客服与物流安排.md
+NEWS-028,公告与课程,G1 平台公告,系统维护通知,news,MD,400-1000字,none,NEWS-028_系统维护通知.md
+NEWS-029,公告与课程,G1 平台公告,验机仓搬迁通知,news,MD,400-1000字,none,NEWS-029_验机仓搬迁通知.md
+NEWS-030,公告与课程,G1 平台公告,客服热线升级通知,news,MD,400-1000字,none,NEWS-030_客服热线升级通知.md
+NEWS-031,公告与课程,G2 买家课程,买家第1课 认识担保交易,news,MD,400-1000字,none,NEWS-031_买家第1课 认识担保交易.md
+NEWS-032,公告与课程,G2 买家课程,买家第2课 看懂成色与质检,news,MD,400-1000字,none,NEWS-032_买家第2课 看懂成色与质检.md
+NEWS-033,公告与课程,G2 买家课程,买家第3课 如何与卖家沟通,news,MD,400-1000字,none,NEWS-033_买家第3课 如何与卖家沟通.md
+NEWS-034,公告与课程,G2 买家课程,买家第4课 下单与支付,news,MD,400-1000字,none,NEWS-034_买家第4课 下单与支付.md
+NEWS-035,公告与课程,G2 买家课程,买家第5课 跟住验货流程,news,MD,400-1000字,none,NEWS-035_买家第5课 跟住验货流程.md
+NEWS-036,公告与课程,G2 买家课程,买家第6课 收货检查清单,news,MD,400-1000字,none,NEWS-036_买家第6课 收货检查清单.md
+NEWS-037,公告与课程,G2 买家课程,买家第7课 评价与追评,news,MD,400-1000字,none,NEWS-037_买家第7课 评价与追评.md
+NEWS-038,公告与课程,G2 买家课程,买家第8课 退款类型怎么选,news,MD,400-1000字,none,NEWS-038_买家第8课 退款类型怎么选.md
+NEWS-039,公告与课程,G2 买家课程,买家第9课 取证与平台介入,news,MD,400-1000字,none,NEWS-039_买家第9课 取证与平台介入.md
+FAQ-011,结构化FAQ,H2 注册认证,实名失败原因,faq,JSON,15-25条QA/文件,mixed,FAQ-011_实名失败原因.json
+FAQ-012,结构化FAQ,H2 注册认证,学生认证,faq,JSON,15-25条QA/文件,mixed,FAQ-012_学生认证.json
+FAQ-013,结构化FAQ,H2 注册认证,个人卖家认证,faq,XLSX,15-25条QA/文件,mixed,FAQ-013_个人卖家认证.xlsx
+FAQ-014,结构化FAQ,H2 注册认证,企业资质认证,faq,CSV,15-25条QA/文件,mixed,FAQ-014_企业资质认证.csv
+FAQ-015,结构化FAQ,H3 买家交易,搜索与筛选,faq,JSON,15-25条QA/文件,mixed,FAQ-015_搜索与筛选.json
+FAQ-016,结构化FAQ,H3 买家交易,收藏想要,faq,CSV,15-25条QA/文件,mixed,FAQ-016_收藏想要.csv
+FAQ-017,结构化FAQ,H3 买家交易,下单流程,faq,XLSX,15-25条QA/文件,mixed,FAQ-017_下单流程.xlsx
+FAQ-018,结构化FAQ,H3 买家交易,议价改价,faq,CSV,15-25条QA/文件,mixed,FAQ-018_议价改价.csv
+FAQ-019,结构化FAQ,H3 买家交易,订单状态说明,faq,JSON,15-25条QA/文件,mixed,FAQ-019_订单状态说明.json
+FAQ-020,结构化FAQ,H3 买家交易,合并下单,faq,CSV,15-25条QA/文件,mixed,FAQ-020_合并下单.csv
+FAQ-021,结构化FAQ,H3 买家交易,取消订单,faq,JSON,15-25条QA/文件,mixed,FAQ-021_取消订单.json
+FAQ-022,结构化FAQ,H3 买家交易,订单备注,faq,JSON,15-25条QA/文件,mixed,FAQ-022_订单备注.json
+FAQ-023,结构化FAQ,H3 买家交易,同城面交,faq,CSV,15-25条QA/文件,mixed,FAQ-023_同城面交.csv
+FAQ-024,结构化FAQ,H3 买家交易,验货服务申请,faq,XLSX,15-25条QA/文件,mixed,FAQ-024_验货服务申请.xlsx
+FAQ-025,结构化FAQ,H4 支付担保,担保交易原理,faq,JSON,15-25条QA/文件,mixed,FAQ-025_担保交易原理.json
+FAQ-026,结构化FAQ,H4 支付担保,支付方式,faq,XLSX,15-25条QA/文件,mixed,FAQ-026_支付方式.xlsx
+FAQ-027,结构化FAQ,H4 支付担保,支付失败,faq,CSV,15-25条QA/文件,mixed,FAQ-027_支付失败.csv
+FAQ-028,结构化FAQ,H4 支付担保,重复扣款,faq,XLSX,15-25条QA/文件,mixed,FAQ-028_重复扣款.xlsx
+FAQ-029,结构化FAQ,H4 支付担保,资金托管状态,faq,JSON,15-25条QA/文件,mixed,FAQ-029_资金托管状态.json
+FAQ-030,结构化FAQ,H4 支付担保,确认收货打款,faq,JSON,15-25条QA/文件,mixed,FAQ-030_确认收货打款.json
+FAQ-031,结构化FAQ,H4 支付担保,价保规则,faq,CSV,15-25条QA/文件,mixed,FAQ-031_价保规则.csv
+FAQ-032,结构化FAQ,H4 支付担保,定金风险,faq,XLSX,15-25条QA/文件,mixed,FAQ-032_定金风险.xlsx
+FAQ-033,结构化FAQ,H4 支付担保,私下转账风险,faq,XLSX,15-25条QA/文件,mixed,FAQ-033_私下转账风险.xlsx
+FAQ-034,结构化FAQ,H4 支付担保,支付安全设置,faq,JSON,15-25条QA/文件,mixed,FAQ-034_支付安全设置.json
+FAQ-035,结构化FAQ,H5 退款售后,仅退款流程,faq,XLSX,15-25条QA/文件,mixed,FAQ-035_仅退款流程.xlsx
+FAQ-036,结构化FAQ,H5 退款售后,退货退款流程,faq,CSV,15-25条QA/文件,mixed,FAQ-036_退货退款流程.csv
+FAQ-037,结构化FAQ,H5 退款售后,退款原因选择,faq,CSV,15-25条QA/文件,mixed,FAQ-037_退款原因选择.csv
+FAQ-038,结构化FAQ,H5 退款售后,卖家拒绝处理,faq,XLSX,15-25条QA/文件,mixed,FAQ-038_卖家拒绝处理.xlsx
+FAQ-039,结构化FAQ,H5 退款售后,平台介入,faq,CSV,15-25条QA/文件,mixed,FAQ-039_平台介入.csv
+FAQ-040,结构化FAQ,H5 退款售后,举证材料,faq,XLSX,15-25条QA/文件,mixed,FAQ-040_举证材料.xlsx
+FAQ-041,结构化FAQ,H5 退款售后,退货物流,faq,XLSX,15-25条QA/文件,mixed,FAQ-041_退货物流.xlsx
+FAQ-042,结构化FAQ,H5 退款售后,退款到账,faq,CSV,15-25条QA/文件,mixed,FAQ-042_退款到账.csv
+FAQ-043,结构化FAQ,H5 退款售后,退款时效,faq,JSON,15-25条QA/文件,mixed,FAQ-043_退款时效.json
+FAQ-044,结构化FAQ,H5 退款售后,部分退款,faq,JSON,15-25条QA/文件,mixed,FAQ-044_部分退款.json
+FAQ-045,结构化FAQ,H5 退款售后,撤销退款,faq,CSV,15-25条QA/文件,mixed,FAQ-045_撤销退款.csv
+FAQ-046,结构化FAQ,H5 退款售后,售后窗口期,faq,JSON,15-25条QA/文件,mixed,FAQ-046_售后窗口期.json
+FAQ-047,结构化FAQ,H5 退款售后,退货运费争议专题,faq,JSON,15-25条QA/文件,mixed,FAQ-047_退货运费争议专题.json
+FAQ-048,结构化FAQ,H5 退款售后,售后进度查询,faq,JSON,15-25条QA/文件,mixed,FAQ-048_售后进度查询.json
+FAQ-057,结构化FAQ,H7 验货通用,验货流程,faq,JSON,15-25条QA/文件,mixed,FAQ-057_验货流程.json
+FAQ-058,结构化FAQ,H7 验货通用,验货时效,faq,JSON,15-25条QA/文件,mixed,FAQ-058_验货时效.json
+FAQ-059,结构化FAQ,H7 验货通用,验货不通过,faq,CSV,15-25条QA/文件,mixed,FAQ-059_验货不通过.csv
+FAQ-060,结构化FAQ,H7 验货通用,复检申请,faq,XLSX,15-25条QA/文件,mixed,FAQ-060_复检申请.xlsx
+FAQ-061,结构化FAQ,H7 验货通用,验机报告解读,faq,XLSX,15-25条QA/文件,mixed,FAQ-061_验机报告解读.xlsx
+FAQ-062,结构化FAQ,H7 验货通用,验货费用,faq,CSV,15-25条QA/文件,mixed,FAQ-062_验货费用.csv
+FAQ-063,结构化FAQ,H8 品类验货,手机验货FAQ,faq,JSON,15-25条QA/文件,mixed,FAQ-063_手机验货FAQ.json
+FAQ-064,结构化FAQ,H8 品类验货,平板验货FAQ,faq,XLSX,15-25条QA/文件,mixed,FAQ-064_平板验货FAQ.xlsx
+FAQ-065,结构化FAQ,H8 品类验货,笔记本验货FAQ,faq,CSV,15-25条QA/文件,mixed,FAQ-065_笔记本验货FAQ.csv
+FAQ-066,结构化FAQ,H8 品类验货,台式机验货FAQ,faq,JSON,15-25条QA/文件,mixed,FAQ-066_台式机验货FAQ.json
+FAQ-067,结构化FAQ,H8 品类验货,相机验货FAQ,faq,CSV,15-25条QA/文件,mixed,FAQ-067_相机验货FAQ.csv
+FAQ-068,结构化FAQ,H8 品类验货,智能手表验货FAQ,faq,CSV,15-25条QA/文件,mixed,FAQ-068_智能手表验货FAQ.csv
+FAQ-069,结构化FAQ,H8 品类验货,耳机验货FAQ,faq,CSV,15-25条QA/文件,mixed,FAQ-069_耳机验货FAQ.csv
+FAQ-070,结构化FAQ,H8 品类验货,游戏主机验货FAQ,faq,JSON,15-25条QA/文件,mixed,FAQ-070_游戏主机验货FAQ.json
+FAQ-071,结构化FAQ,H8 品类验货,奢品箱包验货FAQ,faq,XLSX,15-25条QA/文件,mixed,FAQ-071_奢品箱包验货FAQ.xlsx
+FAQ-072,结构化FAQ,H8 品类验货,腕表验货FAQ,faq,CSV,15-25条QA/文件,mixed,FAQ-072_腕表验货FAQ.csv
+FAQ-073,结构化FAQ,H8 品类验货,黄金珠宝验货FAQ,faq,XLSX,15-25条QA/文件,mixed,FAQ-073_黄金珠宝验货FAQ.xlsx
+FAQ-074,结构化FAQ,H8 品类验货,球鞋验货FAQ,faq,JSON,15-25条QA/文件,mixed,FAQ-074_球鞋验货FAQ.json

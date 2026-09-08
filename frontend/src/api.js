@@ -73,4 +73,11 @@ export const competitorApi = {
   costReset() {
     return http.post('/cost/reset')
   },
+  // —— RAG 知识库问答 ——
+  ragAsk(question, topK = 5) {
+    return http.post('/rag/ask', { question, top_k: topK })
+  },
+  ragStatus() {
+    return http.get('/rag/status')
+  },
 }
