@@ -36,32 +36,39 @@ async def _llm_fallback(question: str) -> str:
     if pre.get("blocked"):
         return "（已触发成本熔断，需在「成本」页确认后继续。当前问题未调用大模型。）"
 
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(
-            f"{settings.llm_api_base.rstrip('/')}/chat/completions",
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {settings.llm_api_key}",
-            },
-            json={
-                "model": settings.llm_model,
-                "messages": [
-                    {"role": "system", "content": _FALLBACK_SYSTEM_PROMPT},
-                    {"role": "user", "content": question},
-                ],
-                "temperature": 0.3,
-            },
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                f"{settings.llm_api_base.rstrip('/')}/chat/completions",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {settings.llm_api_key}",
+                },
+                json={
+                    "model": settings.llm_model,
+                    "messages": [
+                        {"role": "system", "content": _FALLBACK_SYSTEM_PROMPT},
+                        {"role": "user", "content": question},
+                    ],
+                    "temperature": 0.3,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            content = data["choices"][0]["message"]["content"]
+
+            usage = data.get("usage") or {}
+            input_tokens = int(usage.get("prompt_tokens") or est_input)
+            output_tokens = int(usage.get("completion_tokens") or _estimate_tokens(content))
+            tracker.record(input_tokens, output_tokens)
+
+        return content.strip()
+    except (httpx.TimeoutException, httpx.HTTPError) as exc:
+        # LLM 兜底失败时优雅降级，不让接口抛 500
+        return (
+            "抱歉，知识库中未找到与您问题直接相关的内容，且兜底大模型暂时不可用"
+            f"（{type(exc).__name__}）。请稍后重试，或换个更具体的问题。"
         )
-        resp.raise_for_status()
-        data = resp.json()
-        content = data["choices"][0]["message"]["content"]
-
-        usage = data.get("usage") or {}
-        input_tokens = int(usage.get("prompt_tokens") or est_input)
-        output_tokens = int(usage.get("completion_tokens") or _estimate_tokens(content))
-        tracker.record(input_tokens, output_tokens)
-
-    return content.strip()
 
 
 async def ask(question: str, top_k: int = 5) -> AskResponse:
