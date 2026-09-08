@@ -8,7 +8,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
-    app_name: str = "古玩·钱币竞品分析系统"
+    app_name: str = "二手交易平台分析系统"
     debug: bool = True
 
     # 数据库连接（本地 Docker PostgreSQL，端口 5433 避开宿主机 5432）

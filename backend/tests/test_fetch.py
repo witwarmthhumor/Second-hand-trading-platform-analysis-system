@@ -16,13 +16,13 @@ class _FakeProvider:
 
     async def extract(self, url, html, title=""):
         return Extraction(
-            name="微拍堂",
-            type="交易",
-            positioning="文玩艺术品直播竞拍平台",
-            features="直播竞拍、AI 识别、闲置寄售",
-            target_users="文玩藏家与卖家",
-            business_model="交易抽佣",
-            tags=["交易", "直播"],
+            name="闲鱼",
+            type="C2C 闲置交易",
+            positioning="C2C 二手闲置交易平台",
+            features="闲置发布、信用交易、验机服务",
+            target_users="个人闲置卖家与买家",
+            business_model="C2C 撮合 + 增值服务",
+            tags=["C2C", "头部"],
         )
 
 
@@ -35,8 +35,8 @@ class _FakeFetcher:
 
         p = _Page()
         p.url = url
-        p.title = "微拍堂 喜欢就出一手"
-        p.html = "<html><title>微拍堂</title></html>"
+        p.title = "闲鱼 - 让你的闲置游起来"
+        p.html = "<html><title>闲鱼</title></html>"
         return p
 
 
@@ -61,8 +61,8 @@ async def test_fetch_creates_pending_review(client, _mock_deps):
     resp = await client.post("/api/fetch", json={"url": "https://example.com/x"})
     assert resp.status_code == 201, resp.text
     body = resp.json()
-    assert body["name"] == "微拍堂"
-    assert body["type"] == "交易"
+    assert body["name"] == "闲鱼"
+    assert body["type"] == "C2C 闲置交易"
     assert body["data_status"] == "待校对"
     assert body["source_url"] == "https://example.com/x"
 

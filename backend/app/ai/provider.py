@@ -41,12 +41,12 @@ class LLMProvider(Protocol):
 
 
 # 允许的 type 值（与 PlatformType 对齐，避免 LLM 乱写）
-_TYPE_WHITELIST = {"鉴定", "交易", "行情", "社区"}
+_TYPE_WHITELIST = {"C2C 闲置交易", "回收置换", "质检转卖"}
 
 _SYSTEM_PROMPT = (
-    "你是竞品分析助手。请从给定的古玩/文玩/钱币平台网页内容中，"
+    "你是竞品分析助手。请从给定的二手交易平台网页内容中，"
     "提炼该平台的竞品信息，并严格按 JSON 输出，不要输出多余文字。\n"
-    "JSON 字段：name(平台名)、type(平台类型，只能取「鉴定/交易/行情/社区」之一)、"
+    "JSON 字段：name(平台名)、type(平台类型，只能取「C2C 闲置交易/回收置换/质检转卖」之一)、"
     "positioning(一句话定位)、features(核心功能，可多条)、target_users(目标用户)、"
     "business_model(业务/盈利模式)、pricing(定价/抽佣，未知则 null)、"
     "strengths(优势)、weaknesses(不足)、tags(标签数组)。\n"
@@ -148,7 +148,7 @@ class RemoteLLMProvider:
         """规整 LLM 输出：type 归一到白名单，list 字段 join 成字符串，清理空值。"""
         t = data.get("type")
         if t not in _TYPE_WHITELIST:
-            data["type"] = "交易"  # 兜底默认
+            data["type"] = "C2C 闲置交易"  # 兜底默认
         # 文本字段若被 LLM 返回为 list，则拼接成字符串
         _text_fields = (
             "positioning",
@@ -197,7 +197,7 @@ class RuleExtractor:
 
         return Extraction(
             name=title,
-            type="交易",
+            type="C2C 闲置交易",
             positioning=desc or None,
             features=body or None,
         )

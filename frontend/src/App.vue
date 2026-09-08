@@ -33,10 +33,10 @@ const compareLoading = ref(false)
 const radarEl = ref(null)
 let radarChart = null
 
-const typeOptions = ['鉴定', '交易', '行情', '社区']
+const typeOptions = ['C2C 闲置交易', '回收置换', '质检转卖']
 const statusOptions = ['已上线', '内测', '已下线']
 // 评分维度：从后端设置读取（可在"设置"页配置）
-const DEFAULT_DIMS = ['功能完整度', '用户规模', '鉴定能力', '价格竞争力', '口碑']
+const DEFAULT_DIMS = ['功能完整度', '用户规模', '质检能力', '价格竞争力', '口碑']
 const ratingDims = ref([...DEFAULT_DIMS])
 
 // —— 列表 ——
@@ -75,7 +75,7 @@ function emptyRatings() {
 function emptyForm() {
   return {
     name: '',
-    type: '交易',
+    type: 'C2C 闲置交易',
     positioning: '',
     website: '',
     launch_status: '已上线',
@@ -286,7 +286,7 @@ function dataStatusTag(s) {
 }
 
 function typeTag(type) {
-  const map = { 鉴定: 'warning', 交易: 'primary', 行情: 'success', 社区: 'info' }
+  const map = { 'C2C 闲置交易': 'primary', '回收置换': 'warning', '质检转卖': 'success' }
   return map[type] || 'info'
 }
 
@@ -432,7 +432,7 @@ onMounted(() => {
   <el-container class="app">
     <el-header class="header">
       <div>
-        <h1>古玩 · 钱币竞品分析系统</h1>
+        <h1>二手交易平台分析系统</h1>
         <p class="sub">竞品情报收集、整理与横向对比</p>
       </div>
       <el-tabs v-model="activeTab" class="tabs">
@@ -727,7 +727,7 @@ onMounted(() => {
         <div class="dims-add">
           <el-input
             v-model="newDim"
-            placeholder="输入新维度名称，如：社区活跃度"
+            placeholder="输入新维度名称，如：验机能力"
             style="width: 280px"
             maxlength="12"
             @keyup.enter="addDim"

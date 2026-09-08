@@ -12,10 +12,9 @@ from app.db import Base
 class PlatformType(str, Enum):
     """平台类型（可扩展）。"""
 
-    APPRAISAL = "鉴定"
-    TRADE = "交易"
-    MARKET = "行情"
-    COMMUNITY = "社区"
+    C2C = "C2C 闲置交易"
+    RECYCLE = "回收置换"
+    REFURBISH = "质检转卖"
 
 
 class LaunchStatus(str, Enum):

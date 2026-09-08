@@ -117,7 +117,7 @@ def _conclusion(competitors: list[Competitor], dims: list[str]) -> str:
 def build_markdown(competitors: list[Competitor], dims: list[str]) -> str:
     """生成 Markdown 报告全文。"""
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    return f"""# 古玩·近代钱币竞品分析报告
+    return f"""# 二手交易平台竞品分析报告
 
 > 生成时间：{now}　|　竞品数量：{len(competitors)}　|　评分维度：{len(dims)} 维（0~5 分）
 

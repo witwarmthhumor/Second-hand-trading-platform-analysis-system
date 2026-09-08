@@ -31,6 +31,10 @@ htmlcov/
 # 生成的分析报告（产物不入库）
 backend/reports/
 
+# RAG 向量库与缓存（建库产物，不入库；语料 canonical/faq_source/facts 入库）
+rag_data/vector_store/
+rag_data/*.npy
+
 # IDE / 编辑器
 .idea/
 .vscode/

@@ -103,7 +103,7 @@ class _CostProvider:
         return "sk-test"
 
     async def extract(self, url, html, title=""):
-        return Extraction(name="熔断测试", type="交易", positioning="p")
+        return Extraction(name="熔断测试", type="C2C 闲置交易", positioning="p")
 
 
 class _CheapCostProvider(_CostProvider):

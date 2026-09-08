@@ -21,12 +21,12 @@ async def client():
 
 def _create_payload(**overrides) -> dict:
     base = {
-        "name": "微拍堂",
-        "type": "交易",
-        "positioning": "文玩艺术品交易与竞拍平台",
-        "website": "https://www.weipaitang.com",
+        "name": "闲鱼",
+        "type": "C2C 闲置交易",
+        "positioning": "阿里旗下 C2C 二手闲置交易平台",
+        "website": "https://www.goofish.com",
         "launch_status": "已上线",
-        "tags": ["交易", "直播"],
+        "tags": ["C2C", "头部"],
     }
     base.update(overrides)
     return base
@@ -38,7 +38,7 @@ async def test_create_and_get(client):
     assert resp.status_code == 201, resp.text
     created = resp.json()
     assert created["name"] == "测试竞品A"
-    assert created["type"] == "交易"
+    assert created["type"] == "C2C 闲置交易"
     assert created["data_status"] == "已入库"
     assert created["id"] > 0
 
@@ -51,8 +51,8 @@ async def test_create_and_get(client):
 
 async def test_list_and_filter(client):
     """正常：列表 + 关键字/类型筛选。"""
-    a = _create_payload(name="唯一关键字AAA", type="鉴定")
-    b = _create_payload(name="普通竞品B", type="交易")
+    a = _create_payload(name="唯一关键字AAA", type="回收置换")
+    b = _create_payload(name="普通竞品B", type="C2C 闲置交易")
     id_a = (await client.post("/api/competitors", json=a)).json()["id"]
     id_b = (await client.post("/api/competitors", json=b)).json()["id"]
 
@@ -60,9 +60,9 @@ async def test_list_and_filter(client):
     names = [x["name"] for x in resp.json()]
     assert "唯一关键字AAA" in names
 
-    resp = await client.get("/api/competitors", params={"type": "鉴定"})
+    resp = await client.get("/api/competitors", params={"type": "回收置换"})
     types = {x["type"] for x in resp.json()}
-    assert types == {"鉴定"}
+    assert types == {"回收置换"}
 
     await client.delete(f"/api/competitors/{id_a}")
     await client.delete(f"/api/competitors/{id_b}")

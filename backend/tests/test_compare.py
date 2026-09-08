@@ -16,7 +16,7 @@ async def client():
 def _payload(name, ratings=None):
     return {
         "name": name,
-        "type": "交易",
+        "type": "C2C 闲置交易",
         "positioning": "测试定位",
         "ext_fields": {"ratings": ratings or {}},
     }
@@ -39,7 +39,7 @@ async def test_compare_returns_ratings(client):
     assert body["dimensions"] == [
         "功能完整度",
         "用户规模",
-        "鉴定能力",
+        "质检能力",
         "价格竞争力",
         "口碑",
     ]

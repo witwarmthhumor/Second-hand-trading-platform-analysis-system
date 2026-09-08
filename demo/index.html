@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-page-node-id="U03Ty6R3Q7evmstnQ5RIzR">
-<head data-page-node-id="vAyZsyTulpOhyt2LhPRfA3">
-<meta charset="UTF-8" data-page-node-id="TSoWtXFGrXhc3aMJdpVODr">
-<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="ncw89vTvoHR64o8bDFPdEX">
-<title>古玩·钱币竞品分析系统 — Demo</title>
+<html lang="zh-CN" data-page-node-id="9bCA7C5NunNvCPzStVH1HW">
+<head data-page-node-id="VguDCxBnYQfxJqrAQA8PSh">
+<meta charset="UTF-8" data-page-node-id="IfuGmfz6OxHu6HG9DhOstd">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="x9G1RaqGzhWiKSV1Okc32z">
+<title>二手交易平台分析系统 — Demo</title>
 <style>
   :root {
     --bg: #f5f6f8;
@@ -29,10 +29,7 @@
   .app { max-width: 1080px; margin: 0 auto; padding: 24px 20px 60px; }
 
   /* 顶部 */
-  .header {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 20px;
-  }
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
   .header h1 { font-size: 20px; font-weight: 700; }
   .header .sub { color: var(--text-sub); font-size: 12px; margin-top: 2px; }
 
@@ -110,6 +107,12 @@
   .form-item.invalid .err { display: block; }
   .form-actions { display: flex; gap: 10px; padding-top: 4px; }
 
+  /* 评分条 */
+  .score-row { display: flex; align-items: center; gap: 10px; }
+  .score-row label { width: 90px; font-size: 13px; color: var(--text-sub); }
+  .score-row input[type=range] { flex: 1; }
+  .score-row .score-val { width: 28px; text-align: center; font-weight: 600; color: var(--primary); }
+
   /* 对比页 */
   .compare-empty { padding: 60px 20px; text-align: center; color: var(--text-sub); }
   .compare-head { padding: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
@@ -125,6 +128,39 @@
   .legend span { display: flex; align-items: center; gap: 5px; }
   .legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 
+  /* 问答页 */
+  .qa-layout { display: flex; flex-direction: column; gap: 16px; }
+  .qa-chat { display: flex; flex-direction: column; gap: 14px; padding: 16px; min-height: 320px; max-height: 480px; overflow-y: auto; }
+  .qa-msg { display: flex; gap: 10px; max-width: 88%; }
+  .qa-msg.user { align-self: flex-end; flex-direction: row-reverse; }
+  .qa-msg .bubble {
+    padding: 10px 14px; border-radius: 10px; background: #f3f4f6; font-size: 14px; line-height: 1.6;
+  }
+  .qa-msg.user .bubble { background: var(--primary); color: #fff; }
+  .qa-msg.assistant .bubble { background: #fff; border: 1px solid var(--border); }
+  .qa-msg .avatar {
+    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #fff;
+  }
+  .qa-msg.user .avatar { background: var(--primary); }
+  .qa-msg.assistant .avatar { background: #10b981; }
+  .qa-src { margin-top: 8px; padding: 8px 10px; background: #f9fafb; border-left: 3px solid #10b981; border-radius: 4px; font-size: 12px; color: var(--text-sub); }
+  .qa-src .src-title { font-weight: 600; color: var(--text); margin-bottom: 2px; }
+  .qa-input { display: flex; gap: 10px; padding: 14px 16px; border-top: 1px solid var(--border); }
+  .qa-input input { flex: 1; }
+  .qa-hints { padding: 12px 16px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .qa-hints .hint-label { font-size: 12px; color: var(--text-sub); }
+  .qa-hints .hint {
+    font-size: 12px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 14px;
+    background: #fff; cursor: pointer; color: var(--text-sub); transition: all .15s;
+  }
+  .qa-hints .hint:hover { border-color: var(--primary); color: var(--primary); }
+  .qa-typing { display: flex; gap: 6px; align-items: center; color: var(--text-sub); font-size: 13px; padding: 8px 4px; }
+  .qa-typing .dot { width: 6px; height: 6px; border-radius: 50%; background: #9ca3af; animation: blink 1.2s infinite; }
+  .qa-typing .dot:nth-child(2) { animation-delay: .2s; }
+  .qa-typing .dot:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%,100% { opacity: .2; } 50% { opacity: 1; } }
+
   .toast {
     position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
     background: #111827; color: #fff; padding: 10px 20px; border-radius: 8px;
@@ -133,201 +169,204 @@
   .toast.show { opacity: 1; }
 </style>
 </head>
-<body data-page-node-id="1WW19bBJnWBqbEBxHn7tvv">
-<div class="app" data-page-node-id="c9V9Cglw3hxK759fCTYaXX">
-  <div class="header" data-page-node-id="jsUMKGEI8ErQKIzc1BN3Gc">
-    <div data-page-node-id="z6Wxcr1S5iYgSMdcpMkeaH">
-      <h1 data-page-node-id="NQEUH38MMbjyZZa1FtOEFk">古玩 · 钱币竞品分析系统</h1>
-      <div class="sub" data-page-node-id="gcvaniuLlB0enGTcFvp0pw">Demo · 数据为 mock，仅用于验证界面与流程</div>
+<body data-page-node-id="P4asIXSZoGt4Ul6zt5A9P8">
+<div class="app" data-page-node-id="eORPSEjnrDygiyRPTtWfYw">
+  <div class="header" data-page-node-id="a1Z4UBC4prBMzXUHO1RWN5">
+    <div data-page-node-id="445BVBzFbJwRC1ZJr9Y2aY">
+      <h1 data-page-node-id="3ehf3DzpSCvqJxmgaQHXCb">二手交易平台分析系统</h1>
+      <div class="sub" data-page-node-id="FfYYcZDsfGQuoGG8gdzXCm">Demo · 数据为 mock，仅用于验证界面与流程</div>
     </div>
   </div>
 
-  <div class="tabs" data-page-node-id="p5PRJxPfDrFr4HPfOiZ4j0">
-    <button class="tab active" data-tab="list" data-page-node-id="CgJyzE4JB2fsVKBf9eScJB">竞品列表</button>
-    <button class="tab" data-tab="form" data-page-node-id="KoNy6av40cow36iAkDvyGD">录入竞品</button>
-    <button class="tab" data-tab="compare" data-page-node-id="ocai1DIxSuJg9UXOAzXval">对比 <span class="badge" id="compareBadge" data-page-node-id="zlfFCDQcrIKDrmqdxE7uJ3">0</span></button>
+  <div class="tabs" data-page-node-id="b7oMP93UTqHc7NbsY2Exwc">
+    <button class="tab active" data-tab="list" data-page-node-id="DGfpojyoG9y0uKvskTD8AR">竞品列表</button>
+    <button class="tab" data-tab="form" data-page-node-id="JDHEn2Z5IHZzhEtpMtJxih">录入竞品</button>
+    <button class="tab" data-tab="compare" data-page-node-id="RsUXBocFNPVCYwgMXhWHcc">对比 <span class="badge" id="compareBadge" data-page-node-id="EIB7wkpKaY6f4ydDP6yqN8">0</span></button>
+    <button class="tab" data-tab="qa" data-page-node-id="vxRmvVcXHqBccPjNCCoXJc">知识库问答</button>
   </div>
 
   <!-- 列表页 -->
-  <section id="view-list" class="view" data-page-node-id="XBvmZ7eO4v98ScTuzjVkpY">
-    <div class="panel" data-page-node-id="CsBjbI36RuskBYW3GicsqL">
-      <div class="toolbar" data-page-node-id="DYkTCwuvXidV85rDXTFwI6">
-        <input type="text" id="searchInput" placeholder="搜索名称 / 定位 / 标签" style="flex:1;min-width:180px;" data-page-node-id="ta8TBvlzSTXrQDpnHJHttC">
-        <select id="typeFilter" data-page-node-id="YDfQd3Dl5fFp9kSRRe1HKK">
-          <option value="" data-page-node-id="HOwBnlEonWWYbj3oLCTyRa">全部类型</option>
-          <option value="鉴定" data-page-node-id="GexrA0NkjjOnBnwOwOLo3u">鉴定</option>
-          <option value="交易" data-page-node-id="8dNOSd9m07N3x00Yb1Rq4Y">交易</option>
-          <option value="行情" data-page-node-id="gY8z7q6DLioHyYBnSyKGMo">行情</option>
-          <option value="社区" data-page-node-id="17uGZdfXgUXxv7mAPJ7o6W">社区</option>
+  <section id="view-list" class="view" data-page-node-id="HA0Ao1YZkarLOcjifw4wDi">
+    <div class="panel" data-page-node-id="ZIYExiMdF2BwHIyhFd2Ecm">
+      <div class="toolbar" data-page-node-id="6bqJslhDhw2dtewY1KNIBQ">
+        <input type="text" id="searchInput" placeholder="搜索名称 / 定位 / 标签" style="flex:1;min-width:180px;" data-page-node-id="X1BcHid1dGYUC8JXlvnLVk">
+        <select id="typeFilter" data-page-node-id="40gasx0lTxgS7Tpyz7miyQ">
+          <option value="" data-page-node-id="trLwPMR2bEUFPN7cPOBFgF">全部类型</option>
+          <option value="C2C 闲置交易" data-page-node-id="0dFlPlUVipyemEO7JC57UK">C2C 闲置交易</option>
+          <option value="回收置换" data-page-node-id="fLbJEi8XeDAm7n0fWKzLyH">回收置换</option>
+          <option value="质检转卖" data-page-node-id="gByBPmepkF9oBfnxV21n5S">质检转卖</option>
         </select>
-        <button class="btn btn-primary" id="goFormBtn" data-page-node-id="Bk2Ic1H16ydPQglb7NwzvY">+ 录入竞品</button>
+        <button class="btn btn-primary" id="goFormBtn" data-page-node-id="L8eONtPo4G6rZAbGbnaF6U">+ 录入竞品</button>
+        <button class="btn" id="exportBtn" data-page-node-id="JI337RrXDvNQGVGxdFsago">导出报告</button>
       </div>
-      <div class="count-tip" id="countTip" data-page-node-id="5GmNAObxWzfBrNrb37KjcY"></div>
-      <div class="list-wrap" id="listContainer" data-page-node-id="aAG8i8lEycfzhYn7MWHvux"></div>
+      <div class="count-tip" id="countTip" data-page-node-id="Q7i7Oa1dvERogsEAUUn57L"></div>
+      <div class="list-wrap" id="listContainer" data-page-node-id="WHzEyurlmZrKyXUGvGxzVy"></div>
     </div>
   </section>
 
   <!-- 录入页 -->
-  <section id="view-form" class="view" style="display:none;" data-page-node-id="R5wgfuDDOttlR5sJlpvhZd">
-    <div class="panel" data-page-node-id="rGiq6nYfQFq0hPEmeXu9H2">
-      <form class="form" id="competitorForm" novalidate data-page-node-id="0pX5AXJvahWoSE059DGAvA">
-        <div class="form-section" data-page-node-id="sRch6QqDNX43lgkjRQBFbJ">
-          <h3 data-page-node-id="uibdDRljHhC0moZHuGxgsY">基础信息</h3>
-          <div class="form-grid" data-page-node-id="1GUcCnvyFr0eP7qtA8cWxK">
-            <div class="form-item" data-field="name" data-page-node-id="LsWjLjdgruH2aNXQfWzqNr">
-              <label data-page-node-id="zpBsw7uAk6kskw9Rx20vZx">名称 <span class="req" data-page-node-id="o6DtPJiC2aAH8gI1jDNIw6">*</span></label>
-              <input type="text" name="name" placeholder="如：微拍堂" data-page-node-id="IJR0mUHYx4w7HFLJh0Hu8F">
-              <span class="err" data-page-node-id="YPYh9f6cT60K0m49HSRn9Z">请填写名称</span>
+  <section id="view-form" class="view" style="display:none;" data-page-node-id="DdODpEyKxtC2m7RLHMw4BK">
+    <div class="panel" data-page-node-id="Rw7cxuj5KIFEFHqAQjMpSR">
+      <form class="form" id="competitorForm" novalidate data-page-node-id="DyObKMaIBkduuWAKI60tPs">
+        <div class="form-section" data-page-node-id="3QcvjYcf9shlKCbTbg7kll">
+          <h3 data-page-node-id="BrJGW4Hd83gKyONpcDT9Rm">基础信息</h3>
+          <div class="form-grid" data-page-node-id="PMhp6kkbp3BbDY3n9KHi8Z">
+            <div class="form-item" data-field="name" data-page-node-id="OA9V60aCCDxZLP7mxkOX3G">
+              <label data-page-node-id="c9yKV6x84x4XGl5QC1dpYa">名称 <span class="req" data-page-node-id="M5UOv5r3ZAOiNegKGmzzL6">*</span></label>
+              <input type="text" name="name" placeholder="如：闲鱼" data-page-node-id="b3QcZM0fdFQq2QkGDkgvyG">
+              <span class="err" data-page-node-id="1D4BTIwYYYz4UggfSEAUCB">请填写名称</span>
             </div>
-            <div class="form-item" data-field="type" data-page-node-id="CkiHN5qgG5MESqjf0j6Up1">
-              <label data-page-node-id="9G8lA7j3LgKDfvPq5HOq4u">平台类型 <span class="req" data-page-node-id="CiXOmLHImFNTAoDd3IYbvB">*</span></label>
-              <select name="type" data-page-node-id="npHoLRV3lQ9Zegl9GA9x9P">
-                <option value="" data-page-node-id="5sH89wNqbDx3iVmwNgS9ZK">请选择</option>
-                <option value="鉴定" data-page-node-id="qqP3iCXlHlLiXTVPdtsLcH">鉴定</option>
-                <option value="交易" data-page-node-id="CT5SL0YkL8xnSZ8Xn3lSS7">交易</option>
-                <option value="行情" data-page-node-id="wYyClM7fsrxDBW5w2sXMGL">行情</option>
-                <option value="社区" data-page-node-id="y4b6R30GugBb7H2w4RKYmi">社区</option>
+            <div class="form-item" data-field="type" data-page-node-id="sJmHQ1uFajAPfQRQL9iMJd">
+              <label data-page-node-id="MHMI4dm6umBPKZyOOLdwp2">平台类型 <span class="req" data-page-node-id="U6F7on260hJJgAL7DxIHJR">*</span></label>
+              <select name="type" data-page-node-id="ihgh7exgyw62q14woJqgPI">
+                <option value="" data-page-node-id="HJ7DCOHBr4ojNAp0DCVbsY">请选择</option>
+                <option value="C2C 闲置交易" data-page-node-id="FprQ1o89UGGZd4aUR8ZnJ0">C2C 闲置交易</option>
+                <option value="回收置换" data-page-node-id="ZGxooZlU5ldlv56sVSK8sH">回收置换</option>
+                <option value="质检转卖" data-page-node-id="sfzDeYHOYOuhjL4i3KBBfA">质检转卖</option>
               </select>
-              <span class="err" data-page-node-id="3tYKMMvrNEzOHMhMx7Nq2V">请选择平台类型</span>
+              <span class="err" data-page-node-id="l8nyWANSuD4Tx5QWc3KMwG">请选择平台类型</span>
             </div>
-            <div class="form-item full" data-page-node-id="a4Mlk0uVmjlYkk2qifopiO">
-              <label data-page-node-id="f7H5WxcfAXGOrAFjYP6sqh">定位</label>
-              <input type="text" name="positioning" placeholder="一句话定位，如：古钱币鉴定与交易的垂直平台" data-page-node-id="jjuXlicWRmwP6i9aZQB6Rz">
+            <div class="form-item full" data-page-node-id="FGK0C53sRxZPVqnHGdjMo9">
+              <label data-page-node-id="gSiNQbWVKo7pTw7Hr4ySna">定位</label>
+              <input type="text" name="positioning" placeholder="一句话定位，如：C2C 二手闲置交易平台" data-page-node-id="t3cEbCjfrM6WkyCE7QbyCe">
             </div>
-            <div class="form-item" data-page-node-id="BGpCYg8PD3JPd5afaDCVeF">
-              <label data-page-node-id="E8PaXYmgamNwBnrke6slfy">官网</label>
-              <input type="text" name="website" placeholder="https://..." data-page-node-id="CtiQlnZMrkvyqnyEzgHTn9">
+            <div class="form-item" data-page-node-id="Hmvl795Try3LcW2t9zvLkl">
+              <label data-page-node-id="dxubHlEQfZayF306CcnmZy">官网</label>
+              <input type="text" name="website" placeholder="https://..." data-page-node-id="9PPNzj5sFwTiYcESCkzwuD">
             </div>
-            <div class="form-item" data-page-node-id="fhFd4tOG0TQjLbvPHF4A2P">
-              <label data-page-node-id="DUwOyfQX5RRL0E6JBfK4en">上线状态</label>
-              <select name="status" data-page-node-id="j7m9Z6GpkEIxR6KZUA1MvW">
-                <option value="已上线" data-page-node-id="McRVGCcYBeXuUezLLSwUPk">已上线</option>
-                <option value="内测" data-page-node-id="51RKyhay7xibNf11DsGMpY">内测</option>
-                <option value="已下线" data-page-node-id="ayBVnGGI4tSSu0yuEFJvNT">已下线</option>
+            <div class="form-item" data-page-node-id="mgyl9kVvUJM0hA2tnrdZrR">
+              <label data-page-node-id="ALuDE0VyXRpQ4ENJEcapol">上线状态</label>
+              <select name="status" data-page-node-id="9RxP9j89poJheSLxYK4QIM">
+                <option value="已上线" data-page-node-id="8bZKbKTpsl7L2mkJsSTDlm">已上线</option>
+                <option value="内测" data-page-node-id="ZBbwqGLJmJ7mcpacugISBc">内测</option>
+                <option value="已下线" data-page-node-id="QkwAZOY4I7N5aZ7yq9DbMx">已下线</option>
               </select>
             </div>
           </div>
         </div>
 
-        <div class="form-section" data-page-node-id="3muBFlgWqPDOxww1RnAskp">
-          <h3 data-page-node-id="riqZCOZwEsqInNRHbwbhiC">功能与业务</h3>
-          <div class="form-grid" data-page-node-id="DVpZ4FtKjNrjOnilkaEiwy">
-            <div class="form-item full" data-page-node-id="SoLmh0W8p38LO7vIFeDn4V">
-              <label data-page-node-id="QkPbu7oNPPi9FRk78tU0Kr">核心功能</label>
+        <div class="form-section" data-page-node-id="0SFAWTosCjuDi3ceHbFfUR">
+          <h3 data-page-node-id="j1FSqWAp3i90fSMF1fNJ70">功能与业务</h3>
+          <div class="form-grid" data-page-node-id="4s4muewQBrrRki5kUUvsv2">
+            <div class="form-item full" data-page-node-id="xMRTQ17ab5qdlPIhID6S3H">
+              <label data-page-node-id="rRGQTFmBzGLEVRvuH0sA5U">核心功能</label>
               <textarea name="features" rows="2" placeholder="核心功能点，逗号分隔"></textarea>
             </div>
-            <div class="form-item" data-page-node-id="iXt2vsuA6GIf1OeST4SbhD">
-              <label data-page-node-id="aHEZMc7e4NbJl5y05Omrig">目标用户</label>
-              <input type="text" name="targetUsers" placeholder="如：藏家、钱币爱好者" data-page-node-id="FFbMxW0rUmRzqDeD2YczwG">
+            <div class="form-item" data-page-node-id="RprXBErNiBlCdZaVBhpnZC">
+              <label data-page-node-id="pTujTkbEq97FVAdNGMJBJj">目标用户</label>
+              <input type="text" name="targetUsers" placeholder="如：个人闲置卖家、淘便宜买家" data-page-node-id="YrFO1U4zMsjwj5XfUTdBbF">
             </div>
-            <div class="form-item" data-page-node-id="hVpBPGdA2v8yrpL8fEqNIA">
-              <label data-page-node-id="LPeJ1yFMJTSEZEO9HjNtF5">业务模式</label>
-              <input type="text" name="businessModel" placeholder="如：抽佣、会员、鉴定服务费" data-page-node-id="MtxlvEJBnZWQVPIPf2j5Ep">
-            </div>
-          </div>
-        </div>
-
-        <div class="form-section" data-page-node-id="TDRJEMiWOrpy9nlJzycsdX">
-          <h3 data-page-node-id="pxLsQoFPo0VNyclBSWBct8">商业信息</h3>
-          <div class="form-grid" data-page-node-id="bxknYBgUKq2MQgXetl5gVb">
-            <div class="form-item" data-page-node-id="ThtjEO51sYbyKxzqdGGair">
-              <label data-page-node-id="A9PvwkJo7dVnf6z3w7Er3A">定价方式</label>
-              <input type="text" name="pricing" placeholder="如：免费 + 鉴定按次收费" data-page-node-id="xD2mWjvVsxQD5j87qTKSzl">
-            </div>
-            <div class="form-item full" data-page-node-id="UeydEk54e5ZfPIa8OH2E1Y">
-              <label data-page-node-id="Ih5vxkJQ7ONKCs0ggLYWuh">优势</label>
-              <input type="text" name="strengths" placeholder="相对其他平台的优点" data-page-node-id="86MCkb55xiZZNestlZDLGA">
-            </div>
-            <div class="form-item full" data-page-node-id="iy1jmxT8nEEMPvEB3VIY47">
-              <label data-page-node-id="5dTDznu02hUs2EWge8Drvt">不足</label>
-              <input type="text" name="weaknesses" placeholder="存在的短板" data-page-node-id="jMxj1DmexUNHncIqbiiuf7">
-            </div>
-            <div class="form-item full" data-page-node-id="wQTFQvcGRl7Q1I4Jhat2WF">
-              <label data-page-node-id="KDIgeWQXvfCkE0sM6J0fTZ">标签</label>
-              <input type="text" name="tags" placeholder="逗号分隔，如：老牌,垂直,鉴定师多" data-page-node-id="PkkY1rUnElRlOKQoyj7Lls">
-            </div>
-            <div class="form-item full" data-page-node-id="ED3P6D1uQVnil1Nbq6Nzgp">
-              <label data-page-node-id="1mQZ3SOqY2PDoabQViAWwV">备注</label>
-              <textarea name="remark" rows="2"></textarea>
+            <div class="form-item" data-page-node-id="LgfpOIuH08mFCBRRDcSEHz">
+              <label data-page-node-id="YcIugVf7Ix5NZCjGstpvXd">业务模式</label>
+              <input type="text" name="businessModel" placeholder="如：C2C 撮合、回收自营" data-page-node-id="blGBrt3xFGlePxiHqnXJvw">
             </div>
           </div>
         </div>
 
-        <div class="form-actions" data-page-node-id="AsjdQoEjebJDNyCFr3dbF3">
-          <button type="submit" class="btn btn-primary" data-page-node-id="FOl8lPGDJqCyYfDawDXXcL">保存竞品</button>
-          <button type="button" class="btn" id="cancelFormBtn" data-page-node-id="QCxHNLz6JgXvz7oo0yX9dP">取消</button>
+        <div class="form-section" data-page-node-id="u9SUAhgm2gXcoBbp77dRNU">
+          <h3 data-page-node-id="jkMrKcgP0HiBChN2Pcczlm">商业信息</h3>
+          <div class="form-grid" data-page-node-id="Bl5VFYqCuI2rnjtZZAUGMg">
+            <div class="form-item" data-page-node-id="9NFTD9c3luVLD2HohAzF45">
+              <label data-page-node-id="y6ZmWCmkwNJkYGAHFqvCWB">定价方式</label>
+              <input type="text" name="pricing" placeholder="如：免费发布 + 增值服务" data-page-node-id="mVnRyiwaYbqaUGAdNohi6d">
+            </div>
+            <div class="form-item full" data-page-node-id="7iCaLpKHwEXWNdsWc1XbTH">
+              <label data-page-node-id="1qKO4223eBmrRRr7R0YeiL">优势</label>
+              <input type="text" name="strengths" placeholder="相对其他平台的优点" data-page-node-id="ZJ4bIu3QjvA3NSvEYcBCIj">
+            </div>
+            <div class="form-item full" data-page-node-id="86FjRqmhcZBOxW7JcEgodc">
+              <label data-page-node-id="K7RwfbuarrJt2bTfcX2ET5">不足</label>
+              <input type="text" name="weaknesses" placeholder="存在的短板" data-page-node-id="rUEgARsAaIuWG5FRGEFQIK">
+            </div>
+            <div class="form-item full" data-page-node-id="Em5PqfAqxyaJr9zAGfR6lX">
+              <label data-page-node-id="weICIlRbU9pN1tkBV8KC20">标签</label>
+              <input type="text" name="tags" placeholder="逗号分隔，如：头部,流量大,验机" data-page-node-id="MQqyB3cfzymx6Tfj27obII">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section" data-page-node-id="hEC5FaFWtBj1fE1NewMIky">
+          <h3 data-page-node-id="pBCgIO3tJrTxL9gGruEQvJ">评分（0~5 分）</h3>
+          <div class="form-grid" id="scoreArea" data-page-node-id="5HmW1LIMpEBSGxzEJ3tmxj"></div>
+        </div>
+
+        <div class="form-actions" data-page-node-id="NhOmJmNnEFo9ApSeGnkLf0">
+          <button type="submit" class="btn btn-primary" data-page-node-id="f7ZXAgzyaRNGEF1qLlNjeO">保存竞品</button>
+          <button type="button" class="btn" id="cancelFormBtn" data-page-node-id="kC6hJ8Yg8O5lfgT1O0rKQE">取消</button>
         </div>
       </form>
     </div>
   </section>
 
   <!-- 对比页 -->
-  <section id="view-compare" class="view" style="display:none;" data-page-node-id="23Ow0zNOd7lhR2PeKJR2n8">
-    <div class="panel" id="comparePanel" data-page-node-id="hhMv0DwDnkI7YBkcTXWu8G"></div>
+  <section id="view-compare" class="view" style="display:none;" data-page-node-id="zaN1SDXm9b3xY95A8NCtNF">
+    <div class="panel" id="comparePanel" data-page-node-id="UsgY4mXjdkuIzICyxGbDTc"></div>
+  </section>
+
+  <!-- 问答页 -->
+  <section id="view-qa" class="view" style="display:none;" data-page-node-id="CBvoN5E58R457d2glpj9xE">
+    <div class="panel qa-layout" data-page-node-id="4sxobptzpcV8gWiEHG3hlG">
+      <div class="qa-hints" data-page-node-id="TxBUc5DGUTB6PIZH7L3vba">
+        <span class="hint-label" data-page-node-id="PXSSG9jygyE3pECRB8wdmP">试试问：</span>
+        <span class="hint" data-page-node-id="I0GrKhfrphuJw7p4LMAVaE">闲鱼卖二手手机的流程？</span>
+        <span class="hint" data-page-node-id="QVxc4wkGpVuHJw144lSUfV">转转验机服务的收费？</span>
+        <span class="hint" data-page-node-id="jyjR5DFO6HBP9rP9gFYjOx">爱回收的退货政策？</span>
+      </div>
+      <div class="qa-chat" id="qaChat" data-page-node-id="FhB20H2REuC0WIuuW0A6cf"></div>
+      <div class="qa-input" data-page-node-id="y6Z9ryPryS1vWWwO3NtFyA">
+        <input type="text" id="qaInput" placeholder="输入关于二手交易平台的问题…" @keyup.enter="askQa" data-page-node-id="iUCMMuyHC8hXIXuipEC7OA">
+        <button class="btn btn-primary" id="qaSendBtn" data-page-node-id="TvMJ47IQH2VTWhKKGXdbKG">发送</button>
+      </div>
+    </div>
   </section>
 </div>
 
-<div class="toast" id="toast" data-page-node-id="vSwIbmykJ87fHWDB7jkUOj"></div>
+<div class="toast" id="toast" data-page-node-id="wrnORSl7SLAQ81lckKCxtj"></div>
 
 <script>
   // ===== Mock 数据 =====
-  const TYPE_LIST = ['鉴定', '交易', '行情', '社区'];
+  const TYPE_LIST = ['C2C 闲置交易', '回收置换', '质检转卖'];
+
+  // 评分维度（与后端可配置维度对齐）
+  const RATING_DIMS = ['功能完整度', '用户规模', '质检能力', '价格竞争力', '口碑'];
 
   let competitors = [
     {
-      id: 1, name: '微拍堂', type: '交易', positioning: '文玩艺术品交易与竞拍的头部平台',
-      website: 'https://www.weipaitang.com', status: '已上线',
-      features: '在线竞拍、直播拍卖、担保交易、鉴定服务',
-      targetUsers: '文玩藏家、商家', businessModel: '交易佣金 + 服务费',
-      pricing: '免费入驻 + 成交抽佣', strengths: '用户量大、品类全、直播生态成熟',
-      weaknesses: '鉴定权威性一般、假货争议多', tags: ['老牌', '交易', '直播'],
-      remark: '', score: { 功能: 5, 用户量: 5, 鉴定: 3, 价格: 4, 口碑: 3 }
+      id: 1, name: '闲鱼', type: 'C2C 闲置交易', positioning: '阿里旗下 C2C 二手闲置交易平台',
+      website: 'https://www.goofish.com', status: '已上线',
+      features: '闲置发布、鱼塘社区、信用交易、验机服务',
+      targetUsers: '个人闲置卖家、淘便宜买家', businessModel: 'C2C 撮合 + 增值服务',
+      pricing: '免费发布 + 验机/担保等增值收费', strengths: '用户量巨大、品类全、社区活跃',
+      weaknesses: '假货/纠纷多、平台监管有限', tags: ['头部', '流量大', 'C2C'],
+      remark: '闲鱼前身为淘宝二手', score: { '功能完整度': 5, '用户规模': 5, '质检能力': 3, '价格竞争力': 4, '口碑': 3 }
     },
     {
-      id: 2, name: '域鉴', type: '鉴定', positioning: '古玩艺术品在线鉴定与价值评估平台',
-      website: 'https://www.yujian.com', status: '已上线',
-      features: '在线图片鉴定、视频鉴定、专家咨询、证书出具',
-      targetUsers: '藏家、需要鉴定的买家', businessModel: '鉴定服务费',
-      pricing: '按次/按件收费，会员套餐', strengths: '专家资源丰富、鉴定流程规范',
-      weaknesses: '线上鉴定精度受限、线下覆盖少', tags: ['鉴定', '专家', '证书'],
-      remark: '', score: { 功能: 4, 用户量: 3, 鉴定: 5, 价格: 3, 口碑: 4 }
+      id: 2, name: '转转', type: '回收置换', positioning: '58 系二手交易 + 验机回收平台',
+      website: 'https://www.zhuanzhuan.com', status: '已上线',
+      features: '二手买卖、官方验机、回收置换、担保交易',
+      targetUsers: '3C 数码换机用户、回收用户', businessModel: '回收自营 + 交易撮合',
+      pricing: '免费发布 + 验机/回收差价', strengths: '验机质检标准化、回收链路成熟',
+      weaknesses: '品类偏 3C、佣金较高', tags: ['验机', '回收', '3C'],
+      remark: '', score: { '功能完整度': 4, '用户规模': 4, '质检能力': 4, '价格竞争力': 3, '口碑': 3 }
     },
     {
-      id: 3, name: '华夏收藏网', type: '行情', positioning: '古玩收藏资讯与市场价格参考平台',
-      website: 'https://www.cang.com', status: '已上线',
-      features: '行情数据、拍卖记录、资讯、论坛社区',
-      targetUsers: '收藏爱好者、研究者', businessModel: '广告 + 会员',
-      pricing: '免费浏览 + 会员增值', strengths: '历史数据沉淀深、资讯专业',
-      weaknesses: '界面老旧、数据更新不够及时', tags: ['老牌', '行情', '资讯'],
-      remark: '', score: { 功能: 3, 用户量: 3, 鉴定: 2, 价格: 4, 口碑: 3 }
-    },
-    {
-      id: 4, name: '钱币天堂', type: '社区', positioning: '近代钱币收藏爱好者的交流社区',
-      website: 'https://www.coinsky.com', status: '已上线',
-      features: '论坛交流、藏品展示、交易信息、知识库',
-      targetUsers: '钱币收藏爱好者', businessModel: '会员 + 广告',
-      pricing: '免费 + 会员', strengths: '社区氛围浓、垂直专业',
-      weaknesses: '交易缺乏担保、商业化弱', tags: ['社区', '钱币', '垂直'],
-      remark: '', score: { 功能: 3, 用户量: 3, 鉴定: 2, 价格: 4, 口碑: 4 }
-    },
-    {
-      id: 5, name: '评级盒鉴定', type: '鉴定', positioning: '近代钱币专业评级与封装服务',
-      website: 'https://example.com', status: '已上线',
-      features: '钱币评级、封装盒、评级报告、防伪',
-      targetUsers: '钱币藏家、交易商', businessModel: '评级服务费',
-      pricing: '按枚收费', strengths: '评级标准专业、封装权威',
-      weaknesses: '周期长、费用高', tags: ['评级', '钱币', '专业'],
-      remark: '', score: { 功能: 4, 用户量: 2, 鉴定: 5, 价格: 2, 口碑: 4 }
-    },
-    {
-      id: 6, name: '古泉园地', type: '社区', positioning: '古钱币收藏交流与交易的垂直社区',
-      website: 'https://example.com', status: '已上线',
-      features: '钱币交易、鉴定讨论、拍卖、知识分享',
-      targetUsers: '古钱币爱好者', businessModel: '交易佣金 + 会员',
-      pricing: '免费 + 会员', strengths: '古钱币领域专业度高',
-      weaknesses: '规模较小、用户量有限', tags: ['社区', '古钱币', '垂直'],
-      remark: '', score: { 功能: 3, 用户量: 2, 鉴定: 4, 价格: 4, 口碑: 4 }
+      id: 3, name: '爱回收', type: '回收置换', positioning: '专业二手 3C 回收与质检转卖平台',
+      website: 'https://www.aihuishou.com', status: '已上线',
+      features: '上门回收、门店回收、质检翻新、二手零售',
+      targetUsers: '换机用户、二手 3C 买家', businessModel: '回收自营 + 零售差价',
+      pricing: '回收估价 + 二手销售差价', strengths: '回收网络广、质检专业、线下门店多',
+      weaknesses: '回收价偏低、品类单一', tags: ['回收', '质检', '线下'],
+      remark: '母公司万物新生集团', score: { '功能完整度': 4, '用户规模': 3, '质检能力': 4, '价格竞争力': 3, '口碑': 4 }
     }
+  ];
+
+  // 知识库 mock 语料（问答检索用）
+  const KB_DOCS = [
+    { title: '闲鱼交易规则', text: '闲鱼支持个人卖家免费发布闲置商品，买家下单后走支付宝担保交易，确认收货后款项到账。发布闲置无需开店，普通账号可发布一定数量商品。' },
+    { title: '转转验机服务说明', text: '转转提供官方验机服务，卖家可将手机寄送验机，验机费按机型收取（几十元不等）。验机通过后商品会打上「验机」标签，提升买家信任。' },
+    { title: '爱回收回收与退货政策', text: '爱回收支持上门/门店/邮寄回收，回收估价后质检复核，价差过大可取消。售出的二手商品支持 7 天无理由退货（部分商品除外）。' },
+    { title: '二手交易担保规则', text: '主流二手平台普遍采用担保交易模式，买家付款后资金由平台托管，确认收货后才打款给卖家，降低交易风险。' },
+    { title: '二手数码品类质检标准', text: '二手数码（手机/平板）质检通常按成色分级（如 99 新/95 新/9 成新），检测项包括屏幕、电池、功能、外观等。' }
   ];
 
   let selectedIds = new Set();
@@ -348,11 +387,16 @@
 
   function switchTab(tab) {
     $$('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
-    ['list', 'form', 'compare'].forEach(v => {
+    ['list', 'form', 'compare', 'qa'].forEach(v => {
       $('#view-' + v).style.display = (v === tab) ? '' : 'none';
     });
     if (tab === 'list') renderList();
     if (tab === 'compare') renderCompare();
+    if (tab === 'qa') initQa();
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   }
 
   // ===== 列表页 =====
@@ -398,7 +442,6 @@
         </div>`;
     }).join('');
 
-    // 事件绑定
     container.querySelectorAll('.check').forEach(cb => {
       cb.addEventListener('change', (e) => {
         const id = Number(e.target.dataset.id);
@@ -428,6 +471,26 @@
   }
 
   // ===== 录入 / 编辑 =====
+  function renderScoreArea(scores) {
+    const area = $('#scoreArea');
+    area.innerHTML = RATING_DIMS.map(d => {
+      const val = scores ? (scores[d] || 0) : 3;
+      return `
+        <div class="form-item">
+          <div class="score-row">
+            <label>${d}</label>
+            <input type="range" min="0" max="5" step="1" value="${val}" data-score-dim="${d}">
+            <span class="score-val">${val}</span>
+          </div>
+        </div>`;
+    }).join('');
+    area.querySelectorAll('input[type=range]').forEach(r => {
+      r.addEventListener('input', (e) => {
+        e.target.closest('.score-row').querySelector('.score-val').textContent = e.target.value;
+      });
+    });
+  }
+
   function startEdit(id) {
     const c = competitors.find(x => x.id === id);
     if (!c) return;
@@ -445,7 +508,7 @@
     f.elements['strengths'].value = c.strengths;
     f.elements['weaknesses'].value = c.weaknesses;
     f.elements['tags'].value = c.tags.join(',');
-    f.elements['remark'].value = c.remark;
+    renderScoreArea(c.score);
     switchTab('form');
     toast('正在编辑：' + c.name);
   }
@@ -453,6 +516,7 @@
   function resetForm() {
     editingId = null;
     $('#competitorForm').reset();
+    renderScoreArea(null);
     $$('.form-item').forEach(el => el.classList.remove('invalid'));
   }
 
@@ -460,7 +524,6 @@
     e.preventDefault();
     const f = e.target;
     let ok = true;
-    // 校验必填
     ['name', 'type'].forEach(field => {
       const wrap = document.querySelector(`.form-item[data-field="${field}"]`);
       const val = f.elements[field].value.trim();
@@ -468,6 +531,10 @@
       else wrap.classList.remove('invalid');
     });
     if (!ok) { toast('请填写必填项'); return; }
+
+    // 收集评分
+    const score = {};
+    $$('#scoreArea input[type=range]').forEach(r => { score[r.dataset.scoreDim] = Number(r.value); });
 
     const data = {
       name: f.elements['name'].value.trim(),
@@ -482,8 +549,8 @@
       strengths: f.elements['strengths'].value.trim(),
       weaknesses: f.elements['weaknesses'].value.trim(),
       tags: f.elements['tags'].value.split(/[,，]/).map(s => s.trim()).filter(Boolean),
-      remark: f.elements['remark'].value.trim(),
-      score: { 功能: 3, 用户量: 3, 鉴定: 3, 价格: 3, 口碑: 3 }
+      remark: '',
+      score: score
     };
 
     if (editingId) {
@@ -511,7 +578,6 @@
     { key: 'weaknesses', label: '不足' },
     { key: 'features', label: '核心功能' }
   ];
-  const RADAR_DIMS = ['功能', '用户量', '鉴定', '价格', '口碑'];
   const RADAR_COLORS = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#7c3aed', '#0891b2'];
 
   function renderCompare() {
@@ -535,6 +601,12 @@
       return `<tr><td class="dim">${d.label}</td>${cells}</tr>`;
     }).join('');
 
+    // 总分行
+    const totalRow = cols.map(({ c }) => {
+      const total = RATING_DIMS.reduce((s, d) => s + (c.score[d] || 0), 0);
+      return `<td><b>${total}</b> 分</td>`;
+    }).join('');
+
     panel.innerHTML = `
       <div class="compare-head">
         <div class="sel">已选择 <b>${sel.length}</b> 个竞品进行对比</div>
@@ -547,6 +619,11 @@
         <h3>雷达图对比</h3>
         <div class="radar-box">${buildRadar(cols)}</div>
         <div class="legend">${cols.map(({c,color}) => `<span><i style="background:${color}"></i>${escapeHtml(c.name)}</span>`).join('')}</div>
+        <h3>评分对比（满分 25）</h3>
+        <table class="cmp">
+          <thead><tr><th>竞品</th>${cols.map(({c}) => `<th>${escapeHtml(c.name)}</th>`).join('')}</tr></thead>
+          <tbody><tr><td class="dim">总分</td>${totalRow}</tr></tbody>
+        </table>
         <h3>详细对比表</h3>
         <table class="cmp">
           <thead><tr><th>维度</th>${cols.map(({c}) => `<th>${escapeHtml(c.name)}</th>`).join('')}</tr></thead>
@@ -563,44 +640,158 @@
     });
   }
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  }
-
   // 手绘 SVG 雷达图
   function buildRadar(cols) {
-    const n = RADAR_DIMS.length;
+    const n = RATING_DIMS.length;
     const cx = 180, cy = 170, R = 130;
     const angle = (i) => -Math.PI / 2 + (i * 2 * Math.PI / n);
     const pt = (i, r) => [cx + r * Math.cos(angle(i)), cy + r * Math.sin(angle(i))];
 
-    // 网格
     let grid = '';
     for (let level = 1; level <= 5; level++) {
       const r = R * level / 5;
-      const pts = RADAR_DIMS.map((_, i) => pt(i, r).join(',')).join(' ');
+      const pts = RATING_DIMS.map((_, i) => pt(i, r).join(',')).join(' ');
       grid += `<polygon points="${pts}" fill="none" stroke="#e5e7eb" stroke-width="1"/>`;
     }
-    // 轴线
-    let axes = RADAR_DIMS.map((_, i) => {
+    let axes = RATING_DIMS.map((_, i) => {
       const [x, y] = pt(i, R);
       return `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="#e5e7eb" stroke-width="1"/>`;
     }).join('');
 
-    // 维度标签
-    let labels = RADAR_DIMS.map((d, i) => {
-      const [x, y] = pt(i, R + 22);
+    let labels = RATING_DIMS.map((d, i) => {
+      const [x, y] = pt(i, R + 26);
       const anchor = Math.abs(x - cx) < 5 ? 'middle' : (x > cx ? 'start' : 'end');
       return `<text x="${x}" y="${y + 4}" text-anchor="${anchor}" font-size="12" fill="#6b7280">${d}</text>`;
     }).join('');
 
-    // 数据多边形
     let polys = cols.map(({ c, color }) => {
-      const pts = RADAR_DIMS.map((d, i) => pt(i, R * (c.score[d] || 0) / 5).join(',')).join(' ');
+      const pts = RATING_DIMS.map((d, i) => pt(i, R * (c.score[d] || 0) / 5).join(',')).join(' ');
       return `<polygon points="${pts}" fill="${color}" fill-opacity="0.15" stroke="${color}" stroke-width="2"/>`;
     }).join('');
 
     return `<svg width="360" height="340" viewBox="0 0 360 340" xmlns="http://www.w3.org/2000/svg">${grid}${axes}${labels}${polys}</svg>`;
+  }
+
+  // ===== 知识库问答 =====
+  let qaInited = false;
+  function initQa() {
+    if (qaInited) return;
+    qaInited = true;
+    // 欢迎语
+    appendQa('assistant', '你好，我是基于二手交易知识库的问答助手。你可以问我关于闲鱼、转转、爱回收等平台的交易规则、验机服务、回收政策等问题。', null);
+    $('#qaSendBtn').addEventListener('click', askQa);
+    $('#qaInput').addEventListener('keyup', (e) => { if (e.key === 'Enter') askQa(); });
+    $$('.qa-hints .hint').forEach(h => {
+      h.addEventListener('click', () => { $('#qaInput').value = h.textContent; askQa(); });
+    });
+  }
+
+  function appendQa(role, text, src) {
+    const chat = $('#qaChat');
+    const wrap = document.createElement('div');
+    wrap.className = 'qa-msg ' + role;
+    const avatar = role === 'user' ? '我' : 'AI';
+    let srcHtml = '';
+    if (src) {
+      srcHtml = `<div class="qa-src"><div class="src-title">📄 来源：${escapeHtml(src.title)}</div><div>${escapeHtml(src.text)}</div></div>`;
+    }
+    wrap.innerHTML = `<div class="avatar">${avatar}</div><div class="bubble">${escapeHtml(text)}${srcHtml}</div>`;
+    chat.appendChild(wrap);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  // mock 检索：简单关键词匹配，模拟 RAG 命中
+  function mockRetrieve(question) {
+    const q = question;
+    // 关键词命中打分
+    const scored = KB_DOCS.map(doc => {
+      let score = 0;
+      const ql = q;
+      if (ql.includes('闲鱼') && doc.title.includes('闲鱼')) score += 3;
+      if (ql.includes('转转') && doc.title.includes('转转')) score += 3;
+      if (ql.includes('爱回收') && doc.title.includes('爱回收')) score += 3;
+      if (ql.includes('退货') && (doc.text.includes('退货') || doc.text.includes('无理由'))) score += 2;
+      if (ql.includes('验机') && doc.text.includes('验机')) score += 2;
+      if (ql.includes('回收') && doc.text.includes('回收')) score += 2;
+      if (ql.includes('流程') && doc.text.includes('流程')) score += 1;
+      if (ql.includes('规则') && doc.text.includes('规则')) score += 1;
+      if (ql.includes('收费') || ql.includes('费用') || ql.includes('价格')) {
+        if (doc.text.includes('费') || doc.text.includes('价格')) score += 1;
+      }
+      return { doc, score };
+    }).filter(x => x.score > 0).sort((a, b) => b.score - a.score);
+
+    if (scored.length === 0) return null;
+    const top = scored[0];
+    return { answer: top.doc.text, src: top.doc };
+  }
+
+  function askQa() {
+    const input = $('#qaInput');
+    const q = input.value.trim();
+    if (!q) return;
+    appendQa('user', q, null);
+    input.value = '';
+
+    // 模拟打字延迟
+    const typing = document.createElement('div');
+    typing.className = 'qa-typing';
+    typing.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+    $('#qaChat').appendChild(typing);
+    $('#qaChat').scrollTop = $('#qaChat').scrollHeight;
+
+    setTimeout(() => {
+      typing.remove();
+      const result = mockRetrieve(q);
+      if (result) {
+        appendQa('assistant', result.answer, result.src);
+      } else {
+        appendQa('assistant', '抱歉，我在知识库中没有找到与「' + q + '」相关的内容。你可以换个问法，或询问关于交易规则、验机服务、回收政策等话题。', null);
+      }
+    }, 600);
+  }
+
+  // ===== 导出报告（mock） =====
+  function exportReport() {
+    const sel = competitors.filter(c => selectedIds.has(c.id));
+    const target = sel.length >= 1 ? sel : competitors;
+    if (target.length === 0) { toast('暂无可导出的竞品'); return; }
+    let md = '# 二手交易平台竞品分析报告\n\n';
+    md += '> 生成时间：' + new Date().toLocaleString() + '\n\n';
+    md += '## 一、竞品总览\n\n';
+    md += '| 名称 | 类型 | 定位 | 总分 |\n|---|---|---|---|\n';
+    target.forEach(c => {
+      const total = RATING_DIMS.reduce((s, d) => s + (c.score[d] || 0), 0);
+      md += `| ${c.name} | ${c.type} | ${c.positioning} | ${total} |\n`;
+    });
+    md += '\n## 二、评分对比\n\n';
+    md += '| 竞品 | ' + RATING_DIMS.join(' | ') + ' | 总分 |\n|---|---|---|---|---|---|---|\n';
+    target.forEach(c => {
+      const total = RATING_DIMS.reduce((s, d) => s + (c.score[d] || 0), 0);
+      md += `| ${c.name} | ` + RATING_DIMS.map(d => c.score[d] || 0).join(' | ') + ` | ${total} |\n`;
+    });
+    md += '\n## 三、详细档案\n\n';
+    target.forEach(c => {
+      md += `### ${c.name}（${c.type}）\n\n`;
+      md += `- **定位**：${c.positioning}\n`;
+      md += `- **官网**：${c.website}\n`;
+      md += `- **核心功能**：${c.features}\n`;
+      md += `- **目标用户**：${c.targetUsers}\n`;
+      md += `- **业务模式**：${c.businessModel}\n`;
+      md += `- **定价**：${c.pricing}\n`;
+      md += `- **优势**：${c.strengths}\n`;
+      md += `- **不足**：${c.weaknesses}\n\n`;
+    });
+
+    // 触发浏览器下载
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '竞品分析报告_' + Date.now() + '.md';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('报告已导出（Markdown）');
   }
 
   // ===== 事件绑定 =====
@@ -610,9 +801,11 @@
   $('#goFormBtn').addEventListener('click', () => { resetForm(); switchTab('form'); });
   $('#cancelFormBtn').addEventListener('click', () => { resetForm(); switchTab('list'); });
   $('#competitorForm').addEventListener('submit', submitForm);
+  $('#exportBtn').addEventListener('click', exportReport);
 
   // 初始化
   updateCompareBadge();
+  renderScoreArea(null);
   renderList();
 </script>
 </body>

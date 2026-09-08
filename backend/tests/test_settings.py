@@ -20,12 +20,12 @@ async def test_default_dimensions(client):
     resp = await client.get("/api/settings/rating-dimensions")
     assert resp.status_code == 200
     dims = resp.json()["dimensions"]
-    assert dims == ["功能完整度", "用户规模", "鉴定能力", "价格竞争力", "口碑"]
+    assert dims == ["功能完整度", "用户规模", "质检能力", "价格竞争力", "口碑"]
 
 
 async def test_update_dimensions(client):
     """更新维度后 GET 返回新值，且 compare 使用新维度。"""
-    new_dims = ["功能完整度", "鉴定能力", "社区活跃度", "价格竞争力"]
+    new_dims = ["功能完整度", "质检能力", "用户规模", "价格竞争力"]
     resp = await client.put(
         "/api/settings/rating-dimensions", json={"dimensions": new_dims}
     )

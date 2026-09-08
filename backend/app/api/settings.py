@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 RATING_DIMENSIONS_KEY = "rating_dimensions"
 
 # 默认评分维度（未配置时使用）
-DEFAULT_RATING_DIMENSIONS = ["功能完整度", "用户规模", "鉴定能力", "价格竞争力", "口碑"]
+DEFAULT_RATING_DIMENSIONS = ["功能完整度", "用户规模", "质检能力", "价格竞争力", "口碑"]
 
 # 维度数量限制（太少雷达图没意义，太多图难以阅读）
 MIN_DIMENSIONS = 3

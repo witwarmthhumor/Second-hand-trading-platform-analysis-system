@@ -20,16 +20,16 @@ async def _create_competitor(client, name: str, ratings: dict) -> int:
         "/api/competitors",
         json={
             "name": name,
-            "type": "交易",
+            "type": "C2C 闲置交易",
             "positioning": f"{name}定位",
             "launch_status": "已上线",
-            "features": "竞拍、直播、鉴定",
-            "target_users": "钱币收藏爱好者",
-            "business_model": "抽佣",
-            "pricing": "免费入驻，成交抽 2%",
+            "features": "闲置发布、信用交易、验机",
+            "target_users": "二手交易用户",
+            "business_model": "撮合",
+            "pricing": "免费发布，增值收费",
             "strengths": "用户量大",
-            "weaknesses": "鉴定周期长",
-            "tags": ["钱币"],
+            "weaknesses": "质检周期长",
+            "tags": ["二手"],
             "ext_fields": {"ratings": ratings},
         },
     )
@@ -49,7 +49,7 @@ async def test_export_all_and_download(client):
         client, "报告测试竞品A", {"功能完整度": 4, "用户规模": 5, "口碑": 3}
     )
     await _create_competitor(
-        client, "报告测试竞品B", {"功能完整度": 3, "鉴定能力": 4, "口碑": 5}
+        client, "报告测试竞品B", {"功能完整度": 3, "质检能力": 4, "口碑": 5}
     )
 
     resp = await client.post("/api/report/export", json={})
