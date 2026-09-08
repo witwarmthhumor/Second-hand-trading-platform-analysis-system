@@ -7,6 +7,7 @@ from sqlalchemy import text
 
 from app.api.compare import router as compare_router
 from app.api.competitors import router as competitors_router
+from app.api.cost import router as cost_router
 from app.api.fetch import router as fetch_router
 from app.api.report import router as report_router
 from app.api.settings import router as settings_router
@@ -30,6 +31,7 @@ app.include_router(fetch_router)
 app.include_router(compare_router)
 app.include_router(settings_router)
 app.include_router(report_router)
+app.include_router(cost_router)
 
 
 @app.get("/health")

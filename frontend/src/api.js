@@ -8,7 +8,15 @@ const http = axios.create({
 http.interceptors.response.use(
   (resp) => resp.data,
   (err) => {
-    const msg = err.response?.data?.detail || err.message || '请求失败'
+    // 后端熔断返回 402，detail 为对象（含 code='cost_limit'、approval_token 等）
+    const detail = err.response?.data?.detail
+    if (err.response?.status === 402 && detail && typeof detail === 'object') {
+      const e = new Error(detail.message || '调用超限，需确认')
+      e.status = 402
+      e.costDetail = detail
+      return Promise.reject(e)
+    }
+    const msg = typeof detail === 'string' ? detail : err.message || '请求失败'
     return Promise.reject(new Error(msg))
   },
 )
@@ -54,5 +62,15 @@ export const competitorApi = {
   },
   reportDownloadUrl(filename) {
     return `/api/report/download/${encodeURIComponent(filename)}`
+  },
+  // —— LLM 成本熔断 ——
+  costStatus() {
+    return http.get('/cost/status')
+  },
+  costApprove(token) {
+    return http.post('/cost/approve', { token })
+  },
+  costReset() {
+    return http.post('/cost/reset')
   },
 }

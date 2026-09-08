@@ -21,5 +21,15 @@ class Settings(BaseSettings):
     llm_model: str = "gpt-5.4-mini"
     llm_api_key: str = ""
 
+    # ---- LLM 成本熔断 ----
+    # 会话累计消费超过该阈值（元）即中断并征询。默认 1 元；按公开单价单次抓取约 0.01 元，
+    # 手动试用难以触发，可下调（如 0.05）让批量/试用也能触发。
+    llm_cost_limit_cny: float = 1.0
+    # 单价：每百万 token 美元（gpt-5.4-mini 公开价：输入 0.75 / 输出 4.50）
+    llm_input_price_usd_per_mtok: float = 0.75
+    llm_output_price_usd_per_mtok: float = 4.50
+    # 汇率（美元→人民币），仅用于费用预估展示
+    usd_cny_rate: float = 7.1
+
 
 settings = Settings()

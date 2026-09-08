@@ -175,6 +175,74 @@ function openFetch() {
   fetchDialogVisible.value = true
 }
 
+// —— 成本熔断征询 ——
+const costDialog = ref(false)
+const costInfo = ref(null) // 待审批信息 { approval_token, estimate_cost_cny, total_cost_cny, cost_limit_cny }
+const costStatus = ref(null) // 累计状态
+const costConfirming = ref(false)
+let pendingFetchUrl = '' // 用户同意后要重试的 URL
+
+async function loadCostStatus() {
+  try {
+    costStatus.value = await competitorApi.costStatus()
+  } catch (e) {
+    /* 非关键，静默 */
+  }
+}
+
+function openCostApprove(info, url) {
+  costInfo.value = info
+  pendingFetchUrl = url
+  costDialog.value = true
+}
+
+async function confirmFetch() {
+  costConfirming.value = true
+  try {
+    await competitorApi.costApprove(costInfo.value.approval_token)
+    costDialog.value = false
+    // 放行后重试本次抓取
+    await doFetchUrl(pendingFetchUrl)
+  } catch (e) {
+    ElMessage.error(e.message)
+  } finally {
+    costConfirming.value = false
+  }
+}
+
+function cancelFetch() {
+  costDialog.value = false
+  pendingFetchUrl = ''
+}
+
+async function resetCost() {
+  try {
+    await competitorApi.costReset()
+    await loadCostStatus()
+    ElMessage.success('已重置成本累计')
+  } catch (e) {
+    ElMessage.error(e.message)
+  }
+}
+
+async function doFetchUrl(url) {
+  try {
+    await competitorApi.fetch(url)
+    ElMessage.success('抓取成功，已进入待校对')
+    fetchDialogVisible.value = false
+    fetchPending()
+    loadCostStatus()
+  } catch (e) {
+    if (e.status === 402 && e.costDetail) {
+      // 成本熔断：弹框征询是否同意继续
+      openCostApprove(e.costDetail, url)
+      loadCostStatus()
+    } else {
+      ElMessage.error(e.message)
+    }
+  }
+}
+
 async function doFetch() {
   const url = fetchUrl.value.trim()
   if (!url) {
@@ -183,12 +251,7 @@ async function doFetch() {
   }
   fetching.value = true
   try {
-    await competitorApi.fetch(url)
-    ElMessage.success('抓取成功，已进入待校对')
-    fetchDialogVisible.value = false
-    fetchPending()
-  } catch (e) {
-    ElMessage.error(e.message)
+    await doFetchUrl(url)
   } finally {
     fetching.value = false
   }
@@ -361,6 +424,7 @@ onMounted(() => {
   fetchList()
   fetchPending()
   loadDims()
+  loadCostStatus()
 })
 </script>
 
@@ -676,7 +740,7 @@ onMounted(() => {
     </el-main>
 
     <!-- 抓取对话框 -->
-    <el-dialog v-model="fetchDialogVisible" title="抓取竞品" width="520px">
+    <el-dialog v-model="fetchDialogVisible" title="抓取竞品" width="540px">
       <p class="fetch-tip">输入竞品官网 URL，系统将抓取页面并用 AI 提炼结构化信息，生成待校对草稿。</p>
       <el-input
         v-model="fetchUrl"
@@ -684,9 +748,48 @@ onMounted(() => {
         clearable
         @keyup.enter="doFetch"
       />
+      <div class="cost-bar" v-if="costStatus">
+        <span>
+          本会话 LLM 已消费
+          <b>¥{{ costStatus.total_cost_cny }}</b>
+          / 限额 ¥{{ costStatus.cost_limit_cny }}
+          <el-tag v-if="costStatus.blocked" type="danger" size="small">已熔断</el-tag>
+        </span>
+        <el-button link type="primary" size="small" @click="resetCost">重置累计</el-button>
+      </div>
       <template #footer>
         <el-button @click="fetchDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="fetching" @click="doFetch">抓取并提炼</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 成本熔断征询对话框 -->
+    <el-dialog v-model="costDialog" title="LLM 调用费用确认" width="480px">
+      <el-alert
+        type="warning"
+        :closable="false"
+        show-icon
+        title="本次 LLM 调用预估费用已超过会话限额，需你确认后才会真正发出请求。"
+        style="margin-bottom: 14px"
+      />
+      <div v-if="costInfo" class="cost-detail">
+        <p>
+          本次预估费用：
+          <b class="num">¥{{ costInfo.estimate_cost_cny }}</b>
+        </p>
+        <p>
+          当前已累计：<b class="num">¥{{ costInfo.total_cost_cny }}</b>
+          <span v-if="costInfo.projected_total_cny" class="muted">
+            （累计后约 ¥{{ costInfo.projected_total_cny }}）
+          </span>
+        </p>
+        <p class="muted">会话限额：¥{{ costInfo.cost_limit_cny }}</p>
+      </div>
+      <template #footer>
+        <el-button @click="cancelFetch">取消本次</el-button>
+        <el-button type="warning" :loading="costConfirming" @click="confirmFetch">
+          同意，继续本次调用
+        </el-button>
       </template>
     </el-dialog>
   </el-container>
@@ -776,5 +879,29 @@ body {
   display: flex;
   gap: 10px;
   margin-bottom: 8px;
+}
+.cost-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  color: #606266;
+  font-size: 13px;
+}
+.cost-bar b {
+  color: #e6a23c;
+}
+.cost-detail p {
+  margin: 6px 0;
+}
+.cost-detail .num {
+  color: #e6a23c;
+}
+.cost-detail .muted {
+  color: #909399;
+  font-size: 13px;
 }
 </style>

@@ -54,6 +54,11 @@ _SYSTEM_PROMPT = (
 )
 
 
+def _estimate_tokens(text: str) -> int:
+    """极简 token 估算：中英文混合按字符数/2 粗估（用于无 usage 时的兜底记账）。"""
+    return max(1, len(text) // 2)
+
+
 class RemoteLLMProvider:
     """OpenAI 兼容接口的 LLM 提炼实现。"""
 
@@ -66,6 +71,9 @@ class RemoteLLMProvider:
         self.api_base = (api_base or settings.llm_api_base).rstrip("/")
         self.model = model or settings.llm_model
         self.api_key = api_key or settings.llm_api_key
+        # 最近一次真实调用的 token 用量（供成本记账；单请求串行使用场景足够）
+        self.last_input_tokens: int = 0
+        self.last_output_tokens: int = 0
 
     async def extract(self, url: str, html: str, title: str = "") -> Extraction:
         # 先用 BS4 抽取纯文本（去标签、压缩空白），比直接发 HTML 更省 token
@@ -92,6 +100,15 @@ class RemoteLLMProvider:
             resp.raise_for_status()
             data = resp.json()
             content = data["choices"][0]["message"]["content"]
+
+            # 记录真实 token 用量（供成本熔断记账），缺失时按输入字符粗估
+            usage = data.get("usage") or {}
+            self.last_input_tokens = int(
+                usage.get("prompt_tokens") or _estimate_tokens(user_prompt)
+            )
+            self.last_output_tokens = int(
+                usage.get("completion_tokens") or _estimate_tokens(content)
+            )
 
         parsed = self._parse_json(content)
         return Extraction(**self._normalize(parsed))

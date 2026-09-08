@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_session
 from app.models.competitor import Competitor, DataStatus
 from app.schemas.competitor import CompetitorOut
-from app.services.fetch_service import create_draft_from_url
+from app.services.fetch_service import CostLimitExceeded, create_draft_from_url
 
 router = APIRouter(prefix="/api/fetch", tags=["fetch"])
 
@@ -23,6 +23,21 @@ async def fetch_competitor(
     """抓取 URL 并用 LLM/规则提炼，落库为「待校对」草稿。"""
     try:
         return await create_draft_from_url(payload.url, session)
+    except CostLimitExceeded as exc:
+        # 成本熔断：HTTP 402 语义，携带需征询的信息，前端据此弹框
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "code": "cost_limit",
+                "reason": exc.reason,
+                "approval_token": exc.detail.get("approval_token"),
+                "estimate_cost_cny": exc.detail.get("estimate_cost_cny"),
+                "total_cost_cny": exc.detail.get("total_cost_cny"),
+                "cost_limit_cny": exc.detail.get("cost_limit_cny"),
+                "projected_total_cny": exc.detail.get("projected_total_cny"),
+                "message": "LLM 调用预估费用已超过限额，是否同意继续本次调用？",
+            },
+        ) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"抓取或提炼失败: {exc}") from exc
 

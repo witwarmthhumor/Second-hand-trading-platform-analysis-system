@@ -1,0 +1,187 @@
+"""LLM 成本估算与会话级熔断器。
+
+产品需求：API 调用费用超过阈值（默认 1 元）即中断，经用户同意后才继续。
+
+设计要点：
+- 单进程内存态（本项目 uvicorn 单进程），会话级累计。
+- 三种形态统一：单次调用预检（发请求前估算）、累计消费熔断、放行审批。
+- 熔断后后续调用一律被拒，直到用户通过审批端点放行一次或重置累计。
+"""
+
+from __future__ import annotations
+
+import uuid
+
+from app.config import settings
+
+
+class CostTracker:
+    """会话级成本记账与熔断。
+
+    线程安全：uvicorn 单进程、异步单线程事件循环内运行，dict 读写无竞争。
+    """
+
+    def __init__(
+        self,
+        cost_limit_cny: float | None = None,
+        input_price: float | None = None,
+        output_price: float | None = None,
+        usd_rate: float | None = None,
+    ) -> None:
+        self.cost_limit_cny = (
+            cost_limit_cny
+            if cost_limit_cny is not None
+            else settings.llm_cost_limit_cny
+        )
+        self.input_price = (
+            input_price
+            if input_price is not None
+            else settings.llm_input_price_usd_per_mtok
+        )
+        self.output_price = (
+            output_price
+            if output_price is not None
+            else settings.llm_output_price_usd_per_mtok
+        )
+        self.usd_rate = usd_rate if usd_rate is not None else settings.usd_cny_rate
+
+        # 累计用量与费用（元）
+        self._total_input_tokens = 0
+        self._total_output_tokens = 0
+        self._total_cost_cny = 0.0
+        # 熔断状态与放行令牌
+        self._blocked = False
+        self._pending_approval_token: str | None = None
+        self._approved_once = False
+        # 记录最近一次估算，供审批前端展示
+        self.last_estimate_cost_cny: float | None = None
+
+    # ---- 费用计算 ----
+    def estimate_cost_cny(self, input_tokens: int, output_tokens: int) -> float:
+        """按公开单价把 token 用量换算成人民币（预估，非账单）。"""
+        usd = (
+            input_tokens / 1_000_000 * self.input_price
+            + output_tokens / 1_000_000 * self.output_price
+        )
+        return round(usd * self.usd_rate, 4)
+
+    # ---- 状态 ----
+    @property
+    def blocked(self) -> bool:
+        return self._blocked
+
+    @property
+    def total_cost_cny(self) -> float:
+        return round(self._total_cost_cny, 4)
+
+    @property
+    def total_input_tokens(self) -> int:
+        return self._total_input_tokens
+
+    @property
+    def total_output_tokens(self) -> int:
+        return self._total_output_tokens
+
+    @property
+    def cost_limit_cny_prop(self) -> float:
+        return self.cost_limit_cny
+
+    def status(self) -> dict:
+        """当前状态（供 GET 查询 / 前端展示）。"""
+        return {
+            "blocked": self._blocked,
+            "cost_limit_cny": self.cost_limit_cny,
+            "total_cost_cny": self.total_cost_cny,
+            "total_input_tokens": self.total_input_tokens,
+            "total_output_tokens": self.total_output_tokens,
+            "needs_approval": self._blocked,
+        }
+
+    # ---- 单次调用预检 ----
+    def precheck(self, estimated_input_tokens: int) -> dict:
+        """发请求前调用：估算本次成本并决定是否拦截。
+
+        拦截条件：已处于熔断态，或「本次估算 + 已累计」超过阈值。
+        返回结构供 API 判断：allowed 为 False 时需征询。
+        """
+        # 粗略按输入占比估算输出（网页提炼输出远小于输入），给一个保守上界
+        est_output = max(200, estimated_input_tokens // 5)
+        est_cost = self.estimate_cost_cny(estimated_input_tokens, est_output)
+        self.last_estimate_cost_cny = est_cost
+
+        projected = self._total_cost_cny + est_cost
+        # 熔断态：需先批准放行
+        if self._blocked:
+            return {
+                "allowed": False,
+                "reason": "blocked",
+                "estimate_cost_cny": est_cost,
+                "total_cost_cny": self.total_cost_cny,
+                "approval_token": self._pending_approval_token,
+            }
+        # 首次放行已生效但累计仍超限时也拦（边界防御，通常不会走到）
+        if projected > self.cost_limit_cny:
+            self._blocked = True
+            self._pending_approval_token = uuid.uuid4().hex
+            return {
+                "allowed": False,
+                "reason": "limit_exceeded",
+                "estimate_cost_cny": est_cost,
+                "projected_total_cny": round(projected, 4),
+                "total_cost_cny": self.total_cost_cny,
+                "approval_token": self._pending_approval_token,
+            }
+        return {
+            "allowed": True,
+            "estimate_cost_cny": est_cost,
+            "total_cost_cny": self.total_cost_cny,
+        }
+
+    # ---- 记账（真实调用后） ----
+    def record(self, input_tokens: int, output_tokens: int) -> None:
+        """真实调用结束后记录用量，并把累计超限置为熔断。"""
+        self._total_input_tokens += input_tokens
+        self._total_output_tokens += output_tokens
+        cost = self.estimate_cost_cny(input_tokens, output_tokens)
+        self._total_cost_cny += cost
+        if self._total_cost_cny > self.cost_limit_cny:
+            self._blocked = True
+            self._pending_approval_token = uuid.uuid4().hex
+        elif self._approved_once:
+            # 放行的一次已用完，恢复普通熔断语义由累计决定
+            self._approved_once = False
+
+    # ---- 审批放行 ----
+    def approve(self, token: str | None) -> bool:
+        """用户同意继续：校验令牌有效则放行一次，返回是否成功。"""
+        if not self._blocked:
+            return False
+        if not token or token != self._pending_approval_token:
+            return False
+        self._blocked = False
+        self._pending_approval_token = None
+        self._approved_once = True
+        return True
+
+    def reset(self) -> dict:
+        """重置累计与熔断（如用户想清零重新累计）。"""
+        self._total_input_tokens = 0
+        self._total_output_tokens = 0
+        self._total_cost_cny = 0.0
+        self._blocked = False
+        self._pending_approval_token = None
+        self._approved_once = False
+        self.last_estimate_cost_cny = None
+        return self.status()
+
+
+# 会话级单例：整个应用生命周期内共享累计
+_tracker: CostTracker | None = None
+
+
+def get_cost_tracker() -> CostTracker:
+    """返回全局成本熔断器单例。"""
+    global _tracker
+    if _tracker is None:
+        _tracker = CostTracker()
+    return _tracker
