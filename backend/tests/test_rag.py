@@ -107,3 +107,125 @@ async def test_ask_when_not_ready(monkeypatch):
     resp = await rag_service.ask("忘记密码怎么办")
     assert resp.mode == "fallback"
     assert "知识库尚未就绪" in resp.answer
+
+
+# ---------------- rag_service 命中 / 兜底分支 ----------------
+
+
+class _ReadyRetriever:
+    """就绪的 mock retriever，search 返回预设结果。"""
+
+    is_ready = True
+
+    def __init__(self, results):
+        self._results = results
+
+    def search(self, question, top_k=5):
+        return self._results
+
+
+def _hit_results():
+    """构造命中结果：首条 vector_sim 高，且含重复 doc_id 用于测去重。"""
+    return [
+        {"doc_id": "A-006", "text": "企业卖家需营业执照", "vector_sim": 0.72},
+        {"doc_id": "C-001", "text": "个人卖家需实名", "vector_sim": 0.70},
+        {"doc_id": "A-006", "text": "企业卖家需营业执照（续）", "vector_sim": 0.68},
+    ]
+
+
+async def test_ask_hit_returns_direct_answer(monkeypatch):
+    """命中：mode=hit，answer 直出首条原文，来源按 doc_id 去重。"""
+    from app.services import rag_service
+
+    monkeypatch.setattr(rag_service, "get_retriever", lambda: _ReadyRetriever(_hit_results()))
+    resp = await rag_service.ask("卖家入驻需要什么资质")
+
+    assert resp.mode == "hit"
+    assert resp.answer == "企业卖家需营业执照"
+    # 去重后 A-006 只保留一次，共 2 个来源
+    assert [s.doc_id for s in resp.sources] == ["A-006", "C-001"]
+    assert resp.question == "卖家入驻需要什么资质"
+
+
+async def test_ask_hit_below_threshold_falls_back(monkeypatch):
+    """未命中（最高相似度 < 阈值）时走 LLM 兜底，sources 为空。"""
+    from app.services import rag_service
+
+    low = [{"doc_id": "A-006", "text": "无关", "vector_sim": 0.3}]
+    monkeypatch.setattr(rag_service, "get_retriever", lambda: _ReadyRetriever(low))
+
+    async def _fake_fallback(question):
+        return "（mock 兜底回答）"
+
+    monkeypatch.setattr(rag_service, "_llm_fallback", _fake_fallback)
+    resp = await rag_service.ask("今天天气怎么样")
+
+    assert resp.mode == "fallback"
+    assert resp.answer == "（mock 兜底回答）"
+    assert resp.sources == []
+
+
+async def test_ask_empty_results_falls_back(monkeypatch):
+    """检索无结果时走 LLM 兜底。"""
+    from app.services import rag_service
+
+    monkeypatch.setattr(rag_service, "get_retriever", lambda: _ReadyRetriever([]))
+
+    async def _fake(q):
+        return "兜底"
+
+    monkeypatch.setattr(rag_service, "_llm_fallback", _fake)
+
+    resp = await rag_service.ask("完全无关的问题")
+    assert resp.mode == "fallback"
+
+
+async def test_llm_fallback_graceful_on_timeout(monkeypatch):
+    """LLM 兜底超时/HTTP 错误时优雅降级，不抛异常。"""
+    import httpx
+
+    from app.services import rag_service
+
+    class _BoomClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, *a, **k):
+            raise httpx.ReadTimeout("timeout")
+
+    monkeypatch.setattr(rag_service.httpx, "AsyncClient", lambda **k: _BoomClient())
+    # 成本预检需放行：确保 precheck 返回 allowed
+    monkeypatch.setattr(
+        rag_service,
+        "get_cost_tracker",
+        lambda: _PassingTracker(),
+    )
+
+    answer = await rag_service._llm_fallback("随便问")
+    assert "暂时不可用" in answer
+
+
+class _PassingTracker:
+    """precheck 放行、record 无副作用的 mock tracker。"""
+
+    def precheck(self, est_input):
+        return {"blocked": False, "allowed": True}
+
+    def record(self, *a, **k):
+        return None
+
+
+async def test_llm_fallback_blocked_returns_hint(monkeypatch):
+    """成本熔断 blocked 时直接返回提示，不调用 LLM。"""
+    from app.services import rag_service
+
+    class _BlockedTracker:
+        def precheck(self, est_input):
+            return {"blocked": True}
+
+    monkeypatch.setattr(rag_service, "get_cost_tracker", lambda: _BlockedTracker())
+    answer = await rag_service._llm_fallback("随便问")
+    assert "成本熔断" in answer
