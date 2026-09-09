@@ -59,11 +59,24 @@ async def update_competitor(
     payload: CompetitorUpdate,
     session: AsyncSession = Depends(get_session),
 ) -> Competitor:
-    """编辑（只更新传入字段）。"""
+    """编辑（只更新传入字段）；自动追踪字段变化并记录到变化日志。"""
     competitor = await session.get(Competitor, competitor_id)
     if competitor is None:
         raise HTTPException(status_code=404, detail="竞品不存在")
-    for key, value in payload.model_dump(exclude_unset=True).items():
+
+    update_data = payload.model_dump(exclude_unset=True)
+    # 变化检测：对比更新前旧值与新值，记录发生变化的字段
+    from app.models.competitor_change import CompetitorChange
+    from app.services import change_service
+
+    changes = change_service.diff_fields(competitor, update_data)
+    if changes:
+        from app.services.change_service import build_change_objects
+
+        for obj in build_change_objects(competitor, changes, source="manual"):
+            session.add(CompetitorChange(**obj))
+
+    for key, value in update_data.items():
         setattr(competitor, key, value)
     await session.commit()
     await session.refresh(competitor)

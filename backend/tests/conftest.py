@@ -23,7 +23,11 @@ TEST_URL = f"postgresql+asyncpg://competitor:competitor@localhost:5433/{TEST_DB}
 os.environ["DATABASE_URL"] = TEST_URL
 
 from app.db import Base, engine  # noqa: E402
-from app.models import ChatSession, Competitor  # noqa: E402, F401  # 注册模型到 Base
+from app.models import (  # noqa: E402, F401  # 注册模型到 Base
+    ChatSession,
+    Competitor,
+    CompetitorChange,
+)
 
 
 @pytest.fixture(scope="session", autouse=True)

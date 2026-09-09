@@ -12,6 +12,7 @@ dependencies = [
     "pydantic-settings>=2.3",
     "alembic>=1.13",
     "beautifulsoup4>=4.12",
+    "apscheduler>=3.10",
     # ---- RAG 检索依赖（二手交易知识库问答）----
     "chromadb>=1.5",
     "rank-bm25>=0.2.2",

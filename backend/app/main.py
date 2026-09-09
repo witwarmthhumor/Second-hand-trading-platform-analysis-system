@@ -2,9 +2,11 @@
 
 from contextlib import asynccontextmanager
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 from sqlalchemy import text
 
+from app.api.changes import router as changes_router
 from app.api.compare import router as compare_router
 from app.api.competitors import router as competitors_router
 from app.api.cost import router as cost_router
@@ -18,15 +20,48 @@ from app.models import (  # noqa: F401  # 确保模型被注册到 Base
     AppSetting,
     ChatSession,
     Competitor,
+    CompetitorChange,
 )
+
+_scheduler: AsyncIOScheduler | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """启动时建表（阶段 1 用 create_all，规模增大后改 Alembic）。"""
+    """启动时建表并启动定时调度器（阶段 1 用 create_all，规模增大后改 Alembic）。"""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # 启动 APScheduler：定时监控（每小时触发一次快照检查；骨架，实际抓取策略按需启用）
+    global _scheduler
+    _scheduler = AsyncIOScheduler(timezone="Asia/Shanghai")
+    _scheduler.add_job(
+        _monitor_job,
+        "interval",
+        hours=1,
+        id="competitor_monitor",
+        replace_existing=True,
+    )
+    _scheduler.start()
+
     yield
+
+    if _scheduler is not None:
+        _scheduler.shutdown(wait=False)
+
+
+async def _monitor_job() -> None:
+    """定时监控任务：对已入库竞品做一次快照检查（占位，避免无人值守抓取副作用）。"""
+    # 记录到日志即可；实际抓取对比策略待配置后启用
+    from sqlalchemy import select
+
+    from app.models.competitor import DataStatus
+
+    async with engine.connect() as conn:
+        result = await conn.execute(
+            select(Competitor).where(Competitor.data_status == DataStatus.STORED.value)
+        )
+        _ = list(result.all())  # 触发一次查询，确认 DB 连通
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
@@ -38,6 +73,7 @@ app.include_router(settings_router)
 app.include_router(report_router)
 app.include_router(cost_router)
 app.include_router(rag_router)
+app.include_router(changes_router)
 
 
 @app.get("/health")
