@@ -34,20 +34,35 @@ class UploadResponse(BaseModel):
 
 
 @router.get("/documents")
-async def list_documents(_=Depends(require_admin)) -> list[dict]:
-    """列出全部知识库文档（仅管理员）。"""
+async def list_documents(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+    _=Depends(require_admin),
+) -> dict:
+    """列出知识库文档（仅管理员），支持分页。
+
+    返回 { total, page, page_size, items }；默认每页 20 条。
+    """
     docs = kb_service.list_documents()
-    return [
-        {
-            "path": d.path,
-            "filename": d.filename,
-            "kind": d.kind,
-            "category": d.category,
-            "size": d.size,
-            "modified_at": d.modified_at,
-        }
-        for d in docs
-    ]
+    total = len(docs)
+    start = (page - 1) * page_size
+    page_items = docs[start : start + page_size]
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": [
+            {
+                "path": d.path,
+                "filename": d.filename,
+                "kind": d.kind,
+                "category": d.category,
+                "size": d.size,
+                "modified_at": d.modified_at,
+            }
+            for d in page_items
+        ],
+    }
 
 
 @router.post("/documents", response_model=UploadResponse)

@@ -78,8 +78,8 @@ export const authApi = {
 }
 
 export const kbApi = {
-  listDocuments() {
-    return http.get('/kb/documents')
+  listDocuments(page = 1, pageSize = 20) {
+    return http.get('/kb/documents', { params: { page, page_size: pageSize } })
   },
   uploadDocument(file, category) {
     const form = new FormData()

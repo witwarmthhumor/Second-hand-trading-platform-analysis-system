@@ -148,10 +148,60 @@ onMounted(() => {
 
 const activeTab = ref('list')
 
+// —— 左侧导航菜单 ——
+// icon 用 emoji 占位，落地后如需可换 element-plus icon；label 与 name 对应 activeTab
+const menuItems = [
+  { name: 'list', label: '竞品列表', icon: '📊' },
+  { name: 'pending', label: '待校对', icon: '📝' },
+  { name: 'form', label: '录入竞品', icon: '➕' },
+  { name: 'compare', label: '对比', icon: '⚖️' },
+  { name: 'rag', label: '知识库问答', icon: '💬' },
+  { name: 'changes', label: '变化记录', icon: '🔔' },
+  { name: 'kb', label: '知识库管理', icon: '📚', adminOnly: true },
+  { name: 'settings', label: '设置', icon: '⚙️' },
+]
+// 可见菜单：普通用户过滤掉 adminOnly
+const visibleMenu = computed(() =>
+  menuItems.filter((m) => !m.adminOnly || isAdmin.value),
+)
+// 当前页面的标题/副标题（顶部面包屑用）
+const pageMeta = {
+  list: ['竞品列表', '竞品情报收集、整理与横向对比'],
+  pending: ['待校对', 'AI 提炼结果人工审核'],
+  form: ['录入竞品', '手动新增竞品信息'],
+  compare: ['多竞品对比', '评分维度横向雷达对比'],
+  rag: ['知识库问答', '融合 RAG 的智能问答助手'],
+  changes: ['变化记录', '竞品信息变更历史追踪'],
+  kb: ['知识库管理', '知识库语料维护（管理员专属）'],
+  settings: ['设置', '评分维度与系统配置'],
+}
+const currentTitle = computed(() => pageMeta[activeTab.value]?.[0] || '')
+const currentSub = computed(() => pageMeta[activeTab.value]?.[1] || '')
+
 const competitors = ref([])
 const loading = ref(false)
 const keyword = ref('')
 const filterType = ref('')
+// 竞品列表前端分页
+const compPage = ref(1)
+const compPageSize = 10
+
+// 统计卡片数据（从已加载列表 + 待校对推导）
+const compStats = computed(() => {
+  const total = competitors.value.length
+  const online = competitors.value.filter((c) => c.launch_status === '已上线').length
+  return {
+    total,
+    online,
+    offline: total - online,
+    pending: pending.value.length,
+  }
+})
+// 当前页竞品（前端分页）
+const pagedCompetitors = computed(() => {
+  const start = (compPage.value - 1) * compPageSize
+  return competitors.value.slice(start, start + compPageSize)
+})
 
 // —— 抓取 ——
 const fetchUrl = ref('')
@@ -183,6 +233,7 @@ async function fetchList() {
     if (keyword.value) params.keyword = keyword.value
     if (filterType.value) params.type = filterType.value
     competitors.value = await competitorApi.list(params)
+    compPage.value = 1
   } catch (e) {
     ElMessage.error(e.message)
   } finally {
@@ -605,16 +656,30 @@ async function doAsk() {
   try {
     const resp = await competitorApi.ragAsk(q, 5, ragSessionId.value)
     ragAnswer.value = resp
-    // 记录本轮问答到本地历史（与后端保持一致）
+    // 记录本轮问答到本地历史（AI 消息带上来源引用）
     ragHistory.value.push({ role: 'user', content: q })
-    ragHistory.value.push({ role: 'assistant', content: resp.answer })
+    ragHistory.value.push({
+      role: 'assistant',
+      content: resp.answer,
+      sources: resp.sources || [],
+      mode: resp.mode,
+    })
     ragQuestion.value = ''
     loadRagSessions()
+    scrollChatToBottom()
   } catch (e) {
     ElMessage.error(e.message)
   } finally {
     ragLoading.value = false
   }
+}
+
+// 聊天区自动滚动到底部
+const chatMsgsEl = ref(null)
+function scrollChatToBottom() {
+  nextTick(() => {
+    if (chatMsgsEl.value) chatMsgsEl.value.scrollTop = chatMsgsEl.value.scrollHeight
+  })
 }
 
 async function copySourceText(s) {
@@ -658,16 +723,27 @@ const kbLoading = ref(false)
 const kbRebuilding = ref(false)
 const kbUploadCategory = ref('')
 const kbUploadFile = ref(null)
+// 分页
+const kbPage = ref(1)
+const kbPageSize = 20
+const kbTotal = ref(0)
 
 async function loadKbDocuments() {
   kbLoading.value = true
   try {
-    kbDocuments.value = await kbApi.listDocuments()
+    const r = await kbApi.listDocuments(kbPage.value, kbPageSize)
+    kbDocuments.value = r.items
+    kbTotal.value = r.total
   } catch (e) {
     ElMessage.error('加载知识库文档失败：' + e.message)
   } finally {
     kbLoading.value = false
   }
+}
+
+function onKbPageChange(p) {
+  kbPage.value = p
+  loadKbDocuments()
 }
 
 function onKbFileChange(file) {
@@ -827,29 +903,39 @@ async function removeSession(sessionId) {
   </div>
 
   <!-- 已登录：主界面 -->
-  <el-container v-else class="app">
-    <el-header class="header">
-      <div>
-        <h1>二手交易平台分析系统</h1>
-        <p class="sub">竞品情报收集、整理与横向对比</p>
+  <div v-else class="app">
+    <!-- 左侧导航栏 -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <span class="sidebar-logo-icon">⇄</span>
+        <span class="sidebar-logo-text">二手交易平台分析</span>
       </div>
-      <el-tabs v-model="activeTab" class="tabs">
-        <el-tab-pane label="竞品列表" name="list" />
-        <el-tab-pane label="待校对" name="pending" />
-        <el-tab-pane label="录入竞品" name="form" />
-        <el-tab-pane label="对比" name="compare" />
-        <el-tab-pane label="知识库问答" name="rag" />
-        <el-tab-pane label="变化记录" name="changes" />
-        <el-tab-pane v-if="isAdmin" label="知识库管理" name="kb" />
-        <el-tab-pane label="设置" name="settings" />
-      </el-tabs>
-      <div class="user-box">
-        <el-dropdown trigger="click">
-          <span class="user-trigger">
-            <el-avatar :size="28">{{ (currentUser?.username || '?').slice(0, 1).toUpperCase() }}</el-avatar>
-            <span class="user-name">{{ currentUser?.username }}</span>
-            <el-tag v-if="isAdmin" type="danger" size="small" effect="dark">管理员</el-tag>
+      <nav class="sidebar-menu">
+        <div
+          v-for="m in visibleMenu"
+          :key="m.name"
+          class="sidebar-item"
+          :class="{ active: activeTab === m.name }"
+          @click="activeTab = m.name"
+        >
+          <span class="sidebar-icon">{{ m.icon }}</span>
+          <span class="sidebar-label">{{ m.label }}</span>
+          <span v-if="m.name === 'pending' && pending.length" class="sidebar-badge">
+            {{ pending.length }}
           </span>
+          <span v-else-if="m.adminOnly" class="sidebar-admin">admin</span>
+        </div>
+      </nav>
+      <div class="sidebar-footer">
+        <el-avatar :size="32" class="sidebar-avatar">
+          {{ (currentUser?.username || '?').slice(0, 1).toUpperCase() }}
+        </el-avatar>
+        <div class="sidebar-user">
+          <div class="sidebar-user-name">{{ currentUser?.username }}</div>
+          <div class="sidebar-user-role">{{ isAdmin ? '管理员' : '普通用户' }}</div>
+        </div>
+        <el-dropdown trigger="click">
+          <span class="sidebar-more">···</span>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item @click="openChangePwd">修改密码</el-dropdown-item>
@@ -858,11 +944,46 @@ async function removeSession(sessionId) {
           </template>
         </el-dropdown>
       </div>
-    </el-header>
+    </aside>
 
-    <el-main class="main">
+    <!-- 主区域 -->
+    <div class="main-wrap">
+      <header class="topbar">
+        <div class="topbar-title">
+          <span class="topbar-crumb">{{ currentTitle }}</span>
+          <span class="topbar-sub">{{ currentSub }}</span>
+        </div>
+        <div class="topbar-right">
+          <span class="rag-status" :class="{ ready: ragReady !== false }">
+            <i class="dot" /> {{ ragReady === false ? '知识库未就绪' : '知识库就绪' }}
+          </span>
+          <el-tag v-if="isAdmin" type="warning" size="small" effect="dark">管理员</el-tag>
+        </div>
+      </header>
+
+      <main class="main">
       <!-- 列表页 -->
       <div v-if="activeTab === 'list'">
+        <!-- 统计卡片 -->
+        <div class="stat-row">
+          <div class="stat-card">
+            <div class="stat-icon blue">📦</div>
+            <div><div class="stat-val">{{ compStats.total }}</div><div class="stat-label">竞品总数</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green">✅</div>
+            <div><div class="stat-val">{{ compStats.online }}</div><div class="stat-label">已上线</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon orange">⏳</div>
+            <div><div class="stat-val">{{ compStats.pending }}</div><div class="stat-label">待校对</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon purple">📄</div>
+            <div><div class="stat-val">{{ compStats.offline }}</div><div class="stat-label">未上线</div></div>
+          </div>
+        </div>
+
         <div class="toolbar">
           <el-input
             v-model="keyword"
@@ -882,6 +1003,7 @@ async function removeSession(sessionId) {
             <el-option v-for="t in typeOptions" :key="t" :label="t" :value="t" />
           </el-select>
           <el-button type="primary" @click="onSearch">查询</el-button>
+          <span class="toolbar-spacer" />
           <el-button type="primary" plain @click="openCreate">+ 录入竞品</el-button>
           <el-button type="success" plain @click="openFetch">抓取竞品</el-button>
           <el-button
@@ -899,7 +1021,7 @@ async function removeSession(sessionId) {
 
         <el-table
           v-loading="loading"
-          :data="competitors"
+          :data="pagedCompetitors"
           border
           stripe
           @selection-change="onSelectionChange"
@@ -927,7 +1049,15 @@ async function removeSession(sessionId) {
             </template>
           </el-table-column>
         </el-table>
-        <p class="count">共 {{ competitors.length }} 条竞品</p>
+        <div class="list-pagination">
+          <el-pagination
+            v-model:current-page="compPage"
+            :page-size="compPageSize"
+            :total="competitors.length"
+            layout="total, prev, pager, next"
+            background
+          />
+        </div>
       </div>
 
       <!-- 待校对页 -->
@@ -1126,9 +1256,9 @@ async function removeSession(sessionId) {
           type="warning"
           :closable="false"
           show-icon
-          style="margin-bottom: 16px"
+          style="margin-bottom: 12px"
         />
-        <div class="rag-layout">
+        <div class="chat-layout">
           <!-- 会话侧栏 -->
           <div class="rag-side">
             <div class="rag-side-head">
@@ -1147,7 +1277,7 @@ async function removeSession(sessionId) {
                   {{ s.first_question || '（空会话）' }}
                 </div>
                 <div class="rag-side-meta">
-                  {{ s.message_count }} 条 ·
+                  {{ s.message_count }} 条
                   <el-icon class="rag-side-del" @click.stop="removeSession(s.session_id)">
                     <span>🗑</span>
                   </el-icon>
@@ -1157,71 +1287,80 @@ async function removeSession(sessionId) {
             </div>
           </div>
 
-          <!-- 对话区 -->
-          <div class="rag-main">
-            <div class="card">
-              <div class="rag-head">
-                <h3 class="card-title">二手交易知识库问答</h3>
+          <!-- 对话区：气泡流 -->
+          <div class="chat-main">
+            <div class="chat-msgs" ref="chatMsgsEl">
+              <!-- 空会话：欢迎语 -->
+              <div v-if="!ragHistory.length && !ragLoading" class="chat-welcome">
+                <div class="chat-welcome-icon">💬</div>
+                <h3>二手交易知识库问答</h3>
+                <p>
+                  你好，我是二手交易平台的知识库助手。基于约 1000 篇平台语料（规则制度 / 买卖指南 / 验货质检 /
+                  售后仲裁 / 案例 / 公告），命中知识库时直接返回原文并标注来源，未命中时由大模型兜底回答。
+                  支持多轮追问。
+                </p>
               </div>
-              <p class="rag-tip">
-                基于二手交易知识库（规则制度 / 买卖指南 / 验货质检 / 售后仲裁 / 案例 / 公告，共约 1000 篇语料）
-                的检索式问答。命中知识库时直接返回原文并标注来源；未命中时由大模型兜底回答。支持多轮追问。
-              </p>
-              <div class="rag-input">
-                <el-input
-                  v-model="ragQuestion"
-                  placeholder="例如：忘记密码怎么办 / 卖家入驻需要什么资质 / 验机流程是什么"
-                  clearable
-                  @keyup.enter="doAsk"
-                />
-                <el-button type="primary" :loading="ragLoading" @click="doAsk">提问</el-button>
-              </div>
-            </div>
 
-            <!-- 多轮会话历史 -->
-            <div v-if="ragHistory.length" class="card rag-history">
-              <div v-for="(m, i) in ragHistory" :key="i" class="rag-msg" :class="m.role">
-                <span class="rag-role">{{ m.role === 'user' ? '我' : 'AI' }}</span>
-                <div class="rag-msg-body">{{ m.content }}</div>
-              </div>
-              <div v-if="ragLoading" class="rag-msg assistant">
-                <span class="rag-role">AI</span>
-                <div class="rag-msg-body muted">正在思考…</div>
-              </div>
-            </div>
-
-            <!-- 最新回答的来源引用 -->
-            <div v-if="ragAnswer && ragAnswer.sources && ragAnswer.sources.length" class="card rag-answer">
-              <div class="rag-mode">
-                <el-tag :type="ragAnswer.mode === 'hit' ? 'success' : 'warning'" size="small">
-                  {{ ragAnswer.mode === 'hit' ? '知识库命中' : '大模型兜底' }}
-                </el-tag>
-                <span class="rag-q">Q：{{ ragAnswer.question }}</span>
-              </div>
-              <div class="rag-sources">
-                <h4>来源参考（点击展开查看原文）</h4>
-                <el-collapse>
-                  <el-collapse-item
-                    v-for="(s, i) in ragAnswer.sources"
-                    :key="i"
-                    :name="i"
+              <!-- 消息流 -->
+              <div
+                v-for="(m, i) in ragHistory"
+                :key="i"
+                class="chat-msg"
+                :class="m.role"
+              >
+                <div class="chat-avatar">{{ m.role === 'user' ? '我' : 'AI' }}</div>
+                <div class="chat-body">
+                  <div class="chat-bubble">{{ m.content }}</div>
+                  <!-- AI 消息带来源引用 -->
+                  <div
+                    v-if="m.role === 'assistant' && m.sources && m.sources.length"
+                    class="chat-sources"
                   >
-                    <template #title>
-                      <div class="rag-src-title">
-                        <el-tag size="small" type="info">{{ s.doc_id }}</el-tag>
-                        <b>{{ s.title }}</b>
-                        <span class="rag-score">相关度 {{ (s.score * 100).toFixed(1) }}%</span>
-                      </div>
-                    </template>
-                    <div class="rag-src-body">
-                      <p>{{ s.text }}</p>
-                      <el-button size="small" text type="primary" @click.stop="copySourceText(s)">
-                        复制来源文本
-                      </el-button>
-                    </div>
-                  </el-collapse-item>
-                </el-collapse>
+                    <el-collapse>
+                      <el-collapse-item
+                        v-for="(s, j) in m.sources"
+                        :key="j"
+                        :name="j"
+                      >
+                        <template #title>
+                          <div class="rag-src-title">
+                            <el-tag size="small" type="info">{{ s.doc_id }}</el-tag>
+                            <b>{{ s.title }}</b>
+                            <span class="rag-score">相关度 {{ (s.score * 100).toFixed(1) }}%</span>
+                          </div>
+                        </template>
+                        <div class="rag-src-body">
+                          <p>{{ s.text }}</p>
+                          <el-button size="small" text type="primary" @click.stop="copySourceText(s)">
+                            复制来源文本
+                          </el-button>
+                        </div>
+                      </el-collapse-item>
+                    </el-collapse>
+                  </div>
+                </div>
               </div>
+
+              <!-- 打字中 -->
+              <div v-if="ragLoading" class="chat-msg assistant">
+                <div class="chat-avatar">AI</div>
+                <div class="chat-body">
+                  <div class="chat-bubble chat-typing">
+                    <span class="typing-dot" /><span class="typing-dot" /><span class="typing-dot" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 底部输入框 -->
+            <div class="chat-input-bar">
+              <el-input
+                v-model="ragQuestion"
+                placeholder="输入问题，例如：忘记密码怎么办 / 卖家入驻需要什么资质"
+                clearable
+                @keyup.enter="doAsk"
+              />
+              <el-button type="primary" :loading="ragLoading" @click="doAsk">发送</el-button>
             </div>
           </div>
         </div>
@@ -1319,7 +1458,16 @@ async function removeSession(sessionId) {
               </template>
             </el-table-column>
           </el-table>
-          <p class="count">共 {{ kbDocuments.length }} 篇语料</p>
+          <div class="kb-pagination">
+            <el-pagination
+              v-model:current-page="kbPage"
+              :page-size="kbPageSize"
+              :total="kbTotal"
+              layout="total, prev, pager, next, jumper"
+              background
+              @current-change="onKbPageChange"
+            />
+          </div>
         </div>
       </div>
 
@@ -1358,7 +1506,6 @@ async function removeSession(sessionId) {
         <p class="count">当前 {{ dimsDraft.length }} 个维度（3~8 个）</p>
         <el-button type="primary" :loading="dimsSaving" @click="saveDims">保存配置</el-button>
       </div>
-    </el-main>
 
     <!-- 抓取对话框 -->
     <el-dialog v-model="fetchDialogVisible" title="抓取竞品" width="540px">
@@ -1432,7 +1579,9 @@ async function removeSession(sessionId) {
         <el-button type="primary" :loading="pwdSaving" @click="doChangePwd">确认修改</el-button>
       </template>
     </el-dialog>
-  </el-container>
+    </main>
+    </div>
+  </div>
 </template>
 
 <style>
@@ -1441,39 +1590,255 @@ body {
   background: #f5f7fa;
 }
 .app {
+  display: flex;
   min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
-.header {
+/* ===== 侧边栏 ===== */
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: #1d2b36;
+  color: #bfcbd9;
+  display: flex;
+  flex-direction: column;
+}
+.sidebar-logo {
+  height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+}
+.sidebar-logo-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #409eff, #7b5cff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.sidebar-logo-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sidebar-menu {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px;
+  height: 44px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 14px;
+  border-left: 3px solid transparent;
+  white-space: nowrap;
+}
+.sidebar-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+.sidebar-item.active {
+  background: rgba(64, 158, 255, 0.15);
+  color: #fff;
+  border-left-color: #409eff;
+}
+.sidebar-icon {
+  width: 18px;
+  text-align: center;
+  font-size: 15px;
+}
+.sidebar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sidebar-badge {
+  margin-left: auto;
+  background: #f56c6c;
+  color: #fff;
+  font-size: 11px;
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+.sidebar-admin {
+  margin-left: auto;
+  font-size: 10px;
+  color: #e6a23c;
+  border: 1px solid #e6a23c;
+  border-radius: 3px;
+  padding: 0 4px;
+}
+.sidebar-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sidebar-avatar {
+  background: linear-gradient(135deg, #409eff, #67c23a);
+  flex-shrink: 0;
+}
+.sidebar-user {
+  flex: 1;
+  min-width: 0;
+}
+.sidebar-user-name {
+  color: #fff;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sidebar-user-role {
+  font-size: 11px;
+  color: #8a9bb0;
+}
+.sidebar-more {
+  color: #8a9bb0;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 6px;
+  outline: none;
+}
+.sidebar-more:hover {
+  color: #fff;
+}
+/* ===== 主区域 ===== */
+.main-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.topbar {
+  height: 60px;
   background: #fff;
   border-bottom: 1px solid #e4e7ed;
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  padding: 12px 24px 0;
-  height: auto;
+  align-items: center;
+  padding: 0 24px;
+  flex-shrink: 0;
 }
-.header h1 {
-  margin: 0;
-  font-size: 18px;
+.topbar-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.topbar-crumb {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+.topbar-sub {
+  font-size: 12px;
+  color: #909399;
+}
+.topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.rag-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #67c23a;
+}
+.rag-status .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.rag-status.ready {
+  color: #67c23a;
+}
+.rag-status:not(.ready) {
+  color: #e6a23c;
 }
 .sub {
   margin: 2px 0 8px;
   color: #909399;
   font-size: 12px;
 }
-.tabs {
-  margin-left: 40px;
-}
 .main {
-  max-width: 1080px;
-  margin: 0 auto;
-  width: 100%;
+  flex: 1;
+  overflow-y: auto;
   padding: 20px 24px;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
 }
 .toolbar {
   display: flex;
   gap: 10px;
   margin-bottom: 16px;
+}
+.toolbar-spacer {
+  flex: 1;
+}
+/* 统计卡片 */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.stat-card {
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.stat-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.stat-icon.blue { background: #ecf5ff; }
+.stat-icon.green { background: #f0f9eb; }
+.stat-icon.orange { background: #fdf6ec; }
+.stat-icon.purple { background: #f4f0ff; }
+.stat-val {
+  font-size: 24px;
+  font-weight: 700;
+  color: #303133;
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 2px;
+}
+.list-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 .count {
   color: #909399;
@@ -1532,89 +1897,13 @@ body {
   height: 420px;
 }
 .rag-wrap {
-  max-width: 900px;
+  max-width: 1100px;
 }
 .rag-tip {
   color: #909399;
   font-size: 13px;
   margin: 12px 0 16px;
   line-height: 1.6;
-}
-.rag-input {
-  display: flex;
-  gap: 10px;
-}
-.rag-answer {
-  border-left: 3px solid #409eff;
-}
-.rag-mode {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-.rag-q {
-  color: #303133;
-  font-weight: 600;
-}
-.rag-body {
-  white-space: pre-wrap;
-  line-height: 1.8;
-  color: #303133;
-  background: #f5f7fa;
-  border-radius: 4px;
-  padding: 14px 16px;
-}
-/* 多轮会话历史 */
-.rag-history {
-  margin-top: 16px;
-}
-.rag-msg {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-.rag-msg.user {
-  flex-direction: row-reverse;
-}
-.rag-role {
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  line-height: 28px;
-  text-align: center;
-  border-radius: 50%;
-  font-size: 12px;
-  color: #fff;
-  background: #909399;
-}
-.rag-msg.user .rag-role {
-  background: #409eff;
-}
-.rag-msg-body {
-  max-width: 78%;
-  padding: 10px 14px;
-  border-radius: 8px;
-  background: #f5f7fa;
-  color: #303133;
-  line-height: 1.7;
-  white-space: pre-wrap;
-}
-.rag-msg.user .rag-msg-body {
-  background: #ecf5ff;
-}
-.rag-msg-body.muted {
-  color: #909399;
-}
-.rag-sources {
-  margin-top: 16px;
-  border-top: 1px dashed #ebeef5;
-  padding-top: 12px;
-}
-.rag-sources h4 {
-  margin: 0 0 10px;
-  font-size: 13px;
-  color: #909399;
 }
 .rag-src-title {
   display: flex;
@@ -1709,33 +1998,14 @@ body {
   color: #909399;
   font-size: 13px;
 }
-/* 用户信息栏 */
-.user-box {
-  margin-left: 20px;
-  display: flex;
-  align-items: center;
-}
-.user-trigger {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  outline: none;
-  padding: 4px 8px;
-  border-radius: 6px;
-}
-.user-trigger:hover {
-  background: #f5f7fa;
-}
-.user-name {
-  font-size: 13px;
-  color: #303133;
-}
-/* 会话侧栏布局 */
-.rag-layout {
+/* 用户信息栏（侧边栏底部已承载用户信息，此样式废弃） */
+/* 会话侧栏 + 聊天气泡流布局 */
+.chat-layout {
   display: flex;
   gap: 16px;
-  align-items: flex-start;
+  align-items: stretch;
+  height: calc(100vh - 60px - 40px - 12px);
+  min-height: 480px;
 }
 .rag-side {
   width: 260px;
@@ -1743,6 +2013,9 @@ body {
   background: #fff;
   border-radius: 6px;
   padding: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .rag-side-head {
   display: flex;
@@ -1751,9 +2024,10 @@ body {
   font-weight: 600;
   color: #303133;
   margin-bottom: 8px;
+  flex-shrink: 0;
 }
 .rag-side-list {
-  max-height: 480px;
+  flex: 1;
   overflow-y: auto;
 }
 .rag-side-item {
@@ -1789,9 +2063,143 @@ body {
   margin-left: auto;
   cursor: pointer;
 }
-.rag-main {
+/* 对话区 */
+.chat-main {
   flex: 1;
   min-width: 0;
+  background: #fff;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.chat-msgs {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 28px;
+}
+.chat-welcome {
+  text-align: center;
+  padding: 60px 20px 30px;
+  max-width: 520px;
+  margin: 0 auto;
+}
+.chat-welcome-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 18px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #409eff, #7b5cff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  color: #fff;
+}
+.chat-welcome h3 {
+  font-size: 18px;
+  margin-bottom: 10px;
+  color: #303133;
+}
+.chat-welcome p {
+  font-size: 13px;
+  color: #909399;
+  line-height: 1.8;
+}
+.chat-msg {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.chat-msg.user {
+  flex-direction: row-reverse;
+}
+.chat-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 13px;
+}
+.chat-msg.assistant .chat-avatar {
+  background: linear-gradient(135deg, #409eff, #7b5cff);
+}
+.chat-msg.user .chat-avatar {
+  background: linear-gradient(135deg, #67c23a, #409eff);
+}
+.chat-body {
+  max-width: 72%;
+  min-width: 0;
+}
+.chat-bubble {
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #303133;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.chat-msg.assistant .chat-bubble {
+  background: #f5f7fa;
+  border-top-left-radius: 2px;
+}
+.chat-msg.user .chat-bubble {
+  background: #409eff;
+  color: #fff;
+  border-top-right-radius: 2px;
+}
+.chat-sources {
+  margin-top: 8px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  background: #fafbfc;
+  overflow: hidden;
+}
+.chat-sources .el-collapse {
+  border: none;
+}
+.chat-typing {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 14px 16px;
+}
+.typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c0c4cc;
+  animation: typing-blink 1.2s infinite;
+}
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes typing-blink {
+  0%, 80%, 100% { opacity: 0.3; }
+  40% { opacity: 1; }
+}
+.chat-input-bar {
+  border-top: 1px solid #e4e7ed;
+  padding: 14px 20px;
+  display: flex;
+  gap: 10px;
+  background: #fff;
+  flex-shrink: 0;
+}
+.chat-input-bar .el-input {
+  flex: 1;
+}
+.chat-input-bar .el-button {
+  padding: 0 24px;
+  border-radius: 6px;
 }
 /* 知识库管理 */
 .kb-wrap {
@@ -1802,5 +2210,10 @@ body {
   gap: 10px;
   align-items: center;
   margin-bottom: 16px;
+}
+.kb-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 </style>

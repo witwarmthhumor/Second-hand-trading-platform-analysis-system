@@ -53,15 +53,36 @@ async def test_kb_requires_admin(client):
 
 
 async def test_admin_can_list_documents(client):
-    """admin 能列出知识库文档。"""
+    """admin 能列出知识库文档（分页结构）。"""
     token = await _admin_token(client)
     resp = await client.get("/api/kb/documents", headers=_auth(token))
     assert resp.status_code == 200
-    docs = resp.json()
-    assert isinstance(docs, list)
-    # 现有语料应包含 canonical 下的 md（数量 > 0）
-    assert len(docs) > 0
-    assert all("path" in d and "filename" in d for d in docs)
+    data = resp.json()
+    assert isinstance(data, dict)
+    assert "total" in data and "items" in data
+    assert data["total"] > 0
+    assert len(data["items"]) > 0
+    assert all("path" in d and "filename" in d for d in data["items"])
+
+
+async def test_list_documents_pagination(client):
+    """分页参数生效：每页条数受 page_size 约束，翻页不越界。"""
+    token = await _admin_token(client)
+    resp = await client.get(
+        "/api/kb/documents", params={"page": 1, "page_size": 5}, headers=_auth(token)
+    )
+    data = resp.json()
+    assert data["page"] == 1
+    assert data["page_size"] == 5
+    assert len(data["items"]) <= 5
+
+    # 超范围页返回空 items，但 total 不变
+    resp2 = await client.get(
+        "/api/kb/documents", params={"page": 99999, "page_size": 5}, headers=_auth(token)
+    )
+    data2 = resp2.json()
+    assert data2["items"] == []
+    assert data2["total"] == data["total"]
 
 
 async def test_delete_document_requires_admin_and_valid_path(client):
