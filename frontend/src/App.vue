@@ -1,14 +1,150 @@
 <script setup>
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, onMounted, watch, nextTick, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 // echarts 按需引入：只注册用到的雷达图组件，避免全量打包（chunk 从 ~2.2MB 降到 ~500KB）
 import * as echarts from 'echarts/core'
 import { RadarChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import { competitorApi } from './api'
+import { competitorApi, authApi, kbApi, getToken, setAuth, clearAuth, getStoredUser } from './api'
 
 echarts.use([RadarChart, TooltipComponent, LegendComponent, CanvasRenderer])
+
+// —— 登录态 ——
+const currentUser = ref(getStoredUser())
+const isLoggedIn = computed(() => !!currentUser.value)
+const isAdmin = computed(() => currentUser.value?.role === 'admin')
+
+// 登录/注册表单
+const authMode = ref('login') // 'login' | 'register'
+const authUsername = ref('')
+const authPassword = ref('')
+const authConfirm = ref('')
+const authLoading = ref(false)
+
+function enterApp(token, user) {
+  setAuth(token, user)
+  currentUser.value = user
+  // 登录后初始化数据
+  fetchList()
+  fetchPending()
+  loadDims()
+  loadCostStatus()
+  loadRagStatus()
+  loadRagSessions()
+  loadChanges()
+  newRagSession()
+  if (isAdmin.value) loadKbDocuments()
+}
+
+async function doLogin() {
+  if (!authUsername.value.trim() || !authPassword.value) {
+    ElMessage.warning('请输入用户名和密码')
+    return
+  }
+  authLoading.value = true
+  try {
+    const r = await authApi.login(authUsername.value.trim(), authPassword.value)
+    enterApp(r.access_token, r.user)
+    ElMessage.success('登录成功')
+  } catch (e) {
+    ElMessage.error(e.message)
+  } finally {
+    authLoading.value = false
+  }
+}
+
+async function doRegister() {
+  if (!authUsername.value.trim() || authPassword.value.length < 6) {
+    ElMessage.warning('用户名至少 3 位，密码至少 6 位')
+    return
+  }
+  if (authPassword.value !== authConfirm.value) {
+    ElMessage.warning('两次密码不一致')
+    return
+  }
+  authLoading.value = true
+  try {
+    const r = await authApi.register(authUsername.value.trim(), authPassword.value)
+    enterApp(r.access_token, r.user)
+    ElMessage.success('注册成功，已自动登录')
+  } catch (e) {
+    ElMessage.error(e.message)
+  } finally {
+    authLoading.value = false
+  }
+}
+
+function switchAuthMode(mode) {
+  authMode.value = mode
+  authConfirm.value = ''
+}
+
+function doLogout() {
+  clearAuth()
+  currentUser.value = null
+  activeTab.value = 'list'
+  // 清空会话等敏感本地态
+  ragSessionId.value = null
+  ragHistory.value = []
+  ragSessions.value = []
+  ElMessage.success('已退出登录')
+}
+
+// 改密对话框
+const pwdDialog = ref(false)
+const pwdOld = ref('')
+const pwdNew = ref('')
+const pwdConfirm = ref('')
+const pwdSaving = ref(false)
+
+function openChangePwd() {
+  pwdOld.value = ''
+  pwdNew.value = ''
+  pwdConfirm.value = ''
+  pwdDialog.value = true
+}
+
+async function doChangePwd() {
+  if (pwdNew.value.length < 6) {
+    ElMessage.warning('新密码至少 6 位')
+    return
+  }
+  if (pwdNew.value !== pwdConfirm.value) {
+    ElMessage.warning('两次新密码不一致')
+    return
+  }
+  pwdSaving.value = true
+  try {
+    await authApi.changePassword(pwdOld.value, pwdNew.value)
+    ElMessage.success('密码已修改，下次登录请使用新密码')
+    pwdDialog.value = false
+  } catch (e) {
+    ElMessage.error(e.message)
+  } finally {
+    pwdSaving.value = false
+  }
+}
+
+// 登录态失效监听（401 触发）
+onMounted(() => {
+  window.addEventListener('auth-expired', () => {
+    currentUser.value = null
+    ElMessage.warning('登录已过期，请重新登录')
+  })
+  if (isLoggedIn.value) {
+    // 已有 token，直接初始化
+    fetchList()
+    fetchPending()
+    loadDims()
+    loadCostStatus()
+    loadRagStatus()
+    loadRagSessions()
+    loadChanges()
+    newRagSession()
+    if (isAdmin.value) loadKbDocuments()
+  }
+})
 
 const activeTab = ref('list')
 
@@ -516,20 +652,182 @@ async function doMonitor() {
   }
 }
 
-onMounted(() => {
-  fetchList()
-  fetchPending()
-  loadDims()
-  loadCostStatus()
-  loadRagStatus()
-  loadRagSessions()
-  newRagSession()
-  loadChanges()
-})
+// —— 知识库管理（admin 专属） ——
+const kbDocuments = ref([])
+const kbLoading = ref(false)
+const kbRebuilding = ref(false)
+const kbUploadCategory = ref('')
+const kbUploadFile = ref(null)
+
+async function loadKbDocuments() {
+  kbLoading.value = true
+  try {
+    kbDocuments.value = await kbApi.listDocuments()
+  } catch (e) {
+    ElMessage.error('加载知识库文档失败：' + e.message)
+  } finally {
+    kbLoading.value = false
+  }
+}
+
+function onKbFileChange(file) {
+  kbUploadFile.value = file.raw
+}
+
+async function doKbUpload() {
+  if (!kbUploadFile.value) {
+    ElMessage.warning('请先选择 .md 文件')
+    return
+  }
+  try {
+    await kbApi.uploadDocument(kbUploadFile.value, kbUploadCategory.value || undefined)
+    ElMessage.success('上传成功，请重建向量库后生效')
+    kbUploadFile.value = null
+    loadKbDocuments()
+  } catch (e) {
+    ElMessage.error(e.message)
+  }
+}
+
+async function doKbDelete(doc) {
+  try {
+    await ElMessageBox.confirm(`确认删除「${doc.filename}」？删除后需重建向量库才彻底移除。`, '删除确认', {
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+  try {
+    await kbApi.deleteDocument(doc.path)
+    ElMessage.success('已删除')
+    loadKbDocuments()
+  } catch (e) {
+    ElMessage.error(e.message)
+  }
+}
+
+async function doKbRebuild() {
+  try {
+    await ElMessageBox.confirm(
+      '重建向量库会重新分块并 embedding 全部语料（首次可能耗时较长）。确认继续？',
+      '重建确认',
+      { type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  kbRebuilding.value = true
+  try {
+    await kbApi.rebuild()
+    ElMessage.success('已触发重建，正在后台执行…')
+  } catch (e) {
+    ElMessage.error(e.message)
+  } finally {
+    kbRebuilding.value = false
+  }
+}
+
+function kbSize(bytes) {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB'
+}
+
+// —— RAG 会话侧栏 ——
+async function switchSession(sessionId) {
+  ragSessionId.value = sessionId
+  // 拉取该会话历史，展示在对话区
+  ragHistory.value = []
+  ragAnswer.value = null
+  try {
+    const sessions = await competitorApi.ragListSessions()
+    const target = sessions.find((s) => s.session_id === sessionId)
+    if (target) {
+      // 后端列表只返回摘要，不返回 messages；这里从当前会话的首次提问重建
+      // 历史消息在重新提问时才从后端注入；侧栏切换主要用于选择会话继续提问
+      ragHistory.value = []
+    }
+  } catch (e) {
+    ElMessage.error('切换会话失败：' + e.message)
+  }
+}
+
+async function removeSession(sessionId) {
+  try {
+    await ElMessageBox.confirm('确认删除该会话？', '删除会话', { type: 'warning' })
+  } catch {
+    return
+  }
+  try {
+    await competitorApi.ragDeleteSession(sessionId)
+    ElMessage.success('已删除')
+    if (ragSessionId.value === sessionId) {
+      ragSessionId.value = null
+      ragHistory.value = []
+      ragAnswer.value = null
+    }
+    loadRagSessions()
+  } catch (e) {
+    ElMessage.error(e.message)
+  }
+}
 </script>
 
 <template>
-  <el-container class="app">
+  <!-- 未登录：登录/注册视图 -->
+  <div v-if="!isLoggedIn" class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <h1>二手交易平台分析系统</h1>
+        <p class="sub">竞品情报 · 知识库问答</p>
+      </div>
+      <el-form @submit.prevent>
+        <el-form-item>
+          <el-input v-model="authUsername" placeholder="用户名" size="large" clearable />
+        </el-form-item>
+        <el-form-item>
+          <el-input
+            v-model="authPassword"
+            type="password"
+            placeholder="密码"
+            size="large"
+            show-password
+            @keyup.enter="authMode === 'login' ? doLogin() : doRegister()"
+          />
+        </el-form-item>
+        <el-form-item v-if="authMode === 'register'">
+          <el-input
+            v-model="authConfirm"
+            type="password"
+            placeholder="确认密码"
+            size="large"
+            show-password
+            @keyup.enter="doRegister"
+          />
+        </el-form-item>
+        <el-button
+          type="primary"
+          size="large"
+          class="auth-submit"
+          :loading="authLoading"
+          @click="authMode === 'login' ? doLogin() : doRegister()"
+        >
+          {{ authMode === 'login' ? '登 录' : '注 册' }}
+        </el-button>
+      </el-form>
+      <div class="auth-switch">
+        <span v-if="authMode === 'login'">
+          还没有账号？<el-link type="primary" @click="switchAuthMode('register')">去注册</el-link>
+        </span>
+        <span v-else>
+          已有账号？<el-link type="primary" @click="switchAuthMode('login')">去登录</el-link>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 已登录：主界面 -->
+  <el-container v-else class="app">
     <el-header class="header">
       <div>
         <h1>二手交易平台分析系统</h1>
@@ -542,8 +840,24 @@ onMounted(() => {
         <el-tab-pane label="对比" name="compare" />
         <el-tab-pane label="知识库问答" name="rag" />
         <el-tab-pane label="变化记录" name="changes" />
+        <el-tab-pane v-if="isAdmin" label="知识库管理" name="kb" />
         <el-tab-pane label="设置" name="settings" />
       </el-tabs>
+      <div class="user-box">
+        <el-dropdown trigger="click">
+          <span class="user-trigger">
+            <el-avatar :size="28">{{ (currentUser?.username || '?').slice(0, 1).toUpperCase() }}</el-avatar>
+            <span class="user-name">{{ currentUser?.username }}</span>
+            <el-tag v-if="isAdmin" type="danger" size="small" effect="dark">管理员</el-tag>
+          </span>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item @click="openChangePwd">修改密码</el-dropdown-item>
+              <el-dropdown-item divided @click="doLogout">退出登录</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </div>
     </el-header>
 
     <el-main class="main">
@@ -814,71 +1128,101 @@ onMounted(() => {
           show-icon
           style="margin-bottom: 16px"
         />
-        <div class="card">
-          <div class="rag-head">
-            <h3 class="card-title">二手交易知识库问答</h3>
-            <el-button size="small" text type="primary" @click="newRagSession">
-              新对话
-            </el-button>
-          </div>
-          <p class="rag-tip">
-            基于二手交易知识库（规则制度 / 买卖指南 / 验货质检 / 售后仲裁 / 案例 / 公告，共约 1000 篇语料）
-            的检索式问答。命中知识库时直接返回原文并标注来源；未命中时由大模型兜底回答。支持多轮追问。
-          </p>
-          <div class="rag-input">
-            <el-input
-              v-model="ragQuestion"
-              placeholder="例如：忘记密码怎么办 / 卖家入驻需要什么资质 / 验机流程是什么"
-              clearable
-              @keyup.enter="doAsk"
-            />
-            <el-button type="primary" :loading="ragLoading" @click="doAsk">提问</el-button>
-          </div>
-        </div>
-
-        <!-- 多轮会话历史 -->
-        <div v-if="ragHistory.length" class="card rag-history">
-          <div v-for="(m, i) in ragHistory" :key="i" class="rag-msg" :class="m.role">
-            <span class="rag-role">{{ m.role === 'user' ? '我' : 'AI' }}</span>
-            <div class="rag-msg-body">{{ m.content }}</div>
-          </div>
-          <div v-if="ragLoading" class="rag-msg assistant">
-            <span class="rag-role">AI</span>
-            <div class="rag-msg-body muted">正在思考…</div>
-          </div>
-        </div>
-
-        <!-- 最新回答的来源引用 -->
-        <div v-if="ragAnswer && ragAnswer.sources && ragAnswer.sources.length" class="card rag-answer">
-          <div class="rag-mode">
-            <el-tag :type="ragAnswer.mode === 'hit' ? 'success' : 'warning'" size="small">
-              {{ ragAnswer.mode === 'hit' ? '知识库命中' : '大模型兜底' }}
-            </el-tag>
-            <span class="rag-q">Q：{{ ragAnswer.question }}</span>
-          </div>
-          <div class="rag-sources">
-            <h4>来源参考（点击展开查看原文）</h4>
-            <el-collapse>
-              <el-collapse-item
-                v-for="(s, i) in ragAnswer.sources"
-                :key="i"
-                :name="i"
+        <div class="rag-layout">
+          <!-- 会话侧栏 -->
+          <div class="rag-side">
+            <div class="rag-side-head">
+              <span>会话</span>
+              <el-button size="small" text type="primary" @click="newRagSession">新对话</el-button>
+            </div>
+            <div class="rag-side-list">
+              <div
+                v-for="s in ragSessions"
+                :key="s.session_id"
+                class="rag-side-item"
+                :class="{ active: s.session_id === ragSessionId }"
+                @click="switchSession(s.session_id)"
               >
-                <template #title>
-                  <div class="rag-src-title">
-                    <el-tag size="small" type="info">{{ s.doc_id }}</el-tag>
-                    <b>{{ s.title }}</b>
-                    <span class="rag-score">相关度 {{ (s.score * 100).toFixed(1) }}%</span>
-                  </div>
-                </template>
-                <div class="rag-src-body">
-                  <p>{{ s.text }}</p>
-                  <el-button size="small" text type="primary" @click.stop="copySourceText(s)">
-                    复制来源文本
-                  </el-button>
+                <div class="rag-side-title" :title="s.first_question || '（空会话）'">
+                  {{ s.first_question || '（空会话）' }}
                 </div>
-              </el-collapse-item>
-            </el-collapse>
+                <div class="rag-side-meta">
+                  {{ s.message_count }} 条 ·
+                  <el-icon class="rag-side-del" @click.stop="removeSession(s.session_id)">
+                    <span>🗑</span>
+                  </el-icon>
+                </div>
+              </div>
+              <el-empty v-if="!ragSessions.length" description="暂无会话" :image-size="60" />
+            </div>
+          </div>
+
+          <!-- 对话区 -->
+          <div class="rag-main">
+            <div class="card">
+              <div class="rag-head">
+                <h3 class="card-title">二手交易知识库问答</h3>
+              </div>
+              <p class="rag-tip">
+                基于二手交易知识库（规则制度 / 买卖指南 / 验货质检 / 售后仲裁 / 案例 / 公告，共约 1000 篇语料）
+                的检索式问答。命中知识库时直接返回原文并标注来源；未命中时由大模型兜底回答。支持多轮追问。
+              </p>
+              <div class="rag-input">
+                <el-input
+                  v-model="ragQuestion"
+                  placeholder="例如：忘记密码怎么办 / 卖家入驻需要什么资质 / 验机流程是什么"
+                  clearable
+                  @keyup.enter="doAsk"
+                />
+                <el-button type="primary" :loading="ragLoading" @click="doAsk">提问</el-button>
+              </div>
+            </div>
+
+            <!-- 多轮会话历史 -->
+            <div v-if="ragHistory.length" class="card rag-history">
+              <div v-for="(m, i) in ragHistory" :key="i" class="rag-msg" :class="m.role">
+                <span class="rag-role">{{ m.role === 'user' ? '我' : 'AI' }}</span>
+                <div class="rag-msg-body">{{ m.content }}</div>
+              </div>
+              <div v-if="ragLoading" class="rag-msg assistant">
+                <span class="rag-role">AI</span>
+                <div class="rag-msg-body muted">正在思考…</div>
+              </div>
+            </div>
+
+            <!-- 最新回答的来源引用 -->
+            <div v-if="ragAnswer && ragAnswer.sources && ragAnswer.sources.length" class="card rag-answer">
+              <div class="rag-mode">
+                <el-tag :type="ragAnswer.mode === 'hit' ? 'success' : 'warning'" size="small">
+                  {{ ragAnswer.mode === 'hit' ? '知识库命中' : '大模型兜底' }}
+                </el-tag>
+                <span class="rag-q">Q：{{ ragAnswer.question }}</span>
+              </div>
+              <div class="rag-sources">
+                <h4>来源参考（点击展开查看原文）</h4>
+                <el-collapse>
+                  <el-collapse-item
+                    v-for="(s, i) in ragAnswer.sources"
+                    :key="i"
+                    :name="i"
+                  >
+                    <template #title>
+                      <div class="rag-src-title">
+                        <el-tag size="small" type="info">{{ s.doc_id }}</el-tag>
+                        <b>{{ s.title }}</b>
+                        <span class="rag-score">相关度 {{ (s.score * 100).toFixed(1) }}%</span>
+                      </div>
+                    </template>
+                    <div class="rag-src-body">
+                      <p>{{ s.text }}</p>
+                      <el-button size="small" text type="primary" @click.stop="copySourceText(s)">
+                        复制来源文本
+                      </el-button>
+                    </div>
+                  </el-collapse-item>
+                </el-collapse>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -924,6 +1268,58 @@ onMounted(() => {
           <p v-if="!changes.length && !changesLoading" class="muted" style="margin-top: 16px">
             暂无变化记录。
           </p>
+        </div>
+      </div>
+
+      <!-- 知识库管理页（admin 专属） -->
+      <div v-else-if="activeTab === 'kb'" class="kb-wrap">
+        <div class="card">
+          <div class="changes-head">
+            <h3 class="card-title">知识库文档管理</h3>
+            <el-button type="primary" plain :loading="kbRebuilding" @click="doKbRebuild">
+              重建向量库
+            </el-button>
+          </div>
+          <p class="rag-tip">
+            管理知识库语料（canonical 下的 Markdown + FAQ JSON）。上传/删除文档后需「重建向量库」才会进入检索。
+            上传文件名需符合 <code>&lt;id&gt;_&lt;标题&gt;.md</code>（id 形如 A-001，且已在 seeds 中登记）。
+          </p>
+
+          <div class="kb-upload">
+            <el-upload
+              :auto-upload="false"
+              :limit="1"
+              accept=".md"
+              :on-change="onKbFileChange"
+              :on-remove="() => (kbUploadFile = null)"
+            >
+              <el-button>选择 .md 文件</el-button>
+            </el-upload>
+            <el-button type="primary" :disabled="!kbUploadFile" @click="doKbUpload">
+              上传
+            </el-button>
+          </div>
+
+          <el-table v-loading="kbLoading" :data="kbDocuments" border stripe>
+            <el-table-column prop="filename" label="文件名" min-width="260" show-overflow-tooltip />
+            <el-table-column prop="category" label="分类" width="140" />
+            <el-table-column label="类型" width="80">
+              <template #default="{ row }">
+                <el-tag size="small" :type="row.kind === 'md' ? 'primary' : 'success'">
+                  {{ row.kind === 'md' ? 'MD' : 'FAQ' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="大小" width="100">
+              <template #default="{ row }">{{ kbSize(row.size) }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="100" fixed="right">
+              <template #default="{ row }">
+                <el-button link type="danger" @click="doKbDelete(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <p class="count">共 {{ kbDocuments.length }} 篇语料</p>
         </div>
       </div>
 
@@ -1015,6 +1411,25 @@ onMounted(() => {
         <el-button type="warning" :loading="costConfirming" @click="confirmFetch">
           同意，继续本次调用
         </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 修改密码对话框 -->
+    <el-dialog v-model="pwdDialog" title="修改密码" width="420px">
+      <el-form @submit.prevent>
+        <el-form-item label="旧密码">
+          <el-input v-model="pwdOld" type="password" show-password />
+        </el-form-item>
+        <el-form-item label="新密码">
+          <el-input v-model="pwdNew" type="password" show-password placeholder="至少 6 位" />
+        </el-form-item>
+        <el-form-item label="确认新密码">
+          <el-input v-model="pwdConfirm" type="password" show-password />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="pwdDialog = false">取消</el-button>
+        <el-button type="primary" :loading="pwdSaving" @click="doChangePwd">确认修改</el-button>
       </template>
     </el-dialog>
   </el-container>
@@ -1257,5 +1672,135 @@ body {
 .cost-detail .muted {
   color: #909399;
   font-size: 13px;
+}
+/* 登录页 */
+.auth-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+.auth-card {
+  width: 380px;
+  background: #fff;
+  border-radius: 10px;
+  padding: 40px 36px 28px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+}
+.auth-brand {
+  text-align: center;
+  margin-bottom: 24px;
+}
+.auth-brand h1 {
+  margin: 0;
+  font-size: 20px;
+  color: #303133;
+}
+.auth-brand .sub {
+  margin: 6px 0 0;
+}
+.auth-submit {
+  width: 100%;
+}
+.auth-switch {
+  margin-top: 16px;
+  text-align: center;
+  color: #909399;
+  font-size: 13px;
+}
+/* 用户信息栏 */
+.user-box {
+  margin-left: 20px;
+  display: flex;
+  align-items: center;
+}
+.user-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  outline: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.user-trigger:hover {
+  background: #f5f7fa;
+}
+.user-name {
+  font-size: 13px;
+  color: #303133;
+}
+/* 会话侧栏布局 */
+.rag-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.rag-side {
+  width: 260px;
+  flex-shrink: 0;
+  background: #fff;
+  border-radius: 6px;
+  padding: 12px;
+}
+.rag-side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 8px;
+}
+.rag-side-list {
+  max-height: 480px;
+  overflow-y: auto;
+}
+.rag-side-item {
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-bottom: 4px;
+  border: 1px solid transparent;
+}
+.rag-side-item:hover {
+  background: #f5f7fa;
+}
+.rag-side-item.active {
+  background: #ecf5ff;
+  border-color: #c6e2ff;
+}
+.rag-side-title {
+  font-size: 13px;
+  color: #303133;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rag-side-meta {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rag-side-del {
+  margin-left: auto;
+  cursor: pointer;
+}
+.rag-main {
+  flex: 1;
+  min-width: 0;
+}
+/* 知识库管理 */
+.kb-wrap {
+  max-width: 1100px;
+}
+.kb-upload {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
 }
 </style>
