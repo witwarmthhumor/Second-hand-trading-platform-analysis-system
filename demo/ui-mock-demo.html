@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="YVxppwOjnxTLA1FhLHB0HF">
+<head data-page-node-id="NUcedE2AiBT55BMdenwBnu">
+<meta charset="UTF-8" data-page-node-id="BNWgGXFZVJIZzoL4pYrWap">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="YKG7FINdG1fh0cviTFPt15">
+<title>二手交易平台分析系统 · UI Mock Demo</title>
+<style>
+/* ============ 基础 ============ */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --primary: #409eff;
+  --primary-dark: #337ecc;
+  --success: #67c23a;
+  --warning: #e6a23c;
+  --danger: #f56c6c;
+  --info: #909399;
+  --text-main: #303133;
+  --text-sub: #606266;
+  --text-muted: #909399;
+  --border: #dcdfe6;
+  --border-light: #e4e7ed;
+  --bg: #f0f2f5;
+  --sidebar-bg: #1d2b36;
+  --sidebar-active: #409eff;
+  --card-radius: 8px;
+  --shadow: 0 1px 4px rgba(0,21,41,.08);
+}
+body {
+  font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text-main);
+  font-size: 14px;
+  height: 100vh;
+  overflow: hidden;
+}
+.demo-banner {
+  position: fixed; bottom: 16px; right: 16px; z-index: 999;
+  background: rgba(29,43,54,.85); color: #fff; padding: 8px 14px;
+  border-radius: 20px; font-size: 12px; backdrop-filter: blur(4px);
+  pointer-events: none;
+}
+.demo-banner b { color: #79bbff; }
+
+/* ============ 布局骨架 ============ */
+.layout { display: flex; height: 100vh; }
+.sidebar {
+  width: 220px; background: var(--sidebar-bg); color: #bfcbd9;
+  display: flex; flex-direction: column; flex-shrink: 0;
+}
+.logo {
+  height: 60px; display: flex; align-items: center; gap: 10px;
+  padding: 0 20px; color: #fff; font-size: 15px; font-weight: 600;
+  border-bottom: 1px solid rgba(255,255,255,.08); white-space: nowrap;
+}
+.logo .logo-icon {
+  width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+  background: linear-gradient(135deg, #409eff, #7b5cff);
+  display: flex; align-items: center; justify-content: center; font-size: 16px;
+}
+.menu { flex: 1; overflow-y: auto; padding: 8px 0; }
+.menu-item {
+  display: flex; align-items: center; gap: 10px; padding: 0 20px;
+  height: 44px; cursor: pointer; transition: all .2s; font-size: 14px;
+  border-left: 3px solid transparent; white-space: nowrap;
+}
+.menu-item:hover { background: rgba(255,255,255,.06); color: #fff; }
+.menu-item.active {
+  background: rgba(64,158,255,.15); color: #fff;
+  border-left-color: var(--sidebar-active);
+}
+.menu-item .icon { width: 18px; text-align: center; font-size: 15px; }
+.menu-item .badge {
+  margin-left: auto; background: var(--danger); color: #fff; font-size: 11px;
+  border-radius: 10px; padding: 1px 7px;
+}
+.menu-item .tag-admin {
+  margin-left: auto; font-size: 10px; color: #e6a23c;
+  border: 1px solid #e6a23c; border-radius: 3px; padding: 0 4px;
+}
+.sidebar-footer {
+  border-top: 1px solid rgba(255,255,255,.08); padding: 12px 16px;
+  display: flex; align-items: center; gap: 10px;
+}
+.sidebar-footer .avatar {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(135deg, #409eff, #67c23a);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 14px; font-weight: 600;
+}
+.sidebar-footer .u-name { color: #fff; font-size: 13px; }
+.sidebar-footer .u-role { font-size: 11px; color: #8a9bb0; }
+.sidebar-footer .logout {
+  margin-left: auto; cursor: pointer; color: #8a9bb0; font-size: 13px; padding: 4px;
+}
+.sidebar-footer .logout:hover { color: #fff; }
+
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.topbar {
+  height: 60px; background: #fff; border-bottom: 1px solid var(--border-light);
+  display: flex; align-items: center; padding: 0 24px; flex-shrink: 0;
+}
+.topbar .crumb { font-size: 15px; font-weight: 600; color: var(--text-main); }
+.topbar .crumb-sub { font-size: 12px; color: var(--text-muted); font-weight: 400; margin-left: 12px; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+.role-tag {
+  font-size: 11px; color: #fff; background: var(--warning);
+  border-radius: 3px; padding: 1px 6px;
+}
+.content { flex: 1; overflow-y: auto; padding: 20px 24px; }
+.page { display: none; }
+.page.active { display: block; }
+
+/* ============ 通用组件 ============ */
+.card {
+  background: #fff; border-radius: var(--card-radius); box-shadow: var(--shadow);
+  padding: 20px; margin-bottom: 16px;
+}
+.btn {
+  display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border);
+  background: #fff; color: var(--text-sub); border-radius: 4px; padding: 8px 15px;
+  font-size: 13px; cursor: pointer; transition: all .2s; white-space: nowrap;
+}
+.btn:hover { color: var(--primary); border-color: #c6e2ff; background: #ecf5ff; }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.primary:hover { background: var(--primary-dark); }
+.btn.success { background: var(--success); border-color: var(--success); color: #fff; }
+.btn.success:hover { opacity: .85; }
+.btn.warning { background: var(--warning); border-color: var(--warning); color: #fff; }
+.btn.warning:hover { opacity: .85; }
+.btn.danger-text { color: var(--danger); border: none; background: transparent; padding: 4px 8px; }
+.btn.small { padding: 5px 10px; font-size: 12px; }
+.btn.text { border: none; background: transparent; color: var(--primary); padding: 4px 8px; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.input {
+  border: 1px solid var(--border); border-radius: 4px; padding: 8px 12px;
+  font-size: 13px; outline: none; transition: border .2s; color: var(--text-main);
+}
+.input:focus { border-color: var(--primary); }
+select.input { cursor: pointer; }
+.tag { font-size: 12px; border-radius: 4px; padding: 2px 8px; display: inline-block; }
+.tag.blue { background: #ecf5ff; color: var(--primary); border: 1px solid #d9ecff; }
+.tag.green { background: #f0f9eb; color: var(--success); border: 1px solid #e1f3d8; }
+.tag.orange { background: #fdf6ec; color: var(--warning); border: 1px solid #faecd8; }
+.tag.gray { background: #f4f4f5; color: var(--info); border: 1px solid #e9e9eb; }
+.tag.red { background: #fef0f0; color: var(--danger); border: 1px solid #fde2e2; }
+
+/* 表格 */
+table.tbl { width: 100%; border-collapse: collapse; }
+.tbl th {
+  text-align: left; font-size: 13px; color: var(--text-sub); font-weight: 600;
+  background: #f8f9fb; padding: 10px 12px; border-bottom: 1px solid var(--border-light);
+  white-space: nowrap;
+}
+.tbl td { padding: 11px 12px; border-bottom: 1px solid #f0f2f5; font-size: 13px; color: var(--text-sub); }
+.tbl tr:hover td { background: #f5f7fa; }
+.tbl .link { color: var(--primary); text-decoration: none; }
+.tbl .link:hover { text-decoration: underline; }
+
+/* 分页 */
+.pagination { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 14px 0 2px; }
+.pagination .pg-btn {
+  min-width: 30px; height: 30px; border: 1px solid var(--border); background: #fff;
+  border-radius: 4px; cursor: pointer; font-size: 13px; color: var(--text-sub);
+  display: inline-flex; align-items: center; justify-content: center; padding: 0 6px;
+  transition: all .2s;
+}
+.pagination .pg-btn:hover:not(:disabled):not(.on) { color: var(--primary); border-color: #c6e2ff; }
+.pagination .pg-btn.on { background: var(--primary); border-color: var(--primary); color: #fff; cursor: default; }
+.pagination .pg-btn:disabled { opacity: .4; cursor: not-allowed; }
+.pagination .pg-info { font-size: 13px; color: var(--text-muted); margin-right: 8px; }
+.pagination .pg-jump { width: 44px; text-align: center; }
+
+/* ============ 竞品列表 ============ */
+.stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px; }
+.stat-card {
+  background: #fff; border-radius: var(--card-radius); box-shadow: var(--shadow);
+  padding: 18px 20px; display: flex; align-items: center; gap: 14px;
+}
+.stat-card .s-icon {
+  width: 46px; height: 46px; border-radius: 10px; display: flex; align-items: center;
+  justify-content: center; font-size: 20px; flex-shrink: 0;
+}
+.stat-card .s-icon.blue { background: #ecf5ff; }
+.stat-card .s-icon.green { background: #f0f9eb; }
+.stat-card .s-icon.orange { background: #fdf6ec; }
+.stat-card .s-icon.purple { background: #f4f0ff; }
+.stat-card .s-val { font-size: 24px; font-weight: 700; color: var(--text-main); line-height: 1.2; }
+.stat-card .s-label { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.filter-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+.filter-bar .spacer { flex: 1; }
+
+/* ============ 知识库问答 ============ */
+.chat-layout { display: flex; gap: 16px; height: calc(100vh - 60px - 40px); }
+.chat-side {
+  width: 250px; flex-shrink: 0; background: #fff; border-radius: var(--card-radius);
+  box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden;
+}
+.chat-side .side-head {
+  padding: 14px 16px; border-bottom: 1px solid var(--border-light);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.chat-side .side-head b { font-size: 14px; }
+.chat-side .sess-list { flex: 1; overflow-y: auto; padding: 8px; }
+.sess-item {
+  padding: 10px 12px; border-radius: 6px; cursor: pointer; transition: background .2s;
+  margin-bottom: 4px; position: relative;
+}
+.sess-item:hover { background: #f5f7fa; }
+.sess-item.on { background: #ecf5ff; }
+.sess-item .t {
+  font-size: 13px; color: var(--text-main); white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; padding-right: 22px;
+}
+.sess-item .d { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+.sess-item .del {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  color: var(--text-muted); font-size: 12px; opacity: 0; transition: opacity .2s; padding: 4px;
+}
+.sess-item:hover .del { opacity: 1; }
+.sess-item .del:hover { color: var(--danger); }
+.chat-main {
+  flex: 1; background: #fff; border-radius: var(--card-radius); box-shadow: var(--shadow);
+  display: flex; flex-direction: column; overflow: hidden; min-width: 0;
+}
+.chat-msgs { flex: 1; overflow-y: auto; padding: 24px 28px; }
+.msg-row { display: flex; gap: 12px; margin-bottom: 22px; }
+.msg-row.user { flex-direction: row-reverse; }
+.msg-avatar {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; display: flex;
+  align-items: center; justify-content: center; color: #fff; font-size: 13px;
+}
+.msg-row.ai .msg-avatar { background: linear-gradient(135deg, #409eff, #7b5cff); }
+.msg-row.user .msg-avatar { background: linear-gradient(135deg, #67c23a, #409eff); }
+.msg-body { max-width: 72%; }
+.msg-bubble {
+  padding: 12px 16px; border-radius: 10px; font-size: 14px; line-height: 1.7;
+  color: var(--text-main); word-break: break-word;
+}
+.msg-row.ai .msg-bubble { background: #f5f7fa; border-top-left-radius: 2px; }
+.msg-row.user .msg-bubble { background: var(--primary); color: #fff; border-top-right-radius: 2px; }
+.msg-meta { font-size: 11px; color: var(--text-muted); margin-top: 5px; display: flex; gap: 8px; align-items: center; }
+.msg-row.user .msg-meta { justify-content: flex-end; }
+.src-card {
+  margin-top: 8px; border: 1px solid var(--border-light); border-radius: 6px;
+  background: #fafbfc; overflow: hidden;
+}
+.src-card .src-head {
+  padding: 8px 12px; display: flex; align-items: center; gap: 8px; cursor: pointer;
+  font-size: 12px; color: var(--text-sub);
+}
+.src-card .src-head:hover { background: #f5f7fa; }
+.src-card .src-body {
+  padding: 10px 12px; font-size: 12px; color: var(--text-sub); line-height: 1.7;
+  border-top: 1px dashed var(--border-light); display: none; background: #fff;
+}
+.src-card.open .src-body { display: block; }
+.src-score { margin-left: auto; color: var(--text-muted); }
+.typing { display: inline-flex; gap: 4px; padding: 4px 2px; }
+.typing i {
+  width: 6px; height: 6px; border-radius: 50%; background: #c0c4cc; display: block;
+  animation: blink 1.2s infinite;
+}
+.typing i:nth-child(2) { animation-delay: .2s; }
+.typing i:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 0%,80%,100%{opacity:.3} 40%{opacity:1} }
+.chat-welcome { text-align: center; padding: 60px 20px 30px; }
+.chat-welcome .w-icon {
+  width: 64px; height: 64px; margin: 0 auto 18px; border-radius: 18px;
+  background: linear-gradient(135deg, #409eff, #7b5cff); display: flex; align-items: center;
+  justify-content: center; font-size: 30px; color: #fff;
+}
+.chat-welcome h3 { font-size: 18px; margin-bottom: 8px; }
+.chat-welcome p { font-size: 13px; color: var(--text-muted); line-height: 1.8; max-width: 460px; margin: 0 auto; }
+.chat-input-bar {
+  border-top: 1px solid var(--border-light); padding: 14px 20px; display: flex; gap: 10px;
+  background: #fff; flex-shrink: 0;
+}
+.chat-input-bar .input { flex: 1; padding: 11px 14px; font-size: 14px; border-radius: 6px; }
+.chat-input-bar .btn { padding: 11px 24px; border-radius: 6px; }
+
+/* ============ 知识库管理 ============ */
+.kb-head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+.kb-head .desc { font-size: 12px; color: var(--text-muted); line-height: 1.7; margin-top: 6px; }
+.kb-head .actions { margin-left: auto; display: flex; gap: 10px; flex-shrink: 0; }
+
+/* 占位页 */
+.placeholder {
+  text-align: center; padding: 90px 20px; color: var(--text-muted);
+}
+.placeholder .p-icon { font-size: 44px; margin-bottom: 14px; }
+.placeholder h3 { color: var(--text-sub); margin-bottom: 8px; }
+</style>
+</head>
+<body data-page-node-id="9ELovFI7ekUsj7A24RKUbz">
+
+<div class="layout" data-page-node-id="KzkYBeC3cqlgyFo5ISHkq4">
+  <!-- ===== 左侧导航 ===== -->
+  <aside class="sidebar" data-page-node-id="pCTHwvFPRXq1A3sROoUopr">
+    <div class="logo" data-page-node-id="WuMI0rn8vRHABhD8EKFirF"><span class="logo-icon" data-page-node-id="b3mHOY9iNmpINDK00YyM9h">⇄</span>二手交易平台分析</div>
+    <nav class="menu" id="menu" data-page-node-id="JSXz8x95MW6Zfsnfuei6Yc">
+      <div class="menu-item active" data-page="competitors" data-page-node-id="hCaQuZSJYy4O0rlggzeiOf"><span class="icon" data-page-node-id="KlVILamDXpLpMHnawxJLsN">📊</span>竞品列表</div>
+      <div class="menu-item" data-page="pending" data-page-node-id="5RITBpZ1K2jBdXPhBDoSFu"><span class="icon" data-page-node-id="WQ3MRCdv6kNFLseoolhMj0">📝</span>待校对<span class="badge" data-page-node-id="EU2dmXR6TXcKnLIwuvzdsm">2</span></div>
+      <div class="menu-item" data-page="entry" data-page-node-id="S91MK0Oz8AiX9HgOevcQmU"><span class="icon" data-page-node-id="zTgMCGs1CvBD2oNKeQorMM">➕</span>录入竞品</div>
+      <div class="menu-item" data-page="compare" data-page-node-id="Oo9LdcTvKYOQD71Ru3a6uv"><span class="icon" data-page-node-id="AvgqtCw3UbkbKdxz3CVJqe">⚖️</span>对比</div>
+      <div class="menu-item" data-page="chat" data-page-node-id="VQdTFBBJPp7Uzxln3IwsyI"><span class="icon" data-page-node-id="SGOg396dmGIACu3pefKfpz">💬</span>知识库问答</div>
+      <div class="menu-item" data-page="changes" data-page-node-id="ht5mTu7oVxmxiMvvYhcqCN"><span class="icon" data-page-node-id="XFMblHKXWHkUxs6V38zd3e">🔔</span>变化记录</div>
+      <div class="menu-item" data-page="kb" data-page-node-id="Otb21pxBT9CA20PZ0BGpqe"><span class="icon" data-page-node-id="sAzub5mGfqeCd94N1VjU3Q">📚</span>知识库管理<span class="tag-admin" data-page-node-id="Ops0B52kQRWhcDzGGi7AH7">admin</span></div>
+      <div class="menu-item" data-page="settings" data-page-node-id="ftFmXHGIxu140a3MTkvry3"><span class="icon" data-page-node-id="XuxNJHnfBweY2RtM2iBO17">⚙️</span>设置</div>
+    </nav>
+    <div class="sidebar-footer" data-page-node-id="0Hc5WdmIHHccRGZPGCPQDe">
+      <div class="avatar" data-page-node-id="a4GMBNZ37xJ9OdnaNqRB0O">A</div>
+      <div data-page-node-id="H4gZ8b8nq7vbIoyDbMlO54"><div class="u-name" data-page-node-id="FNwD90HQOj475YiNOHx7sN">admin</div><div class="u-role" data-page-node-id="FRijfTRqBE4VBUJ33x8T21">管理员</div></div>
+      <span class="logout" title="退出登录" data-page-node-id="fhAA1lQNroPGqq3RpnCc6s">⏻</span>
+    </div>
+  </aside>
+
+  <!-- ===== 主区域 ===== -->
+  <div class="main" data-page-node-id="7GFH5JI3DknKfPp8Fe67MK">
+    <header class="topbar" data-page-node-id="Jr3JCvqJ0QgrSBvWzlVNDv">
+      <span class="crumb" id="pageTitle" data-page-node-id="OGpuH51WdrPQWxLbZ8ZaOZ">竞品列表</span>
+      <span class="crumb-sub" id="pageSub" data-page-node-id="sI4iYjdMVIL2idYmMv7bDq">竞品情报收集、整理与横向对比</span>
+      <div class="topbar-right" data-page-node-id="8iXvnDfrPQs8JO0tTO9eqK">
+        <span class="tag green" id="ragStatusTag" data-page-node-id="C4nTvDzBUcO1fQWdVUtfMn">● 知识库就绪</span>
+        <span class="role-tag" data-page-node-id="rAV1eS9G42yCq1rdjdIIU5">管理员</span>
+      </div>
+    </header>
+
+    <div class="content" data-page-node-id="qknkjGUgsVB8sfQL1GMPxn">
+
+      <!-- ===== 竞品列表：统计卡片 + 表格分页 ===== -->
+      <section class="page active" id="page-competitors" data-page-node-id="471Hm34uhR0iM3Kr4lx5xl">
+        <div class="stat-row" data-page-node-id="c4Qt4azFBGgltjdtiFUJ22">
+          <div class="stat-card" data-page-node-id="1OMFNF4Xfz8d4qE7i0ykWB"><div class="s-icon blue" data-page-node-id="HCe5rANQ7U04kbRHMmDJyZ">📦</div><div data-page-node-id="Osob09PyTYCN6fM4wb8CKP"><div class="s-val" data-page-node-id="UzU24iFhqIMi3Vfdn5DBHa">23</div><div class="s-label" data-page-node-id="2fVB2EmxzGWtWUAny1ajDb">竞品总数</div></div></div>
+          <div class="stat-card" data-page-node-id="hYpe3sQN1FMGMcXgM0wXxl"><div class="s-icon green" data-page-node-id="BfplDW8kwQCEADronvK0xc">✅</div><div data-page-node-id="hfXq5Cl4GVhidBgFzEDbNG"><div class="s-val" data-page-node-id="Cp6EcSrzI21FFoUrFucFCH">18</div><div class="s-label" data-page-node-id="IlaavkaMHgMJZs6qYLCY6l">已上线</div></div></div>
+          <div class="stat-card" data-page-node-id="N4CDt4A7RfJqqbufFAwPMZ"><div class="s-icon orange" data-page-node-id="di10nHyKdClUu8QmQ1BaV8">⏳</div><div data-page-node-id="EUyBcMZ6ZOgLklVV5M4ycp"><div class="s-val" data-page-node-id="PNzGhe6HYASUv57A53XQfT">5</div><div class="s-label" data-page-node-id="LHpCfHmt1VZHKO8CCKVmKl">待校对 / 抓取中</div></div></div>
+          <div class="stat-card" data-page-node-id="xFs5sTHwrNCpjIU7DBnnTk"><div class="s-icon purple" data-page-node-id="4YV7JBSHJtF3rHKXZ4dTbk">📄</div><div data-page-node-id="bC8eKlCOWzYSwGKIibSqjZ"><div class="s-val" data-page-node-id="0DnMAeNIACx0hEUmXeMTnh">7</div><div class="s-label" data-page-node-id="Vi35XEqq66rU3ER0jjlzSZ">本月变化记录</div></div></div>
+        </div>
+        <div class="card" data-page-node-id="rhPjYirfMRP5bSQjxuR38n">
+          <div class="filter-bar" data-page-node-id="RAR2AByLswbg7UlBOR415T">
+            <input class="input" placeholder="按名称搜索" style="width:200px" data-page-node-id="r5p7qm4O4sHwDVF9Oi7Oon">
+            <select class="input" style="width:150px" data-page-node-id="hdhEEFSaRB87OqI5JWnBHs"><option data-page-node-id="bVBVYQVmx39lasTjplLtJq">平台类型（全部）</option><option data-page-node-id="PalrHaAXEmCAcL20deFD8E">回收宝</option><option data-page-node-id="1hLUH4lQkqpupNXGn8OTGk">C2C 闲鱼</option></select>
+            <button class="btn primary" data-page-node-id="e41sNEhAcWajDOr369CMVc">查询</button>
+            <span class="spacer" data-page-node-id="Y3NSRPIpoPlJe807okq9c6"></span>
+            <button class="btn success" data-page-node-id="ql9Be0TVjhgrh33A2IcK6k">＋ 录入竞品</button>
+            <button class="btn warning" data-page-node-id="q5AIHZKcplHUkVc1lyKyA3">⟳ 抓取竞品</button>
+            <button class="btn" data-page-node-id="NPthyvQy2Xp6KlVDKhr6aw">⚖ 对比 (2)</button>
+            <button class="btn" data-page-node-id="IAx28cWeJzcokiOUTWnrgZ">📥 导出报告 (2)</button>
+          </div>
+          <table class="tbl" data-page-node-id="EAqqtzfIQIugDiKSO50CQG">
+            <thead data-page-node-id="Zuu47ZjufB8hZA3WoFjeFS"><tr data-page-node-id="WOyaOVpTUnhTDBSJEK1y3Y">
+              <th style="width:36px" data-page-node-id="n7Uu255fVcYDzDJtgnOmJ7"><input type="checkbox" data-page-node-id="PMbYtqCSYLtEubEhWzh7Tl"></th><th data-page-node-id="HvNzEs2ShIqOHygCr95oqv">名称</th><th data-page-node-id="r174kByOjiR3XqKCWBiAfq">类型</th><th data-page-node-id="AsripFXWEzWxIZjFw3Ehz0">定位</th><th data-page-node-id="Q04JGzPGT9cg7hMku0nAPt">状态</th><th data-page-node-id="hYbJhe8GVhvEZep4hQOX26">官网</th><th data-page-node-id="eVBNnsGTL3nc3yROkb6LIU">操作</th>
+            </tr></thead>
+            <tbody id="compTbody" data-page-node-id="ccOvVTjFmh2wEnbYlWotqZ"></tbody>
+          </table>
+          <div class="pagination" id="compPaging" data-page-node-id="mfoq0BOR3bjbJfXTg8lsEo"></div>
+        </div>
+      </section>
+
+      <!-- ===== 知识库问答：聊天气泡流 ===== -->
+      <section class="page" id="page-chat" data-page-node-id="MrrHuBmqiNgiRpH1o48s8f">
+        <div class="chat-layout" data-page-node-id="BkwfWYAtEBhGrPGk1Id7D1">
+          <aside class="chat-side" data-page-node-id="PD2ZBWVL17KopUKxmaslL3">
+            <div class="side-head" data-page-node-id="5ZjKFpVWSM7y1pZPzBGmdB"><b data-page-node-id="mOqX6vCa5eHKl4acQXZcIJ">会话</b><button class="btn small primary" onclick="newChat()" data-page-node-id="wY7cGq9ZRxnzbx3NI5x15Z">＋ 新对话</button></div>
+            <div class="sess-list" id="sessList" data-page-node-id="JnHPa81FdKUiT3FXH4CFdT"></div>
+          </aside>
+          <div class="chat-main" data-page-node-id="fC0JvGDdPjJQeBtVlVs60J">
+            <div class="chat-msgs" id="chatMsgs" data-page-node-id="hITiHeOuhTzGgUfgDS7qj2"></div>
+            <div class="chat-input-bar" data-page-node-id="0l4NoozAoKALQXTU9sCsJn">
+              <input class="input" id="chatInput" placeholder="输入问题，例如：忘记密码怎么办 / 卖家入驻需要什么资质" onkeydown="if(event.key==='Enter')sendMsg()" data-page-node-id="qkLL391IMkL9Odd4UW8elM">
+              <button class="btn primary" onclick="sendMsg()" data-page-node-id="vtbxRf9hgoyvbsgRQdXyMD">发送</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 知识库管理：分页表格 ===== -->
+      <section class="page" id="page-kb" data-page-node-id="KJyuBcAYnNlo3pSTRzkTAB">
+        <div class="card" data-page-node-id="IJWTANdKC3a25LbBitBjPS">
+          <div class="kb-head" data-page-node-id="WXrtllfeMw4HANFmIexg3M">
+            <div data-page-node-id="CPDXQ9C36quFz86YOGViDL">
+              <b style="font-size:15px" data-page-node-id="RvCjPzkFUg9RPwLfXwKzBg">知识库文档管理</b>
+              <div class="desc" data-page-node-id="cO33YLGtOWlFz7Pv7H9zr7">管理知识库语料（canonical 下的 Markdown + FAQ JSON）。上传/删除文档后需「重建向量库」才会进入检索。上传文件名需符合 <b data-page-node-id="sSAic0weBn4TUlgHQtLD3W">&lt;id&gt;_&lt;标题&gt;.md</b>（id 形如 A-001）。</div>
+            </div>
+            <div class="actions" data-page-node-id="F0wUnqB8MIxU6sAImn2znu">
+              <button class="btn small" data-page-node-id="WMsqh15MoBQ4H4pitfMiLA">选择 .md 文件</button>
+              <button class="btn small primary" data-page-node-id="E70OTnuhPQRssWLG4QWoWU">上传</button>
+              <button class="btn small warning" data-page-node-id="eNOwLtTaXt5xnlCADwsZMX">⟳ 重建向量库</button>
+            </div>
+          </div>
+          <table class="tbl" data-page-node-id="WS6Nu1c2ClzMHXJ2QrUOCO">
+            <thead data-page-node-id="ZmRLll7GfSzAwKLTqu5pYH"><tr data-page-node-id="uuvWCMyOhxAwfMXmboEzdg">
+              <th style="width:36px" data-page-node-id="OB3UFd6o3p9XMCoqpI0WOZ"><input type="checkbox" data-page-node-id="I4AQcZMzTLBV3iIXfQYjoC"></th><th data-page-node-id="CsDnUkc9o1yRCEpuAPjJBG">文件名</th><th data-page-node-id="jYm1cxCsjSBl06DheHn5vS">分类</th><th data-page-node-id="uMoDVMeW06dxRvmYH17yGO">类型</th><th data-page-node-id="LuBJwV35tZ9I5gR6MX9ZU3">大小</th><th data-page-node-id="o0G3peYM6mMH9ytps3E0nt">操作</th>
+            </tr></thead>
+            <tbody id="kbTbody" data-page-node-id="YBYZu1zvLSupkUDC3476ZY"></tbody>
+          </table>
+          <div class="pagination" id="kbPaging" data-page-node-id="SjtURo8wGppvrr4juwrR0m"></div>
+        </div>
+      </section>
+
+      <!-- ===== 其余页面：占位（Demo 范围外） ===== -->
+      <section class="page" id="page-pending" data-page-node-id="kWNL8G7hEJtKvt2cJxewS8"><div class="card" data-page-node-id="zBSVHKDOVrWrhUg77kfCGf"><div class="placeholder" data-page-node-id="sU4G7DCGCX0QRKsuvepWfm"><div class="p-icon" data-page-node-id="b1CW12CK49KEVC1k2FEBWe">📝</div><h3 data-page-node-id="VUINh7geEPrOsXyuOMAWC8">待校对</h3><p data-page-node-id="6GF8FxYUP6MZivFOmO47vt">Demo 阶段保持现有功能，样式将统一套用新框架</p></div></div></section>
+      <section class="page" id="page-entry" data-page-node-id="zs5Hpa3X756DalT4J6FoSc"><div class="card" data-page-node-id="iZEatCTXZ4HmIjOTa5EqzH"><div class="placeholder" data-page-node-id="EcxWC0TdchKmZfu7ZHr3F7"><div class="p-icon" data-page-node-id="ftBQCI6pQKCgUoLn33fUYL">➕</div><h3 data-page-node-id="ZJFEQ2LBGzbOOuuC6EnyDI">录入竞品</h3><p data-page-node-id="ZHVlCpFsaIJhVUf3pPy1Su">Demo 阶段保持现有功能，样式将统一套用新框架</p></div></div></section>
+      <section class="page" id="page-compare" data-page-node-id="NIGsEMLp2srwM268K20NHT"><div class="card" data-page-node-id="wK9Zbhyo3RqDZ6t8Rdn7Do"><div class="placeholder" data-page-node-id="PBn7RP4mnTmEBPK9N3px1W"><div class="p-icon" data-page-node-id="F7vOciSYEn0M2c8QIpNlOG">⚖️</div><h3 data-page-node-id="EYYyqWI4uCoyFTLOVlBDhK">多竞品对比</h3><p data-page-node-id="CeOiyD4vvDRd81aHFkg6py">Demo 阶段保持现有功能，样式将统一套用新框架</p></div></div></section>
+      <section class="page" id="page-changes" data-page-node-id="hHLc9LPcKMxRJPYKbNQVub"><div class="card" data-page-node-id="EcwNUEL5n5ntSUi5BgRvb4"><div class="placeholder" data-page-node-id="VYAbzGJDbGyPDeizudA0Qx"><div class="p-icon" data-page-node-id="63EDZOQtVvC8rXHNkHUh29">🔔</div><h3 data-page-node-id="Ob9VTKUlJFN2n9yz1F86oS">变化记录</h3><p data-page-node-id="f6W7D24nxvRS4GiHbMA68A">Demo 阶段保持现有功能，样式将统一套用新框架</p></div></div></section>
+      <section class="page" id="page-settings" data-page-node-id="ok29r7bPB8TiRcPDDoQpHV"><div class="card" data-page-node-id="I3eaQ8CbTRrJckCQeRH3Tx"><div class="placeholder" data-page-node-id="nGDIWYrWWEPAYbZQMH5aaw"><div class="p-icon" data-page-node-id="rmYVGFkksrvzpBKzwXl99g">⚙️</div><h3 data-page-node-id="jn3Z3W9TZu21Sqy6DgVdqi">设置</h3><p data-page-node-id="zxlxztIf0F2YZorBmhETfZ">Demo 阶段保持现有功能，样式将统一套用新框架</p></div></div></section>
+
+    </div>
+  </div>
+</div>
+
+<div class="demo-banner" data-page-node-id="b2oG2ZjzKcVjxL9FOxDMtP">UI Mock Demo · 数据均为模拟，仅确认界面与操作流程</div>
+
+<script>
+/* ================= Mock 数据 ================= */
+// 竞品 mock（23 条，展示分页）
+const compTypes = ['回收宝', 'C2C 闲鱼', '回收宝', 'C2C 闲鱼', '回收宝', 'C2C 闲鱼', '回收宝', 'C2C 闲鱼', '回收宝', 'C2C 闲鱼'];
+const compNames = ['爱回收','转转','闲鱼','拍拍严选','找靓机','回收宝','闲转','有得卖','换换回收','回收通','趣回收','机贩子','优品拍拍','京转转','易回收','淘新机','秒回收','回收猴','迅回收','拇指回收','白鲸鱼','旧机堂','回收派'];
+const compDesc = ['专业二手3C回收与质检转卖平台','58 二手交易 + 转机回收平台','阿里旗下 C2C 二手闲置交易平台','京东旗下二手严选与回收','二手手机严选平台','手机数码即时回收平台','本地同城二手闲置交易','企业闲置处置与回收','环保闲置循环回收平台','全品类二手回收平台','年轻人潮流二手交易','二手3C回收估价平台','数码严选回收平台','京东生态二手回收','家电家居二手回收','二手手机快回收','即时估价上门回收','全品类回收服务平台','3C即时回收','手机回收以旧换新','书籍服装二手循环','二手书交易平平台','同城家电回收'];
+const competitors = compNames.map((n,i)=>({
+  name:n, type:compTypes[i], desc:compDesc[i],
+  status: i%4===3 ? '待校对' : '已上线',
+  site:'https://www.'+ ['aihuishou','zhuanzhuan','goofish','paipai','zhaoliaoji','huishoubao','xianzhuan','youdemai','huanhuan','huishoutong','quhuishou','jifanzi','youpin','jdzz','yihuishou','taoxinji','miaohuishou','huihou','xunhuishou','muzhi','baijingyu','jiutang','huishoupai'][i] +'.com'
+}));
+
+// 知识库文档 mock（58 条，每页 20）
+const kbDocs = [];
+const kbCats = [['A','A_rule','注册与认证规则',20],['B','B_guide','买卖交易指南',18],['C','C_check','验货与质检标准',12],['D','D_after','售后与仲裁',8]];
+kbCats.forEach(([pre,cat,catName,count])=>{
+  for(let i=1;i<=count;i++){
+    const id = pre+'-'+String(i).padStart(3,'0');
+    kbDocs.push({ file:id+'_'+catName+i+'.md', id, cat:catName, size:(2.4+Math.random()*5).toFixed(1)+' KB' });
+  }
+});
+
+// 会话 mock
+let sessions = [
+  { id:1, title:'忘记密码怎么办', time:'今天 14:32', msgs:[
+    {role:'user', text:'忘记密码怎么办？'},
+    {role:'ai', text:'根据知识库规则，您可以通过以下方式找回密码：\n1. 在登录页点击「忘记密码」；\n2. 通过注册手机号接收验证码验证身份；\n3. 验证通过后设置新密码即可重新登录。\n\n如手机号已停用，可提交人工申诉，客服将在 1-3 个工作日内处理。', srcs:[{id:'A-001', title:'用户注册注销规则', score:92.4}]}
+  ]},
+  { id:2, title:'卖家入驻资质咨询', time:'今天 10:05', msgs:[
+    {role:'user', text:'卖家入驻需要什么资质？'},
+    {role:'ai', text:'根据入驻规范，个人卖家需完成实名认证（身份证 + 人脸识别）；企业卖家需额外提交营业执照与对公账户信息。特定品类（如数码、奢侈品）还需缴纳保证金并通过品类资质审核。', srcs:[{id:'A-004', title:'个人卖家入驻标准', score:95.1},{id:'A-006', title:'企业卖家入驻与资质要求', score:89.7}]}
+  ]},
+  { id:3, title:'验机流程咨询', time:'昨天 18:40', msgs:[
+    {role:'user', text:'验机流程是什么？'},
+    {role:'ai', text:'标准验机流程为：买家下单 → 卖家寄送到验机中心 → 质检师按 41 项标准检测（外观/功能/拆修）→ 出具质检报告 → 买家确认或取消 → 平台寄送买家。全程约 48 小时。', srcs:[{id:'C-003', title:'验机流程与时效标准', score:94.2}]}
+  ]},
+];
+let curSess = null; // null = 新对话（欢迎页）
+let msgSeq = 100;
+
+/* ================= 导航切换 ================= */
+const pageTitles = {
+  competitors:['竞品列表','竞品情报收集、整理与横向对比'],
+  pending:['待校对','AI 提炼结果人工审核'],
+  entry:['录入竞品','手动新增竞品信息'],
+  compare:['多竞品对比','评分维度横向雷达对比'],
+  chat:['知识库问答','融合 RAG 的智能问答助手'],
+  changes:['变化记录','竞品信息变更历史追踪'],
+  kb:['知识库管理','知识库语料维护（管理员专属）'],
+  settings:['设置','评分维度与系统配置'],
+};
+document.getElementById('menu').addEventListener('click', e=>{
+  const item = e.target.closest('.menu-item'); if(!item) return;
+  document.querySelectorAll('.menu-item').forEach(m=>m.classList.remove('active'));
+  item.classList.add('active');
+  const p = item.dataset.page;
+  document.querySelectorAll('.page').forEach(pg=>pg.classList.remove('active'));
+  document.getElementById('page-'+p).classList.add('active');
+  document.getElementById('pageTitle').textContent = pageTitles[p][0];
+  document.getElementById('pageSub').textContent = pageTitles[p][1];
+});
+
+/* ================= 通用分页组件 ================= */
+function renderPagination(container, total, page, pageSize, onPage){
+  const pages = Math.max(1, Math.ceil(total/pageSize));
+  let btns = '';
+  const mk = (p,label,cls,dis)=>`<button class="pg-btn ${cls||''}" ${dis?'disabled':''} data-p="${p}">${label}</button>`;
+  btns += mk(page-1,'‹','',page===1);
+  // 页码窗口
+  const win = [];
+  for(let i=1;i<=pages;i++){
+    if(i===1||i===pages||Math.abs(i-page)<=2) win.push(i);
+  }
+  let last=0;
+  win.forEach(i=>{
+    if(i-last>1) btns += '<span class="pg-info">…</span>';
+    btns += mk(i,i,i===page?'on':'',false); last=i;
+  });
+  btns += mk(page+1,'›','',page===pages);
+  container.innerHTML = `<span class="pg-info">共 ${total} 条</span>${btns}<span class="pg-info">前往</span><input class="input pg-jump" value="${page}" onkeydown="if(event.key==='Enter'){window.__pgJump('${container.id}',this.value,${pages},${pageSize},${total})}"><span class="pg-info">页</span>`;
+  container.querySelectorAll('.pg-btn').forEach(b=>b.onclick=()=>onPage(+b.dataset.p));
+}
+window.__pgJump = function(cid, v, pages, pageSize, total){
+  const p = Math.min(pages, Math.max(1, parseInt(v)||1));
+  if(cid==='compPaging') renderCompPage(p); else renderKbPage(p);
+};
+
+/* ================= 竞品列表 ================= */
+const COMP_PAGE = 10;
+function renderCompPage(p=1){
+  window.__compPage = p;
+  const start=(p-1)*COMP_PAGE, rows=competitors.slice(start,start+COMP_PAGE);
+  document.getElementById('compTbody').innerHTML = rows.map(c=>`
+    <tr>
+      <td><input type="checkbox"></td>
+      <td><b style="color:var(--text-main)">${c.name}</b></td>
+      <td><span class="tag blue">${c.type}</span></td>
+      <td style="max-width:220px">${c.desc}</td>
+      <td><span class="tag ${c.status==='已上线'?'green':'orange'}">${c.status}</span></td>
+      <td><a class="link" href="javascript:;">${c.site.replace('https://www.','')}</a></td>
+      <td style="white-space:nowrap"><button class="btn text">编辑</button><button class="btn danger-text">删除</button></td>
+    </tr>`).join('');
+  renderPagination(document.getElementById('compPaging'), competitors.length, p, COMP_PAGE, renderCompPage);
+}
+renderCompPage(1);
+
+/* ================= 知识库管理 ================= */
+const KB_PAGE = 20;
+function renderKbPage(p=1){
+  window.__kbPage = p;
+  const start=(p-1)*KB_PAGE, rows=kbDocs.slice(start,start+KB_PAGE);
+  document.getElementById('kbTbody').innerHTML = rows.map(d=>`
+    <tr>
+      <td><input type="checkbox"></td>
+      <td><span class="tag gray">${d.id}</span> <b style="color:var(--text-main)">${d.file}</b></td>
+      <td>${d.cat}</td>
+      <td><span class="tag blue">MD</span></td>
+      <td>${d.size}</td>
+      <td><button class="btn danger-text">删除</button></td>
+    </tr>`).join('');
+  renderPagination(document.getElementById('kbPaging'), kbDocs.length, p, KB_PAGE, renderKbPage);
+}
+renderKbPage(1);
+
+/* ================= 知识库问答 ================= */
+function renderSessList(){
+  const el = document.getElementById('sessList');
+  el.innerHTML = sessions.map(s=>`
+    <div class="sess-item ${curSess===s.id?'on':''}" onclick="openSess(${s.id})">
+      <div class="t">${s.title}</div>
+      <div class="d">${s.time} · ${s.msgs.length} 条消息</div>
+      <span class="del" onclick="event.stopPropagation();delSess(${s.id})">🗑</span>
+    </div>`).join('');
+}
+function welcomeHTML(){
+  return `<div class="chat-welcome">
+    <div class="w-icon">💬</div>
+    <h3>二手交易知识库问答</h3>
+    <p>你好，我是二手交易平台的知识库助手。基于约 1000 篇平台语料（规则制度 / 买卖指南 / 验货质检 / 售后仲裁 / 案例 / 公告），命中知识库时直接返回原文并标注来源，未命中时由大模型兜底回答。支持多轮追问。</p>
+  </div>`;
+}
+function msgHTML(m){
+  if(m.role==='user') return `<div class="msg-row user"><div class="msg-avatar">我</div><div class="msg-body"><div class="msg-bubble">${m.text}</div></div></div>`;
+  const srcs = (m.srcs||[]).map((s,i)=>`
+    <div class="src-card" onclick="this.classList.toggle('open')">
+      <div class="src-head"><span class="tag gray">${s.id}</span><b>${s.title}</b><span class="src-score">相关度 ${s.score}% ▾</span></div>
+      <div class="src-body">（Mock 演示：此处展示命中语料原文片段，落地后与现有来源折叠卡片一致，支持一键复制）</div>
+    </div>`).join('');
+  return `<div class="msg-row ai"><div class="msg-avatar">AI</div><div class="msg-body">
+    <div class="msg-bubble">${m.text.replace(/\n/g,'<br>')}${srcs?'<span class="tag green" style="margin-top:8px">知识库命中</span>':'<span class="tag orange" style="margin-top:8px">大模型兜底</span>'}</div>
+    ${srcs?'<div style="max-width:420px">'+srcs+'</div>':''}
+  </div></div>`;
+}
+function renderChat(){
+  const el = document.getElementById('chatMsgs');
+  const s = sessions.find(x=>x.id===curSess);
+  el.innerHTML = s ? s.msgs.map(msgHTML).join('') : welcomeHTML();
+  el.scrollTop = el.scrollHeight;
+}
+function openSess(id){ curSess=id; renderSessList(); renderChat(); }
+function newChat(){ curSess=null; renderSessList(); renderChat(); }
+function delSess(id){
+  sessions = sessions.filter(s=>s.id!==id);
+  if(curSess===id) curSess=null;
+  renderSessList(); renderChat();
+}
+const mockReplies = [
+  {text:'根据知识库规则，闲鱼平台禁止发布违禁管制物品、假冒伪劣商品与活体动物。违规发布将按情节轻重给予下架、扣除信用分、限制交易 7-30 天直至封号处理。\n\n建议发布前先查阅《商品发布规范》，确认商品在允许类目内。', srcs:[{id:'B-002',title:'商品发布规范',score:91.8},{id:'D-005',title:'违规处置与申诉流程',score:86.3}]},
+  {text:'根据售后仲裁规则，交易纠纷需在收货后 7 天内发起；平台仲裁团队将在 48 小时内介入，依据质检报告与双方举证裁定责任。裁定支持退货的，运费由责任方承担。', srcs:[{id:'D-001',title:'售后仲裁基本规则',score:93.5}]},
+  {text:'（Mock 大模型兜底回答）该问题在知识库中未检索到直接依据，以下为通用参考：二手交易建议保留完整聊天记录与物流凭证，发生争议时可作为仲裁证据提交。', srcs:null},
+];
+let mockIdx = 0;
+function sendMsg(){
+  const input = document.getElementById('chatInput');
+  const q = input.value.trim(); if(!q) return;
+  input.value='';
+  // 确保当前有会话
+  if(curSess===null){
+    const s = {id:++msgSeq, title:q.slice(0,16), time:'刚刚', msgs:[]};
+    sessions.unshift(s); curSess=s.id; renderSessList();
+  }
+  const s = sessions.find(x=>x.id===curSess);
+  s.msgs.push({role:'user', text:q});
+  renderChat();
+  // 打字指示器
+  const el = document.getElementById('chatMsgs');
+  el.insertAdjacentHTML('beforeend', `<div class="msg-row ai" id="typingRow"><div class="msg-avatar">AI</div><div class="msg-body"><div class="msg-bubble"><span class="typing"><i></i><i></i><i></i></span></div></div></div>`);
+  el.scrollTop = el.scrollHeight;
+  setTimeout(()=>{
+    const r = mockReplies[mockIdx++ % mockReplies.length];
+    s.msgs.push({role:'ai', text:r.text, srcs:r.srcs});
+    renderSessList(); renderChat();
+  }, 900);
+}
+renderSessList(); renderChat();
+</script>
+</body>
+</html>
