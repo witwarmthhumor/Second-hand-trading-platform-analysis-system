@@ -11,7 +11,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.ai.cost import CostTracker
-from app.ai.provider import Extraction
+from app.ai.provider import Extraction, RemoteLLMProvider
 from app.main import app
 
 # ---------------- CostTracker 纯逻辑 ----------------
@@ -91,16 +91,16 @@ def test_reset_clears_state():
 # ---------------- 集成：/api/fetch 熔断 + 审批 ----------------
 
 
-class _CostProvider:
-    """带 api_key 和 token 用量的 mock provider（会触发 cost 链路）。"""
+class _CostProvider(RemoteLLMProvider):
+    """模拟远程 LLM provider（会触发 cost 链路）。
+
+    继承 RemoteLLMProvider 使 isinstance 判断正确识别为「远程提炼」，从而
+    走成本预检与记账；不调用父类 __init__（避免真实读配置），仅复用其类型。
+    """
 
     def __init__(self):
         self.last_input_tokens = 2_000_000
         self.last_output_tokens = 0
-
-    @property
-    def api_key(self):
-        return "sk-test"
 
     async def extract(self, url, html, title=""):
         return Extraction(name="熔断测试", type="C2C 闲置交易", positioning="p")
@@ -143,7 +143,7 @@ def _reset_cost(monkeypatch):
     tracker = CostTracker(cost_limit_cny=0.0001)
     # 隔离持久化：跳过 DB 恢复与落库，保证测试间状态干净（持久化单独用 test_cost_persist 验证）
     tracker._restored = True
-    tracker._schedule_persist = lambda: None
+    tracker.schedule_persist = lambda: None
     monkeypatch.setattr(fetch_service, "get_cost_tracker", lambda: tracker)
     monkeypatch.setattr(cost_mod, "get_cost_tracker", lambda: tracker)
     # cost API 模块里 from app.ai.cost import get_cost_tracker 绑定了 app.api.cost.get_cost_tracker

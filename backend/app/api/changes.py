@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.models.competitor_change import CompetitorChange
+from app.services.change_service import list_stored_competitors
 
 router = APIRouter(prefix="/api/changes", tags=["changes"])
 
@@ -53,12 +54,7 @@ async def trigger_monitor(session: AsyncSession = Depends(get_session)) -> dict:
     对已入库竞品做一次快照（当前为占位实现：仅返回竞品数与时间，
     实际网络抓取由 fetcher 完成，此处避免无人值守的抓取副作用）。
     """
-    from app.models.competitor import Competitor, DataStatus
-
-    result = await session.execute(
-        select(Competitor).where(Competitor.data_status == DataStatus.STORED.value)
-    )
-    competitors = list(result.scalars().all())
+    competitors = await list_stored_competitors(session)
     return {
         "checked": len(competitors),
         "changes": 0,

@@ -6,7 +6,10 @@
 
 from __future__ import annotations
 
-from app.models.competitor import Competitor
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.competitor import Competitor, DataStatus
 
 # 参与变化检测的字段（与竞品核心字段对齐，跳过 id/时间戳/状态）
 _TRACKED_FIELDS = (
@@ -22,6 +25,14 @@ _TRACKED_FIELDS = (
     "strengths",
     "weaknesses",
 )
+
+
+async def list_stored_competitors(session: AsyncSession) -> list[Competitor]:
+    """查询所有「已入库」竞品（供定时监控、问答上下文、变化查询共用）。"""
+    result = await session.execute(
+        select(Competitor).where(Competitor.data_status == DataStatus.STORED.value)
+    )
+    return list(result.scalars().all())
 
 
 def _norm(value) -> str | None:

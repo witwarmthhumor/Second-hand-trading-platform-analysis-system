@@ -13,9 +13,12 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 # 持久化在 app_settings 表的 key
 _PERSIST_KEY = "llm_cost_state"
@@ -90,10 +93,6 @@ class CostTracker:
     def total_output_tokens(self) -> int:
         return self._total_output_tokens
 
-    @property
-    def cost_limit_cny_prop(self) -> float:
-        return self.cost_limit_cny
-
     def status(self) -> dict:
         """当前状态（供 GET 查询 / 前端展示）。"""
         return {
@@ -158,7 +157,7 @@ class CostTracker:
         elif self._approved_once:
             # 放行的一次已用完，恢复普通熔断语义由累计决定
             self._approved_once = False
-        self._schedule_persist()
+        self.schedule_persist()
 
     # ---- 审批放行 ----
     def approve(self, token: str | None) -> bool:
@@ -181,7 +180,7 @@ class CostTracker:
         self._pending_approval_token = None
         self._approved_once = False
         self.last_estimate_cost_cny = None
-        self._schedule_persist()
+        self.schedule_persist()
         return self.status()
 
     # ---- 持久化（DB 落库 / 恢复） ----
@@ -204,8 +203,12 @@ class CostTracker:
         self._approved_once = bool(data.get("approved_once", False))
         self._restored = True
 
-    def _schedule_persist(self) -> None:
-        """fire-and-forget 异步落库：无事件循环（如纯同步测试）则跳过。"""
+    def schedule_persist(self) -> None:
+        """fire-and-forget 异步落库：无事件循环（如纯同步测试）则跳过。
+
+        公开方法：审批放行等外部动作后需立即落库时，由 API 层显式触发；
+        内部记账/重置也复用此方法。
+        """
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -226,9 +229,9 @@ class CostTracker:
                 else:
                     row.value = self.to_dict()
                 await session.commit()
-        except Exception:
+        except Exception as exc:
             # 落库失败不影响主流程（如 DB 未就绪），内存态仍保证本次会话熔断
-            return
+            logger.warning("成本状态落库失败（不影响熔断，仅本次会话内存态生效）: %s", exc)
 
     async def restore_from_db(self) -> None:
         """从 app_settings 表恢复累计状态（仅首次调用生效）。"""
@@ -244,8 +247,9 @@ class CostTracker:
                     self.load_dict(row.value)
                 else:
                     self._restored = True
-        except Exception:
+        except Exception as exc:
             self._restored = True  # DB 不可用时放弃恢复，避免重复尝试
+            logger.warning("成本状态恢复失败（DB 不可用，从零累计）: %s", exc)
 
 
 # 会话级单例：整个应用生命周期内共享累计

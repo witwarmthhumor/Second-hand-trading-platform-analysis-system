@@ -6,7 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.models.competitor import Competitor, DataStatus, PlatformType
+from app.models.competitor_change import CompetitorChange
 from app.schemas.competitor import CompetitorCreate, CompetitorOut, CompetitorUpdate
+from app.services.change_service import build_change_objects, diff_fields
 
 router = APIRouter(prefix="/api/competitors", tags=["competitors"])
 
@@ -66,13 +68,8 @@ async def update_competitor(
 
     update_data = payload.model_dump(exclude_unset=True)
     # 变化检测：对比更新前旧值与新值，记录发生变化的字段
-    from app.models.competitor_change import CompetitorChange
-    from app.services import change_service
-
-    changes = change_service.diff_fields(competitor, update_data)
+    changes = diff_fields(competitor, update_data)
     if changes:
-        from app.services.change_service import build_change_objects
-
         for obj in build_change_objects(competitor, changes, source="manual"):
             session.add(CompetitorChange(**obj))
 

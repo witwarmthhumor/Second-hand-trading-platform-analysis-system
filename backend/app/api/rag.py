@@ -14,10 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.models.chat_session import ChatSession
-from app.models.competitor import Competitor, DataStatus
 from app.rag.retriever import get_retriever
 from app.schemas.rag import AskRequest, AskResponse
 from app.services import rag_service
+from app.services.change_service import list_stored_competitors
 
 router = APIRouter(prefix="/api/rag", tags=["rag"])
 
@@ -27,10 +27,7 @@ _HISTORY_ROUNDS = 5
 
 async def _load_competitors_context(session: AsyncSession) -> str:
     """读取已入库竞品数据，序列化为文本上下文（供 LLM 兜底回答对比类问题）。"""
-    result = await session.execute(
-        select(Competitor).where(Competitor.data_status == DataStatus.STORED.value)
-    )
-    competitors = list(result.scalars().all())
+    competitors = await list_stored_competitors(session)
     return rag_service.build_competitors_context(competitors)
 
 
@@ -93,8 +90,6 @@ async def status() -> dict:
 @router.get("/sessions")
 async def list_sessions(session: AsyncSession = Depends(get_session)) -> list[dict]:
     """列出会话摘要（按更新时间倒序），供前端展示历史会话列表。"""
-    from sqlalchemy import select
-
     result = await session.execute(
         select(ChatSession).order_by(ChatSession.updated_at.desc())
     )

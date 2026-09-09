@@ -47,7 +47,7 @@ async def approve_call(payload: ApproveRequest) -> CostStatus:
             status_code=400,
             detail="审批令牌无效或当前无需放行（未熔断）",
         )
-    tracker._schedule_persist()  # noqa: SLF001 审批放行后落库
+    tracker.schedule_persist()  # 审批放行后落库
     return CostStatus(**tracker.status())
 
 

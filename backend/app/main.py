@@ -53,15 +53,11 @@ async def lifespan(app: FastAPI):
 async def _monitor_job() -> None:
     """定时监控任务：对已入库竞品做一次快照检查（占位，避免无人值守抓取副作用）。"""
     # 记录到日志即可；实际抓取对比策略待配置后启用
-    from sqlalchemy import select
+    from app.db import async_session_factory
+    from app.services.change_service import list_stored_competitors
 
-    from app.models.competitor import DataStatus
-
-    async with engine.connect() as conn:
-        result = await conn.execute(
-            select(Competitor).where(Competitor.data_status == DataStatus.STORED.value)
-        )
-        _ = list(result.all())  # 触发一次查询，确认 DB 连通
+    async with async_session_factory() as session:
+        _ = await list_stored_competitors(session)  # 触发一次查询，确认 DB 连通
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)

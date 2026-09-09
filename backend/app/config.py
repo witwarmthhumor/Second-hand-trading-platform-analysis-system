@@ -9,12 +9,12 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     app_name: str = "二手交易平台分析系统"
-    debug: bool = True
+    debug: bool = False
 
-    # 数据库连接（本地 Docker PostgreSQL，端口 5433 避开宿主机 5432）
-    database_url: str = (
-        "postgresql+asyncpg://competitor:competitor@localhost:5433/competitor"
-    )
+    # 数据库连接（本地 Docker PostgreSQL，端口 5433 避开宿主机 5432）。
+    # 无默认账号密码：必须经 .env 的 DATABASE_URL 注入，避免无 .env 部署时
+    # 误用弱凭证（见 .env.example）。缺失时启动报错，强制显式配置。
+    database_url: str
 
     # LLM 配置（OpenAI 兼容接口，通过 .env 注入）
     llm_api_base: str = "https://www.rightapi.ai/codex/v1"

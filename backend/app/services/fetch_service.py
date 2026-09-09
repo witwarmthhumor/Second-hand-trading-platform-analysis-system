@@ -9,7 +9,7 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.cost import get_cost_tracker
-from app.ai.provider import Extraction, get_provider
+from app.ai.provider import Extraction, RemoteLLMProvider, get_provider
 from app.crawler.fetcher import fetch_url
 from app.models.competitor import Competitor, DataStatus
 
@@ -31,8 +31,8 @@ async def fetch_and_extract(url: str) -> tuple[Extraction, str, str]:
     page = await fetch_url(url)
     provider = get_provider()
 
-    # 若为规则兜底（无 LLM key）则不涉及费用，直接提炼
-    if getattr(provider, "api_key", None):
+    # 仅远程 LLM 提炼涉及费用；规则兜底（无 key）不预检、不记账
+    if isinstance(provider, RemoteLLMProvider):
         input_text = f"{url}\n{page.title}\n{page.html[:4000]}"
         estimated_tokens = len(input_text) // 2
         tracker = get_cost_tracker()
@@ -44,12 +44,10 @@ async def fetch_and_extract(url: str) -> tuple[Extraction, str, str]:
     extraction = await provider.extract(url=url, html=page.html, title=page.title)
 
     # 真实用量记账（仅远程 provider 有 token 用量）
-    if getattr(provider, "last_input_tokens", 0) or getattr(
-        provider, "last_output_tokens", 0
-    ):
+    if isinstance(provider, RemoteLLMProvider):
         get_cost_tracker().record(
-            getattr(provider, "last_input_tokens", 0),
-            getattr(provider, "last_output_tokens", 0),
+            provider.last_input_tokens,
+            provider.last_output_tokens,
         )
     return extraction, page.title, page.html
 
