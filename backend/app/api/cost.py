@@ -28,7 +28,9 @@ class CostStatus(BaseModel):
 
 @router.get("/status", response_model=CostStatus)
 async def cost_status() -> CostStatus:
-    return CostStatus(**get_cost_tracker().status())
+    tracker = get_cost_tracker()
+    await tracker.restore_from_db()
+    return CostStatus(**tracker.status())
 
 
 @router.post("/approve", response_model=CostStatus)
@@ -38,16 +40,20 @@ async def approve_call(payload: ApproveRequest) -> CostStatus:
     token 无效或当前未熔断时返回 400（明确失败），避免调用方误判为放行成功。
     """
     tracker = get_cost_tracker()
+    await tracker.restore_from_db()
     ok = tracker.approve(payload.token)
     if not ok:
         raise HTTPException(
             status_code=400,
             detail="审批令牌无效或当前无需放行（未熔断）",
         )
+    tracker._schedule_persist()  # noqa: SLF001 审批放行后落库
     return CostStatus(**tracker.status())
 
 
 @router.post("/reset", response_model=CostStatus)
 async def reset_cost() -> CostStatus:
     """清零累计消费并解除熔断。"""
-    return CostStatus(**get_cost_tracker().reset())
+    tracker = get_cost_tracker()
+    await tracker.restore_from_db()
+    return CostStatus(**tracker.reset())

@@ -211,6 +211,9 @@ async def test_llm_fallback_graceful_on_timeout(monkeypatch):
 class _PassingTracker:
     """precheck 放行、record 无副作用的 mock tracker。"""
 
+    async def restore_from_db(self):
+        return None
+
     def precheck(self, est_input):
         return {"blocked": False, "allowed": True}
 
@@ -223,6 +226,9 @@ async def test_llm_fallback_blocked_returns_hint(monkeypatch):
     from app.services import rag_service
 
     class _BlockedTracker:
+        async def restore_from_db(self):
+            return None
+
         def precheck(self, est_input):
             return {"blocked": True}
 

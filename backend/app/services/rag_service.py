@@ -29,6 +29,7 @@ def _estimate_tokens(text: str) -> int:
 async def _llm_fallback(question: str) -> str:
     """未命中时调用 LLM 兜底生成，接入成本熔断。"""
     tracker = get_cost_tracker()
+    await tracker.restore_from_db()
 
     # 成本预检：预估输入 token，超限且未审批则中断
     est_input = _estimate_tokens(_FALLBACK_SYSTEM_PROMPT + question)

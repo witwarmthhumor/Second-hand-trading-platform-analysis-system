@@ -36,6 +36,7 @@ async def fetch_and_extract(url: str) -> tuple[Extraction, str, str]:
         input_text = f"{url}\n{page.title}\n{page.html[:4000]}"
         estimated_tokens = len(input_text) // 2
         tracker = get_cost_tracker()
+        await tracker.restore_from_db()
         verdict = tracker.precheck(estimated_tokens)
         if not verdict["allowed"]:
             raise CostLimitExceeded(verdict["reason"], verdict)

@@ -141,6 +141,9 @@ def _reset_cost(monkeypatch):
     from app.services import fetch_service
 
     tracker = CostTracker(cost_limit_cny=0.0001)
+    # 隔离持久化：跳过 DB 恢复与落库，保证测试间状态干净（持久化单独用 test_cost_persist 验证）
+    tracker._restored = True
+    tracker._schedule_persist = lambda: None
     monkeypatch.setattr(fetch_service, "get_cost_tracker", lambda: tracker)
     monkeypatch.setattr(cost_mod, "get_cost_tracker", lambda: tracker)
     # cost API 模块里 from app.ai.cost import get_cost_tracker 绑定了 app.api.cost.get_cost_tracker
@@ -223,3 +226,47 @@ async def test_cost_status_and_reset(client, _reset_cost):
     assert reset.status_code == 200
     assert reset.json()["total_cost_cny"] == 0.0
     assert reset.json()["blocked"] is False
+
+
+# ---------------- 持久化（DB 往返） ----------------
+
+def test_to_dict_and_load_dict_roundtrip():
+    """序列化 → 反序列化往返，累计状态一致。"""
+    t = CostTracker(cost_limit_cny=1.0)
+    t.record(1000, 200)
+    t.record(500, 100)
+    data = t.to_dict()
+    assert data["total_input_tokens"] == 1500
+    assert data["total_output_tokens"] == 300
+
+    t2 = CostTracker(cost_limit_cny=1.0)
+    t2.load_dict(data)
+    assert t2.total_input_tokens == 1500
+    assert t2.total_output_tokens == 300
+    assert t2.total_cost_cny == t.total_cost_cny
+
+
+async def test_persist_and_restore_roundtrip():
+    """落库 → 恢复往返：新实例从 DB 恢复出累计用量。"""
+    from app.db import async_session_factory
+    from app.models.setting import AppSetting
+
+    t = CostTracker(cost_limit_cny=1.0)
+    t.record(2000, 400)
+
+    # 手动落库（绕过 fire-and-forget，直接 await）
+    await t._persist_async()
+
+    # 清理：验证后删除落库记录，避免污染其他测试
+    try:
+        t2 = CostTracker(cost_limit_cny=1.0)
+        await t2.restore_from_db()
+        assert t2.total_input_tokens == 2000
+        assert t2.total_output_tokens == 400
+        assert t2.total_cost_cny == t.total_cost_cny
+    finally:
+        async with async_session_factory() as session:
+            row = await session.get(AppSetting, "llm_cost_state")
+            if row is not None:
+                await session.delete(row)
+                await session.commit()

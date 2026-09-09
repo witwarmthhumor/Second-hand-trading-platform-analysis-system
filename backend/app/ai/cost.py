@@ -3,16 +3,22 @@
 产品需求：API 调用费用超过阈值（默认 1 元）即中断，经用户同意后才继续。
 
 设计要点：
-- 单进程内存态（本项目 uvicorn 单进程），会话级累计。
+- 内存态累计 + DB 持久化（存 app_settings 表），重启不丢累计。
+  record 同步更新内存后，若在事件循环内则 fire-and-forget 异步落库；
+  restore 由成本 API 端点首次访问时 await 恢复。
 - 三种形态统一：单次调用预检（发请求前估算）、累计消费熔断、放行审批。
 - 熔断后后续调用一律被拒，直到用户通过审批端点放行一次或重置累计。
 """
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 
 from app.config import settings
+
+# 持久化在 app_settings 表的 key
+_PERSIST_KEY = "llm_cost_state"
 
 
 class CostTracker:
@@ -55,6 +61,8 @@ class CostTracker:
         self._approved_once = False
         # 记录最近一次估算，供审批前端展示
         self.last_estimate_cost_cny: float | None = None
+        # 是否已从 DB 恢复过（避免重复恢复覆盖运行时状态）
+        self._restored = False
 
     # ---- 费用计算 ----
     def estimate_cost_cny(self, input_tokens: int, output_tokens: int) -> float:
@@ -150,6 +158,7 @@ class CostTracker:
         elif self._approved_once:
             # 放行的一次已用完，恢复普通熔断语义由累计决定
             self._approved_once = False
+        self._schedule_persist()
 
     # ---- 审批放行 ----
     def approve(self, token: str | None) -> bool:
@@ -172,7 +181,71 @@ class CostTracker:
         self._pending_approval_token = None
         self._approved_once = False
         self.last_estimate_cost_cny = None
+        self._schedule_persist()
         return self.status()
+
+    # ---- 持久化（DB 落库 / 恢复） ----
+    def to_dict(self) -> dict:
+        """序列化累计状态（供落库）。"""
+        return {
+            "total_input_tokens": self._total_input_tokens,
+            "total_output_tokens": self._total_output_tokens,
+            "total_cost_cny": self._total_cost_cny,
+            "blocked": self._blocked,
+            "approved_once": self._approved_once,
+        }
+
+    def load_dict(self, data: dict) -> None:
+        """从落库数据恢复累计状态（不覆盖 pending token，避免旧令牌误放行）。"""
+        self._total_input_tokens = int(data.get("total_input_tokens", 0))
+        self._total_output_tokens = int(data.get("total_output_tokens", 0))
+        self._total_cost_cny = float(data.get("total_cost_cny", 0.0))
+        self._blocked = bool(data.get("blocked", False))
+        self._approved_once = bool(data.get("approved_once", False))
+        self._restored = True
+
+    def _schedule_persist(self) -> None:
+        """fire-and-forget 异步落库：无事件循环（如纯同步测试）则跳过。"""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return  # 无运行中的事件循环，仅保留内存态
+        loop.create_task(self._persist_async())
+
+    async def _persist_async(self) -> None:
+        """把累计状态写入 app_settings 表（后台任务，失败静默不抛）。"""
+        try:
+            from app.db import async_session_factory
+            from app.models.setting import AppSetting
+
+            async with async_session_factory() as session:
+                row = await session.get(AppSetting, _PERSIST_KEY)
+                if row is None:
+                    row = AppSetting(key=_PERSIST_KEY, value=self.to_dict())
+                    session.add(row)
+                else:
+                    row.value = self.to_dict()
+                await session.commit()
+        except Exception:
+            # 落库失败不影响主流程（如 DB 未就绪），内存态仍保证本次会话熔断
+            return
+
+    async def restore_from_db(self) -> None:
+        """从 app_settings 表恢复累计状态（仅首次调用生效）。"""
+        if self._restored:
+            return
+        try:
+            from app.db import async_session_factory
+            from app.models.setting import AppSetting
+
+            async with async_session_factory() as session:
+                row = await session.get(AppSetting, _PERSIST_KEY)
+                if row is not None and isinstance(row.value, dict):
+                    self.load_dict(row.value)
+                else:
+                    self._restored = True
+        except Exception:
+            self._restored = True  # DB 不可用时放弃恢复，避免重复尝试
 
 
 # 会话级单例：整个应用生命周期内共享累计
