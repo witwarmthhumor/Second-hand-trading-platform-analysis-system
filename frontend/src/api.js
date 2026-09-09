@@ -166,6 +166,12 @@ export const competitorApi = {
   ragListSessions() {
     return http.get('/rag/sessions')
   },
+  ragGetSession(sessionId) {
+    return http.get(`/rag/sessions/${sessionId}`)
+  },
+  ragBatchDeleteSessions(sessionIds) {
+    return http.post('/rag/sessions/batch-delete', { session_ids: sessionIds })
+  },
   ragDeleteSession(sessionId) {
     return http.delete(`/rag/sessions/${sessionId}`)
   },

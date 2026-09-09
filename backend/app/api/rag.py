@@ -1,15 +1,19 @@
 """RAG 问答 API。
 
-- POST /api/rag/ask        ：问答（检索命中直出 + 来源，未命中 LLM 兜底）；支持 session_id 多轮
+- POST /api/rag/ask        ：问答（检索命中直出 + 来源，未命中 LLM 兜底）；支持 session_id 多轮，
+                             会话不存在时懒创建（前端本地生成 session_id，首问即落库）
 - GET  /api/rag/status     ：知识库就绪状态
 - GET  /api/rag/sessions   ：列出当前用户的会话（admin 可见全部）
 - POST /api/rag/sessions   ：新建会话（绑定当前用户）
+- GET  /api/rag/sessions/{session_id} ：获取指定会话的消息历史（仅本人或 admin）
+- POST /api/rag/sessions/batch-delete ：批量删除会话（只能删自己的；admin 可删任意）
 - DELETE /api/rag/sessions/{session_id} ：删除指定会话（仅本人或 admin）
 """
 
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,6 +50,12 @@ async def _get_owned_session(
     return row
 
 
+class BatchDeleteRequest(BaseModel):
+    """批量删除会话请求体。"""
+
+    session_ids: list[str] = Field(..., min_length=1, max_length=100)
+
+
 @router.post("/ask", response_model=AskResponse)
 async def ask(
     payload: AskRequest,
@@ -57,14 +67,15 @@ async def ask(
 
     # 读取历史：带 session_id 时从 DB 取本人会话，取最近 _HISTORY_ROUNDS 轮
     history: list[dict] = []
+    existing: ChatSession | None = None
     if session_id:
-        row = await _get_owned_session(session_id, user, session)
-        if row is not None:
-            messages = row.messages or []
-            history = messages[-(_HISTORY_ROUNDS * 2):]
-        else:
-            # 会话不存在或不属于当前用户：拒绝继续，避免越权读写他人会话
+        existing = await session.get(ChatSession, session_id)
+        if existing is not None and user.role != ROLE_ADMIN and existing.user_id != user.id:
+            # 会话存在但不属于当前用户：拒绝，避免越权读写他人会话
             raise HTTPException(status_code=404, detail="会话不存在或无权访问")
+        if existing is not None:
+            history = (existing.messages or [])[-(_HISTORY_ROUNDS * 2):]
+        # 会话不存在：懒创建模式，保存阶段落库归属当前用户（前端本地生成 session_id）
 
     # 读取已入库竞品数据作为对比类问题的上下文
     competitors_context = await _load_competitors_context(session)
@@ -77,18 +88,20 @@ async def ask(
         competitors_context=competitors_context,
     )
 
-    # 保存本轮问答到会话（仅当带 session_id 时，实现多轮记忆）
+    # 保存本轮问答到会话（仅当带 session_id 时，实现多轮记忆；不存在则懒创建）
     if session_id:
-        row = await _get_owned_session(session_id, user, session)
         new_messages = [
             {"role": "user", "content": payload.question},
             {"role": "assistant", "content": response.answer},
         ]
-        if row is None:
-            row = ChatSession(session_id=session_id, user_id=user.id, messages=new_messages)
-            session.add(row)
+        if existing is None:
+            session.add(
+                ChatSession(
+                    session_id=session_id, user_id=user.id, messages=new_messages
+                )
+            )
         else:
-            row.messages = (row.messages or []) + new_messages
+            existing.messages = (existing.messages or []) + new_messages
         await session.commit()
 
     return response
@@ -143,15 +156,49 @@ async def delete_session(
     return {"deleted": True, "session_id": session_id}
 
 
+@router.get("/sessions/{session_id}")
+async def get_session_messages(
+    session_id: str,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """获取指定会话的完整消息历史（仅本人或 admin），供前端切换会话时回显。"""
+    row = await _get_owned_session(session_id, user, session)
+    if row is None:
+        raise HTTPException(status_code=404, detail="会话不存在或无权访问")
+    return {
+        "session_id": row.session_id,
+        "messages": row.messages or [],
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
+
+
+@router.post("/sessions/batch-delete")
+async def batch_delete_sessions(
+    payload: BatchDeleteRequest,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """批量删除会话。普通用户只能删自己的，admin 可删任意；不存在的 id 静默跳过。"""
+    deleted = 0
+    for sid in payload.session_ids:
+        row = await _get_owned_session(sid, user, session)
+        if row is not None:
+            await session.delete(row)
+            deleted += 1
+    await session.commit()
+    return {"deleted": deleted, "requested": len(payload.session_ids)}
+
+
 @router.post("/sessions")
 async def create_session(
     session: AsyncSession = Depends(get_session),
     user: User = Depends(get_current_user),
 ) -> dict:
-    """新建会话，返回 session_id（前端「新对话」用）。会话记录立即落库并归属当前用户。
+    """新建会话，返回 session_id（绑定当前用户）。
 
-    立即落库的意义：空会话也能出现在历史列表里，用户新建后未提问就退出，
-    重新登录仍能找回这条会话。
+    注：前端已改为「首问懒创建」（ask 会话不存在时自动落库），此接口保留供
+    显式建会话的场景与既有测试使用。
     """
     session_id = uuid.uuid4().hex
     session.add(ChatSession(session_id=session_id, user_id=user.id, messages=[]))

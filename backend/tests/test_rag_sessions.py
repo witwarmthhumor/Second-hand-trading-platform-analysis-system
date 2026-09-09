@@ -143,3 +143,96 @@ async def test_session_survives_relogin(client):
     token2 = await _login(client, username, "secret123")
     resp = await client.get("/api/rag/sessions", headers=_auth(token2))
     assert sid in [s["session_id"] for s in resp.json()]
+
+
+async def test_get_session_messages(client):
+    """能取回自己会话的消息历史；他人会话 404；不存在的会话 404。"""
+    user_a, token_a = await _register(client)
+    _, token_b = await _register(client)
+
+    # A 新建会话并提问一轮，产生消息
+    resp = await client.post("/api/rag/sessions", headers=_auth(token_a))
+    sid = resp.json()["session_id"]
+    resp = await client.post(
+        "/api/rag/ask",
+        json={"question": "忘记密码怎么办", "session_id": sid},
+        headers=_auth(token_a),
+    )
+    assert resp.status_code == 200
+
+    # A 取回消息：应有 2 条（user + assistant）
+    resp = await client.get(f"/api/rag/sessions/{sid}", headers=_auth(token_a))
+    assert resp.status_code == 200
+    msgs = resp.json()["messages"]
+    assert len(msgs) == 2
+    assert msgs[0]["role"] == "user" and "忘记密码" in msgs[0]["content"]
+
+    # B 取 A 的会话 → 404
+    resp = await client.get(f"/api/rag/sessions/{sid}", headers=_auth(token_b))
+    assert resp.status_code == 404
+
+    # 不存在的会话 → 404
+    resp = await client.get("/api/rag/sessions/nonexistent", headers=_auth(token_a))
+    assert resp.status_code == 404
+
+
+async def test_ask_lazy_creates_session(client):
+    """ask 带不存在的 session_id 时懒创建（归属当前用户），不再 404。"""
+    _, token_a = await _register(client)
+
+    sid = secrets.token_hex(16)
+    resp = await client.post(
+        "/api/rag/ask",
+        json={"question": "验机流程是什么", "session_id": sid},
+        headers=_auth(token_a),
+    )
+    assert resp.status_code == 200
+
+    # 会话已落库且归属当前用户
+    resp = await client.get("/api/rag/sessions", headers=_auth(token_a))
+    assert sid in [s["session_id"] for s in resp.json()]
+
+
+async def test_batch_delete_sessions(client):
+    """批量删除：普通用户只能删自己的；admin 可删任意；返回删除数量。"""
+    user_a, token_a = await _register(client)
+    user_b, token_b = await _register(client)
+
+    resp = await client.post("/api/rag/sessions", headers=_auth(token_a))
+    sid_a1 = resp.json()["session_id"]
+    resp = await client.post("/api/rag/sessions", headers=_auth(token_a))
+    sid_a2 = resp.json()["session_id"]
+    resp = await client.post("/api/rag/sessions", headers=_auth(token_b))
+    sid_b1 = resp.json()["session_id"]
+
+    # A 批量删 [自己的两个 + B 的一个] → 只删掉 2 个
+    resp = await client.post(
+        "/api/rag/sessions/batch-delete",
+        json={"session_ids": [sid_a1, sid_a2, sid_b1]},
+        headers=_auth(token_a),
+    )
+    assert resp.status_code == 200
+    assert resp.json()["deleted"] == 2
+
+    # A 的会话没了，B 的还在
+    resp = await client.get("/api/rag/sessions", headers=_auth(token_a))
+    assert sid_a1 not in [s["session_id"] for s in resp.json()]
+    resp = await client.get("/api/rag/sessions", headers=_auth(token_b))
+    assert sid_b1 in [s["session_id"] for s in resp.json()]
+
+    # admin 可批量删 B 的会话
+    admin_token = await _login(client, "admin", "123456")
+    resp = await client.post(
+        "/api/rag/sessions/batch-delete",
+        json={"session_ids": [sid_b1]},
+        headers=_auth(admin_token),
+    )
+    assert resp.json()["deleted"] == 1
+
+    # 空 id 列表 → 422 校验失败
+    resp = await client.post(
+        "/api/rag/sessions/batch-delete",
+        json={"session_ids": []},
+        headers=_auth(token_a),
+    )
+    assert resp.status_code == 422

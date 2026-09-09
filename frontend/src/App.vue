@@ -33,7 +33,6 @@ function enterApp(token, user) {
   loadRagStatus()
   loadRagSessions()
   loadChanges()
-  newRagSession()
   if (isAdmin.value) loadKbDocuments()
 }
 
@@ -141,7 +140,6 @@ onMounted(() => {
     loadRagStatus()
     loadRagSessions()
     loadChanges()
-    newRagSession()
     if (isAdmin.value) loadKbDocuments()
   }
 })
@@ -633,17 +631,14 @@ async function loadRagSessions() {
   }
 }
 
-async function newRagSession() {
-  // 新对话：清空当前会话与历史，从后端拿新 session_id
+function newRagSession() {
+  // 新对话：仅本地清空（不再立即落库）。首问时前端生成 session_id，
+  // 后端 ask 懒创建会话，避免侧栏堆积「空会话」。
   ragSessionId.value = null
   ragHistory.value = []
   ragAnswer.value = null
-  try {
-    const r = await competitorApi.ragCreateSession()
-    ragSessionId.value = r.session_id
-  } catch (e) {
-    ElMessage.error('新建会话失败：' + e.message)
-  }
+  batchMode.value = false
+  checkedSessions.value = []
 }
 
 async function doAsk() {
@@ -654,6 +649,10 @@ async function doAsk() {
   }
   ragLoading.value = true
   try {
+    // 新对话的首问：本地生成 session_id，后端 ask 懒创建并归属当前用户
+    if (!ragSessionId.value) {
+      ragSessionId.value = crypto.randomUUID().replace(/-/g, '')
+    }
     const resp = await competitorApi.ragAsk(q, 5, ragSessionId.value)
     ragAnswer.value = resp
     // 记录本轮问答到本地历史（AI 消息带上来源引用）
@@ -810,38 +809,84 @@ function kbSize(bytes) {
 }
 
 // —— RAG 会话侧栏 ——
+// 会话时间显示：今天显示 HH:mm，否则显示 MM-DD
+function fmtSessionTime(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const now = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  if (d.toDateString() === now.toDateString()) return hm
+  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${hm}`
+}
+
 async function switchSession(sessionId) {
   ragSessionId.value = sessionId
-  // 拉取该会话历史，展示在对话区
   ragHistory.value = []
   ragAnswer.value = null
   try {
-    const sessions = await competitorApi.ragListSessions()
-    const target = sessions.find((s) => s.session_id === sessionId)
-    if (target) {
-      // 后端列表只返回摘要，不返回 messages；这里从当前会话的首次提问重建
-      // 历史消息在重新提问时才从后端注入；侧栏切换主要用于选择会话继续提问
-      ragHistory.value = []
-    }
+    // 从后端拉取该会话的完整消息历史并回显到对话区
+    const detail = await competitorApi.ragGetSession(sessionId)
+    ragHistory.value = (detail.messages || []).map((m) => ({
+      role: m.role,
+      content: m.content,
+    }))
+    scrollChatToBottom()
   } catch (e) {
-    ElMessage.error('切换会话失败：' + e.message)
+    ElMessage.error('加载会话失败：' + e.message)
   }
 }
 
-async function removeSession(sessionId) {
+// —— 批量删除 ——
+const batchMode = ref(false) // 批量删除模式
+const checkedSessions = ref([]) // 勾选的 session_id
+
+function toggleBatchMode() {
+  batchMode.value = !batchMode.value
+  checkedSessions.value = []
+}
+
+function toggleSessionCheck(sessionId) {
+  const i = checkedSessions.value.indexOf(sessionId)
+  if (i >= 0) {
+    checkedSessions.value.splice(i, 1)
+  } else {
+    checkedSessions.value.push(sessionId)
+  }
+}
+
+const allChecked = computed(
+  () => ragSessions.value.length > 0 && checkedSessions.value.length === ragSessions.value.length
+)
+
+function toggleCheckAll() {
+  checkedSessions.value = allChecked.value ? [] : ragSessions.value.map((s) => s.session_id)
+}
+
+async function doBatchDelete() {
+  if (!checkedSessions.value.length) {
+    ElMessage.warning('请先勾选要删除的会话')
+    return
+  }
   try {
-    await ElMessageBox.confirm('确认删除该会话？', '删除会话', { type: 'warning' })
+    await ElMessageBox.confirm(`确认删除选中的 ${checkedSessions.value.length} 个会话？`, '批量删除', {
+      type: 'warning',
+    })
   } catch {
     return
   }
   try {
-    await competitorApi.ragDeleteSession(sessionId)
-    ElMessage.success('已删除')
-    if (ragSessionId.value === sessionId) {
+    const r = await competitorApi.ragBatchDeleteSessions([...checkedSessions.value])
+    ElMessage.success(`已删除 ${r.deleted} 个会话`)
+    // 若当前会话被删除，清空对话区
+    if (checkedSessions.value.includes(ragSessionId.value)) {
       ragSessionId.value = null
       ragHistory.value = []
       ragAnswer.value = null
     }
+    checkedSessions.value = []
+    batchMode.value = false
     loadRagSessions()
   } catch (e) {
     ElMessage.error(e.message)
@@ -1261,29 +1306,54 @@ async function removeSession(sessionId) {
         <div class="chat-layout">
           <!-- 会话侧栏 -->
           <div class="rag-side">
-            <div class="rag-side-head">
-              <span>会话</span>
-              <el-button size="small" text type="primary" @click="newRagSession">新对话</el-button>
+            <div class="rag-side-actions">
+              <el-button class="new-chat-btn" type="primary" plain @click="newRagSession">
+                ＋ 新建对话
+              </el-button>
+              <el-tooltip :content="batchMode ? '退出批量删除' : '批量删除'" placement="top">
+                <el-button
+                  class="batch-btn"
+                  :type="batchMode ? 'warning' : 'default'"
+                  text
+                  @click="toggleBatchMode"
+                >
+                  🗑
+                </el-button>
+              </el-tooltip>
             </div>
+
+            <!-- 批量模式工具条 -->
+            <div v-if="batchMode" class="rag-side-batchbar">
+              <el-checkbox :model-value="allChecked" @change="toggleCheckAll">全选</el-checkbox>
+              <el-button size="small" type="danger" text @click="doBatchDelete">
+                删除({{ checkedSessions.length }})
+              </el-button>
+            </div>
+
             <div class="rag-side-list">
               <div
                 v-for="s in ragSessions"
                 :key="s.session_id"
                 class="rag-side-item"
-                :class="{ active: s.session_id === ragSessionId }"
-                @click="switchSession(s.session_id)"
+                :class="{ active: !batchMode && s.session_id === ragSessionId }"
+                @click="batchMode ? toggleSessionCheck(s.session_id) : switchSession(s.session_id)"
               >
-                <div class="rag-side-title" :title="s.first_question || '（空会话）'">
-                  {{ s.first_question || '（空会话）' }}
-                </div>
-                <div class="rag-side-meta">
-                  {{ s.message_count }} 条
-                  <el-icon class="rag-side-del" @click.stop="removeSession(s.session_id)">
-                    <span>🗑</span>
-                  </el-icon>
+                <el-checkbox
+                  v-if="batchMode"
+                  :model-value="checkedSessions.includes(s.session_id)"
+                  @change="toggleSessionCheck(s.session_id)"
+                  @click.stop
+                />
+                <div class="rag-side-item-body">
+                  <div class="rag-side-title" :title="s.first_question || '新对话'">
+                    {{ s.first_question || '新对话' }}
+                  </div>
+                  <div class="rag-side-meta">
+                    {{ s.message_count }} 条 · {{ fmtSessionTime(s.updated_at) }}
+                  </div>
                 </div>
               </div>
-              <el-empty v-if="!ragSessions.length" description="暂无会话" :image-size="60" />
+              <div v-if="!ragSessions.length" class="rag-side-empty">暂无会话</div>
             </div>
           </div>
 
@@ -2017,12 +2087,24 @@ body {
   flex-direction: column;
   overflow: hidden;
 }
-.rag-side-head {
+.rag-side-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+.new-chat-btn {
+  flex: 1;
+}
+.batch-btn {
+  font-size: 16px;
+  padding: 8px 10px;
+}
+.rag-side-batchbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-weight: 600;
-  color: #303133;
   margin-bottom: 8px;
   flex-shrink: 0;
 }
@@ -2031,8 +2113,11 @@ body {
   overflow-y: auto;
 }
 .rag-side-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 10px 12px;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   margin-bottom: 4px;
   border: 1px solid transparent;
@@ -2043,6 +2128,10 @@ body {
 .rag-side-item.active {
   background: #ecf5ff;
   border-color: #c6e2ff;
+}
+.rag-side-item-body {
+  min-width: 0;
+  flex: 1;
 }
 .rag-side-title {
   font-size: 13px;
@@ -2055,13 +2144,12 @@ body {
   font-size: 12px;
   color: #909399;
   margin-top: 4px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
-.rag-side-del {
-  margin-left: auto;
-  cursor: pointer;
+.rag-side-empty {
+  text-align: center;
+  color: #c0c4cc;
+  font-size: 13px;
+  padding: 32px 0;
 }
 /* 对话区 */
 .chat-main {
