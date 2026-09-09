@@ -26,13 +26,45 @@ def _estimate_tokens(text: str) -> int:
     return max(1, len(text) // 2)
 
 
-async def _llm_fallback(question: str, history: list[dict] | None = None) -> str:
-    """未命中时调用 LLM 兜底生成，接入成本熔断；可注入多轮历史上下文。"""
+def build_competitors_context(competitors: list) -> str:
+    """把已入库竞品数据序列化为文本，供 LLM 兜底回答对比类问题。
+
+    只取对问答有价值的字段（名称/类型/定位/商业模式/定价/优势/不足），
+    控制长度避免 token 膨胀。competitors 为 Competitor ORM 实例列表。
+    """
+    lines: list[str] = []
+    for c in competitors:
+        fields: list[str] = [f"【{c.name}】"]
+        if c.type:
+            fields.append(f"类型：{c.type}")
+        if c.positioning:
+            fields.append(f"定位：{c.positioning}")
+        if c.business_model:
+            fields.append(f"商业模式：{c.business_model}")
+        if c.pricing:
+            fields.append(f"定价/抽佣：{c.pricing}")
+        if c.strengths:
+            fields.append(f"优势：{c.strengths}")
+        if c.weaknesses:
+            fields.append(f"不足：{c.weaknesses}")
+        lines.append("；".join(fields))
+    return "\n".join(lines)
+
+
+async def _llm_fallback(
+    question: str,
+    history: list[dict] | None = None,
+    competitors_context: str | None = None,
+) -> str:
+    """未命中时调用 LLM 兜底生成，接入成本熔断；可注入多轮历史与竞品数据上下文。"""
     tracker = get_cost_tracker()
     await tracker.restore_from_db()
 
-    # 组装带历史的 messages：system + 最近若干轮历史 + 当前问题
-    messages: list[dict] = [{"role": "system", "content": _FALLBACK_SYSTEM_PROMPT}]
+    # 组装带历史的 messages：system（含竞品上下文）+ 最近若干轮历史 + 当前问题
+    system_prompt = _FALLBACK_SYSTEM_PROMPT
+    if competitors_context:
+        system_prompt += f"\n\n以下是系统中已录入的竞品数据（供对比类问题参考）：\n{competitors_context}"
+    messages: list[dict] = [{"role": "system", "content": system_prompt}]
     for msg in (history or []):
         role = msg.get("role")
         content = msg.get("content")
@@ -42,8 +74,7 @@ async def _llm_fallback(question: str, history: list[dict] | None = None) -> str
 
     # 成本预检：预估输入 token（system + 历史 + 问题），超限且未审批则中断
     est_input = _estimate_tokens(
-        _FALLBACK_SYSTEM_PROMPT
-        + "".join(m.get("content", "") for m in messages[1:])
+        system_prompt + "".join(m.get("content", "") for m in messages[1:])
     )
     pre = tracker.precheck(est_input)
     if pre.get("blocked"):
@@ -86,8 +117,9 @@ async def ask(
     top_k: int = 5,
     session_id: str | None = None,
     history: list[dict] | None = None,
+    competitors_context: str | None = None,
 ) -> AskResponse:
-    """问答主入口：检索命中直出，未命中 LLM 兜底（可注入多轮历史）。"""
+    """问答主入口：检索命中直出，未命中 LLM 兜底（可注入多轮历史与竞品数据）。"""
     retriever = get_retriever()
     if not retriever.is_ready:
         return AskResponse(
@@ -127,8 +159,10 @@ async def ask(
             session_id=session_id,
         )
 
-    # 未命中：LLM 兜底（注入历史上下文，支持追问）
-    answer = await _llm_fallback(question, history=history)
+    # 未命中：LLM 兜底（注入历史上下文与竞品数据，支持追问与对比类问题）
+    answer = await _llm_fallback(
+        question, history=history, competitors_context=competitors_context
+    )
     return AskResponse(
         answer=answer,
         mode="fallback",

@@ -154,7 +154,7 @@ async def test_ask_hit_below_threshold_falls_back(monkeypatch):
     low = [{"doc_id": "A-006", "text": "无关", "vector_sim": 0.3}]
     monkeypatch.setattr(rag_service, "get_retriever", lambda: _ReadyRetriever(low))
 
-    async def _fake_fallback(question, history=None):
+    async def _fake_fallback(question, history=None, competitors_context=None):
         return "（mock 兜底回答）"
 
     monkeypatch.setattr(rag_service, "_llm_fallback", _fake_fallback)
@@ -171,7 +171,7 @@ async def test_ask_empty_results_falls_back(monkeypatch):
 
     monkeypatch.setattr(rag_service, "get_retriever", lambda: _ReadyRetriever([]))
 
-    async def _fake(q, history=None):
+    async def _fake(q, history=None, competitors_context=None):
         return "兜底"
 
     monkeypatch.setattr(rag_service, "_llm_fallback", _fake)
@@ -246,7 +246,7 @@ async def test_ask_injects_history_to_fallback(monkeypatch):
     monkeypatch.setattr(rag_service, "get_retriever", lambda: _ReadyRetriever([]))
     captured = {}
 
-    async def _fake(q, history=None):
+    async def _fake(q, history=None, competitors_context=None):
         captured["history"] = history
         return "兜底"
 
@@ -321,3 +321,63 @@ async def test_llm_fallback_history_limits_rounds(monkeypatch):
         ],
     )
     assert answer == "多轮兜底回答"
+
+
+# ---------------- 竞品数据联动（B2） ----------------
+
+class _FakeCompetitor:
+    """模拟 Competitor ORM 实例。"""
+
+    def __init__(self, **kw):
+        self.name = kw.get("name", "")
+        self.type = kw.get("type")
+        self.positioning = kw.get("positioning")
+        self.business_model = kw.get("business_model")
+        self.pricing = kw.get("pricing")
+        self.strengths = kw.get("strengths")
+        self.weaknesses = kw.get("weaknesses")
+
+
+def test_build_competitors_context():
+    from app.services import rag_service
+
+    comps = [
+        _FakeCompetitor(
+            name="闲鱼",
+            type="C2C 闲置交易",
+            positioning="个人闲置交易平台",
+            business_model="C2C 撮合",
+            pricing="交易抽佣 0.6%",
+            strengths="用户量大",
+            weaknesses="假货风险",
+        ),
+        _FakeCompetitor(name="转转", type="回收置换", pricing="质检转卖，抽佣更高"),
+    ]
+    ctx = rag_service.build_competitors_context(comps)
+    assert "【闲鱼】" in ctx
+    assert "交易抽佣 0.6%" in ctx
+    assert "【转转】" in ctx
+    # 空字段不输出空值占位
+    assert "None" not in ctx
+
+
+def test_build_competitors_context_empty():
+    from app.services import rag_service
+
+    assert rag_service.build_competitors_context([]) == ""
+
+
+async def test_ask_injects_competitors_context(monkeypatch):
+    """未命中兜底时，竞品上下文透传给 _llm_fallback。"""
+    from app.services import rag_service
+
+    monkeypatch.setattr(rag_service, "get_retriever", lambda: _ReadyRetriever([]))
+    captured = {}
+
+    async def _fake(q, history=None, competitors_context=None):
+        captured["ctx"] = competitors_context
+        return "兜底"
+
+    monkeypatch.setattr(rag_service, "_llm_fallback", _fake)
+    await rag_service.ask("闲鱼和转转哪个抽成高", competitors_context="【闲鱼】抽佣0.6%")
+    assert captured["ctx"] == "【闲鱼】抽佣0.6%"

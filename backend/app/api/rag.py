@@ -9,10 +9,12 @@
 import uuid
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.models.chat_session import ChatSession
+from app.models.competitor import Competitor, DataStatus
 from app.rag.retriever import get_retriever
 from app.schemas.rag import AskRequest, AskResponse
 from app.services import rag_service
@@ -23,12 +25,21 @@ router = APIRouter(prefix="/api/rag", tags=["rag"])
 _HISTORY_ROUNDS = 5
 
 
+async def _load_competitors_context(session: AsyncSession) -> str:
+    """读取已入库竞品数据，序列化为文本上下文（供 LLM 兜底回答对比类问题）。"""
+    result = await session.execute(
+        select(Competitor).where(Competitor.data_status == DataStatus.STORED.value)
+    )
+    competitors = list(result.scalars().all())
+    return rag_service.build_competitors_context(competitors)
+
+
 @router.post("/ask", response_model=AskResponse)
 async def ask(
     payload: AskRequest,
     session: AsyncSession = Depends(get_session),
 ) -> AskResponse:
-    """二手交易知识库问答（支持多轮会话）。"""
+    """二手交易知识库问答（支持多轮会话与竞品数据联动）。"""
     session_id = payload.session_id
 
     # 读取历史：带 session_id 时从 DB 取，取最近 _HISTORY_ROUNDS 轮（即 2*N 条消息）
@@ -39,11 +50,15 @@ async def ask(
             messages = row.messages or []
             history = messages[-(_HISTORY_ROUNDS * 2):]
 
+    # 读取已入库竞品数据作为对比类问题的上下文
+    competitors_context = await _load_competitors_context(session)
+
     response = await rag_service.ask(
         payload.question,
         top_k=payload.top_k,
         session_id=session_id,
         history=history,
+        competitors_context=competitors_context,
     )
 
     # 保存本轮问答到会话（仅当带 session_id 时，实现多轮记忆）
