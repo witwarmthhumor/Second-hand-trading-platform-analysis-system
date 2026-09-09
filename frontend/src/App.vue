@@ -491,6 +491,31 @@ async function copySourceText(s) {
   }
 }
 
+// —— 竞品变化记录 ——
+const changes = ref([])
+const changesLoading = ref(false)
+
+async function loadChanges() {
+  changesLoading.value = true
+  try {
+    changes.value = await competitorApi.listChanges({ limit: 100 })
+  } catch (e) {
+    ElMessage.error('加载变化记录失败：' + e.message)
+  } finally {
+    changesLoading.value = false
+  }
+}
+
+async function doMonitor() {
+  try {
+    const r = await competitorApi.triggerMonitor()
+    ElMessage.success(`监控检查完成：共检查 ${r.checked} 个竞品`)
+    loadChanges()
+  } catch (e) {
+    ElMessage.error(e.message)
+  }
+}
+
 onMounted(() => {
   fetchList()
   fetchPending()
@@ -499,6 +524,7 @@ onMounted(() => {
   loadRagStatus()
   loadRagSessions()
   newRagSession()
+  loadChanges()
 })
 </script>
 
@@ -515,6 +541,7 @@ onMounted(() => {
         <el-tab-pane label="录入竞品" name="form" />
         <el-tab-pane label="对比" name="compare" />
         <el-tab-pane label="知识库问答" name="rag" />
+        <el-tab-pane label="变化记录" name="changes" />
         <el-tab-pane label="设置" name="settings" />
       </el-tabs>
     </el-header>
@@ -856,6 +883,50 @@ onMounted(() => {
         </div>
       </div>
 
+      <!-- 变化记录页 -->
+      <div v-else-if="activeTab === 'changes'" class="changes-wrap">
+        <div class="card">
+          <div class="changes-head">
+            <h3 class="card-title">竞品变化记录</h3>
+            <el-button size="small" type="primary" plain @click="doMonitor">
+              手动触发监控检查
+            </el-button>
+          </div>
+          <p class="rag-tip">
+            记录竞品字段的变化（人工编辑时自动追踪）。定时监控每小时自动做一次快照检查。
+          </p>
+          <el-table :data="changes" v-loading="changesLoading" border stripe>
+            <el-table-column prop="competitor_name" label="竞品" min-width="120" />
+            <el-table-column prop="field" label="字段" width="110" />
+            <el-table-column label="旧值" min-width="180">
+              <template #default="{ row }">
+                <span class="muted">{{ row.old_value ?? '（空）' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="新值" min-width="180">
+              <template #default="{ row }">
+                <span>{{ row.new_value ?? '（空）' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="来源" width="90">
+              <template #default="{ row }">
+                <el-tag size="small" :type="row.source === 'monitor' ? 'warning' : 'info'">
+                  {{ row.source === 'monitor' ? '监控' : '人工' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="时间" width="170">
+              <template #default="{ row }">
+                {{ (row.changed_at || '').replace('T', ' ').slice(0, 19) }}
+              </template>
+            </el-table-column>
+          </el-table>
+          <p v-if="!changes.length && !changesLoading" class="muted" style="margin-top: 16px">
+            暂无变化记录。
+          </p>
+        </div>
+      </div>
+
       <!-- 设置页 -->
       <div v-else-if="activeTab === 'settings'" class="form-wrap">
         <h3 class="section">评分维度配置</h3>
@@ -1028,6 +1099,17 @@ body {
   justify-content: space-between;
 }
 .rag-head .card-title {
+  margin: 0;
+}
+.changes-wrap {
+  max-width: 1100px;
+}
+.changes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.changes-head .card-title {
   margin: 0;
 }
 .radar {

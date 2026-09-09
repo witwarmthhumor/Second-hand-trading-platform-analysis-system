@@ -92,4 +92,11 @@ export const competitorApi = {
   ragDeleteSession(sessionId) {
     return http.delete(`/rag/sessions/${sessionId}`)
   },
+  // —— 竞品变化记录 ——
+  listChanges(params) {
+    return http.get('/changes', { params })
+  },
+  triggerMonitor() {
+    return http.post('/changes/monitor')
+  },
 }
