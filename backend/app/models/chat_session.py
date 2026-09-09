@@ -34,4 +34,5 @@ class ChatSession(Base):
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+        index=True,  # 会话列表按 updated_at 倒序查询，加索引加速
     )
