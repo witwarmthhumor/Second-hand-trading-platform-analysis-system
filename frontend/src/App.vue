@@ -481,6 +481,16 @@ async function doAsk() {
   }
 }
 
+async function copySourceText(s) {
+  // 复制来源文本，供用户溯源核对
+  try {
+    await navigator.clipboard.writeText(`【${s.doc_id}】${s.title}\n${s.text}`)
+    ElMessage.success('来源文本已复制')
+  } catch (e) {
+    ElMessage.error('复制失败，请手动选择文本')
+  }
+}
+
 onMounted(() => {
   fetchList()
   fetchPending()
@@ -820,15 +830,28 @@ onMounted(() => {
             <span class="rag-q">Q：{{ ragAnswer.question }}</span>
           </div>
           <div class="rag-sources">
-            <h4>来源参考</h4>
-            <ul>
-              <li v-for="(s, i) in ragAnswer.sources" :key="i">
-                <el-tag size="small" type="info">{{ s.doc_id }}</el-tag>
-                <b>{{ s.title }}</b>
-                <span class="rag-score">相关度 {{ (s.score * 100).toFixed(1) }}%</span>
-                <p>{{ s.text }}</p>
-              </li>
-            </ul>
+            <h4>来源参考（点击展开查看原文）</h4>
+            <el-collapse>
+              <el-collapse-item
+                v-for="(s, i) in ragAnswer.sources"
+                :key="i"
+                :name="i"
+              >
+                <template #title>
+                  <div class="rag-src-title">
+                    <el-tag size="small" type="info">{{ s.doc_id }}</el-tag>
+                    <b>{{ s.title }}</b>
+                    <span class="rag-score">相关度 {{ (s.score * 100).toFixed(1) }}%</span>
+                  </div>
+                </template>
+                <div class="rag-src-body">
+                  <p>{{ s.text }}</p>
+                  <el-button size="small" text type="primary" @click.stop="copySourceText(s)">
+                    复制来源文本
+                  </el-button>
+                </div>
+              </el-collapse-item>
+            </el-collapse>
           </div>
         </div>
       </div>
@@ -1096,27 +1119,30 @@ body {
   font-size: 13px;
   color: #909399;
 }
-.rag-sources ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+.rag-src-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
 }
-.rag-sources li {
-  margin-bottom: 12px;
+.rag-src-title b {
   font-size: 13px;
-  line-height: 1.6;
+  color: #303133;
 }
-.rag-sources li p {
-  margin: 4px 0 0;
+.rag-src-body p {
+  margin: 0 0 8px;
   color: #606266;
   background: #fafafa;
   padding: 8px 10px;
   border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
 }
 .rag-score {
   color: #909399;
   font-size: 12px;
-  margin-left: 8px;
+  margin-left: auto;
 }
 .dims-list {
   margin-bottom: 12px;
