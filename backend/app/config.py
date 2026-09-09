@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     # 误用弱凭证（见 .env.example）。缺失时启动报错，强制显式配置。
     database_url: str
 
+    # Redis（RAG 检索缓存）。默认本地 Docker Redis 端口 6380 避开宿主机 6379。
+    redis_url: str = "redis://localhost:6380/0"
+    # 检索缓存 TTL（秒），默认 1 小时
+    rag_cache_ttl: int = 3600
+
     # LLM 配置（OpenAI 兼容接口，通过 .env 注入）
     llm_api_base: str = "https://www.rightapi.ai/codex/v1"
     llm_model: str = "gpt-5.6-luna"

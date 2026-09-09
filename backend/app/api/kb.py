@@ -108,6 +108,14 @@ def _run_rebuild() -> None:
     try:
         result = kb_service.rebuild_vector_store()
         _rebuild_state["last_result"] = {"ok": True, **result}
+        # 重建后清空检索缓存，避免命中旧语料的过期结果
+        import asyncio
+
+        from app.rag.cache import get_search_cache
+
+        cleared = asyncio.run(get_search_cache().clear())
+        if cleared:
+            _rebuild_state["last_result"]["cache_cleared"] = cleared
     except Exception as exc:  # noqa: BLE001 - 后台任务需兜底所有异常
         _rebuild_state["last_result"] = {"ok": False, "error": str(exc)}
     finally:

@@ -13,6 +13,7 @@ dependencies = [
     "pydantic-settings>=2.3",
     "PyJWT>=2.8",
     "bcrypt>=4.0",
+    "redis>=5.0",
     "alembic>=1.13",
     "beautifulsoup4>=4.12",
     "apscheduler>=3.10",

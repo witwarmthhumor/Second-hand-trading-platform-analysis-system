@@ -10,6 +10,7 @@ import httpx
 
 from app.ai.cost import get_cost_tracker
 from app.config import settings
+from app.rag.cache import get_search_cache
 from app.rag.config import SIMILARITY_THRESHOLD
 from app.rag.retriever import get_retriever
 from app.schemas.rag import AskResponse, SourceDoc
@@ -130,7 +131,13 @@ async def ask(
             session_id=session_id,
         )
 
-    results = retriever.search(question, top_k=top_k)
+    # 检索缓存：热点问题命中缓存时直接复用上次结果（免 embedding+向量检索），
+    # 未命中才真正检索并写回缓存。
+    search_cache = get_search_cache()
+    results = await search_cache.get(question)
+    if results is None:
+        results = retriever.search(question, top_k=top_k)
+        await search_cache.set(question, results)
 
     # 命中判定：最高向量相似度 ≥ 阈值（cosine 相似度 0~1，语义相关查询约 0.7+，
     # 无关查询约 0.48；RRF 得分量级仅 0.016~0.033，不宜作阈值）
