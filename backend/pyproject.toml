@@ -21,7 +21,6 @@ dependencies = [
     "jieba>=0.42",
     "numpy>=2.0",
     "pyyaml>=6.0",
-    "pyjwt>=2.8",
 ]
 
 [dependency-groups]

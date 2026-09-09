@@ -2,18 +2,21 @@
 
 - POST /api/rag/ask        ：问答（检索命中直出 + 来源，未命中 LLM 兜底）；支持 session_id 多轮
 - GET  /api/rag/status     ：知识库就绪状态
-- GET  /api/rag/sessions   ：列出会话（按更新时间倒序）
-- DELETE /api/rag/sessions/{session_id} ：删除指定会话
+- GET  /api/rag/sessions   ：列出当前用户的会话（admin 可见全部）
+- POST /api/rag/sessions   ：新建会话（绑定当前用户）
+- DELETE /api/rag/sessions/{session_id} ：删除指定会话（仅本人或 admin）
 """
 
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
+from app.deps import get_current_user
 from app.models.chat_session import ChatSession
+from app.models.user import ROLE_ADMIN, User
 from app.rag.retriever import get_retriever
 from app.schemas.rag import AskRequest, AskResponse
 from app.services import rag_service
@@ -31,21 +34,37 @@ async def _load_competitors_context(session: AsyncSession) -> str:
     return rag_service.build_competitors_context(competitors)
 
 
+async def _get_owned_session(
+    session_id: str, user: User, db: AsyncSession
+) -> ChatSession | None:
+    """按会话归属读取：普通用户只能取自己的会话，admin 可取任意会话。"""
+    row = await db.get(ChatSession, session_id)
+    if row is None:
+        return None
+    if user.role != ROLE_ADMIN and row.user_id != user.id:
+        return None
+    return row
+
+
 @router.post("/ask", response_model=AskResponse)
 async def ask(
     payload: AskRequest,
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user),
 ) -> AskResponse:
-    """二手交易知识库问答（支持多轮会话与竞品数据联动）。"""
+    """二手交易知识库问答（支持多轮会话与竞品数据联动，会话按用户隔离）。"""
     session_id = payload.session_id
 
-    # 读取历史：带 session_id 时从 DB 取，取最近 _HISTORY_ROUNDS 轮（即 2*N 条消息）
+    # 读取历史：带 session_id 时从 DB 取本人会话，取最近 _HISTORY_ROUNDS 轮
     history: list[dict] = []
     if session_id:
-        row = await session.get(ChatSession, session_id)
+        row = await _get_owned_session(session_id, user, session)
         if row is not None:
             messages = row.messages or []
             history = messages[-(_HISTORY_ROUNDS * 2):]
+        else:
+            # 会话不存在或不属于当前用户：拒绝继续，避免越权读写他人会话
+            raise HTTPException(status_code=404, detail="会话不存在或无权访问")
 
     # 读取已入库竞品数据作为对比类问题的上下文
     competitors_context = await _load_competitors_context(session)
@@ -60,19 +79,17 @@ async def ask(
 
     # 保存本轮问答到会话（仅当带 session_id 时，实现多轮记忆）
     if session_id:
-        if session_id == response.session_id:
-            # 无历史会话则新建；有则追加本轮
-            row = await session.get(ChatSession, session_id)
-            new_messages = [
-                {"role": "user", "content": payload.question},
-                {"role": "assistant", "content": response.answer},
-            ]
-            if row is None:
-                row = ChatSession(session_id=session_id, messages=new_messages)
-                session.add(row)
-            else:
-                row.messages = (row.messages or []) + new_messages
-            await session.commit()
+        row = await _get_owned_session(session_id, user, session)
+        new_messages = [
+            {"role": "user", "content": payload.question},
+            {"role": "assistant", "content": response.answer},
+        ]
+        if row is None:
+            row = ChatSession(session_id=session_id, user_id=user.id, messages=new_messages)
+            session.add(row)
+        else:
+            row.messages = (row.messages or []) + new_messages
+        await session.commit()
 
     return response
 
@@ -88,11 +105,15 @@ async def status() -> dict:
 
 
 @router.get("/sessions")
-async def list_sessions(session: AsyncSession = Depends(get_session)) -> list[dict]:
-    """列出会话摘要（按更新时间倒序），供前端展示历史会话列表。"""
-    result = await session.execute(
-        select(ChatSession).order_by(ChatSession.updated_at.desc())
-    )
+async def list_sessions(
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> list[dict]:
+    """列出会话摘要（按更新时间倒序）。普通用户仅见自己的，admin 可见全部。"""
+    stmt = select(ChatSession).order_by(ChatSession.updated_at.desc())
+    if user.role != ROLE_ADMIN:
+        stmt = stmt.where(ChatSession.user_id == user.id)
+    result = await session.execute(stmt)
     rows = result.scalars().all()
     return [
         {
@@ -111,9 +132,10 @@ async def list_sessions(session: AsyncSession = Depends(get_session)) -> list[di
 async def delete_session(
     session_id: str,
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user),
 ) -> dict:
-    """删除指定会话。"""
-    row = await session.get(ChatSession, session_id)
+    """删除指定会话（仅本人或 admin）。"""
+    row = await _get_owned_session(session_id, user, session)
     if row is None:
         return {"deleted": False, "session_id": session_id}
     await session.delete(row)
@@ -122,6 +144,16 @@ async def delete_session(
 
 
 @router.post("/sessions")
-async def create_session() -> dict:
-    """新建会话，返回 session_id（前端「新对话」用）。"""
-    return {"session_id": uuid.uuid4().hex}
+async def create_session(
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """新建会话，返回 session_id（前端「新对话」用）。会话记录立即落库并归属当前用户。
+
+    立即落库的意义：空会话也能出现在历史列表里，用户新建后未提问就退出，
+    重新登录仍能找回这条会话。
+    """
+    session_id = uuid.uuid4().hex
+    session.add(ChatSession(session_id=session_id, user_id=user.id, messages=[]))
+    await session.commit()
+    return {"session_id": session_id}
