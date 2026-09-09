@@ -63,10 +63,10 @@ start_docker() {
 }
 
 start_app() {
-  echo "[1/4] 检查并启动 Docker Desktop（只启动软件，不改项目文件）"
+  echo "[1/5] 检查并启动 Docker Desktop（只启动软件，不改项目文件）"
   start_docker || return 1
 
-  echo "[2/4] 启动 Postgres 容器并等待健康检查（不删除具名卷）"
+  echo "[2/5] 启动 Postgres 容器并等待健康检查（不删除具名卷）"
   (cd "$ROOT" && docker compose up -d db) || return 1
   local status=""
   for _ in $(seq 1 24); do
@@ -78,7 +78,18 @@ start_app() {
   done
   [[ "$status" == "healthy" ]] || { echo "ERROR: Postgres 未达到 healthy。" >&2; return 1; }
 
-  echo "[3/4] 启动 FastAPI 后端（8000；日志写入 .run-app/backend.log）"
+  echo "[3/5] 检查向量库与 Ollama(bge-m3)（缺失仅提示，不中断启动）"
+  local vector_store="$ROOT/rag_data/vector_store"
+  if [[ ! -d "$vector_store" ]] || [[ -z "$(ls -A "$vector_store" 2>/dev/null)" ]]; then
+    echo "WARN: 未检测到向量库 rag_data/vector_store，RAG 问答将不可用。"
+    echo "      请先执行：bash scripts/build_vector_store.sh（首次约 5 分钟）"
+  fi
+  if ! curl -fsS "http://127.0.0.1:11434/api/tags" 2>/dev/null | grep -q "bge-m3"; then
+    echo "WARN: Ollama 未就绪或缺少 bge-m3 模型，RAG 检索将不可用。"
+    echo "      请确认宿主机 Ollama 运行，并已 ollama pull bge-m3。"
+  fi
+
+  echo "[4/5] 启动 FastAPI 后端（8000；日志写入 .run-app/backend.log）"
   backend_pid="$(read_pid "$BACKEND_PID_FILE")"
   if ! is_running "$backend_pid"; then
     old_pid="$(port_pid 8000)"
@@ -86,17 +97,21 @@ start_app() {
       echo "ERROR: 8000 已被 PID $old_pid 占用，请确认不是其他程序后再处理。" >&2
       return 1
     fi
-    (cd "$ROOT/backend" && nohup .venv/Scripts/python -m uvicorn app.main:app --reload --port 8000 >"$BACKEND_LOG" 2>&1 & echo $! >"$BACKEND_PID_FILE")
+    (cd "$ROOT/backend" && nohup .venv/Scripts/python -m uvicorn app.main:app --port 8000 >"$BACKEND_LOG" 2>&1 & echo $! >"$BACKEND_PID_FILE")
   fi
   wait_for_url "http://localhost:8000/health" || { echo "ERROR: 后端未通过健康检查，查看 $BACKEND_LOG" >&2; return 1; }
 
-  echo "[4/4] 启动 Vue/Vite 前端（5173；日志写入 .run-app/frontend.log）"
+  echo "[5/5] 启动 Vue/Vite 前端（5173；日志写入 .run-app/frontend.log）"
   frontend_pid="$(read_pid "$FRONTEND_PID_FILE")"
   if ! is_running "$frontend_pid"; then
     old_pid="$(port_pid 5173)"
     if [[ -n "$old_pid" ]]; then
       echo "ERROR: 5173 已被 PID $old_pid 占用，请确认不是其他程序后再处理。" >&2
       return 1
+    fi
+    if [[ ! -d "$ROOT/frontend/node_modules" ]]; then
+      echo "未检测到 node_modules，先执行 npm install（首次较慢）..."
+      (cd "$ROOT/frontend" && npm install) || return 1
     fi
     (cd "$ROOT/frontend" && nohup npm run dev >"$FRONTEND_LOG" 2>&1 & echo $! >"$FRONTEND_PID_FILE")
   fi
@@ -106,6 +121,7 @@ start_app() {
   echo "网站：http://localhost:5173"
   echo "后端：运行中（http://localhost:8000/health）"
   echo "数据库：已连接（competitor-analysis-db healthy，端口 5433）"
+  echo "RAG：$(curl -fsS "http://127.0.0.1:11434/api/tags" 2>/dev/null | grep -q bge-m3 && echo '向量库/模型就绪' || echo '请检查向量库与 bge-m3')"
 }
 
 status_app() {
@@ -114,6 +130,9 @@ status_app() {
   echo "数据库：$(cd "$ROOT" && docker compose ps --status running --services 2>/dev/null | grep -qx db && echo 运行中 || echo 未运行)"
   echo "后端：$(wait_for_url "http://localhost:8000/health" 1 && echo 运行中 || echo 未运行)"
   echo "前端：$(wait_for_url "http://localhost:5173/" 1 && echo 运行中 || echo 未运行)"
+  echo "Ollama：$(curl -fsS "http://127.0.0.1:11434/api/tags" 2>/dev/null | grep -q bge-m3 && echo 'bge-m3 可用' || echo '未就绪或缺少 bge-m3')"
+  local vector_store="$ROOT/rag_data/vector_store"
+  echo "向量库：$([[ -d "$vector_store" ]] && [[ -n "$(ls -A "$vector_store" 2>/dev/null)" ]] && echo 已就绪 || echo 缺失/为空)"
 }
 
 stop_app() {
