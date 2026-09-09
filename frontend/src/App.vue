@@ -653,21 +653,39 @@ async function doAsk() {
     if (!ragSessionId.value) {
       ragSessionId.value = crypto.randomUUID().replace(/-/g, '')
     }
-    const resp = await competitorApi.ragAsk(q, 5, ragSessionId.value)
-    ragAnswer.value = resp
-    // 记录本轮问答到本地历史（AI 消息带上来源引用）
+    // 记录用户消息到本地历史
     ragHistory.value.push({ role: 'user', content: q })
-    ragHistory.value.push({
-      role: 'assistant',
-      content: resp.answer,
-      sources: resp.sources || [],
-      mode: resp.mode,
-    })
     ragQuestion.value = ''
+    scrollChatToBottom()
+
+    // 流式问答：AI 消息边收边渲染
+    const aiMsg = { role: 'assistant', content: '', sources: [], mode: 'fallback' }
+    ragHistory.value.push(aiMsg)
+    let doneInfo = null
+    for await (const evt of competitorApi.ragAskStream(q, 5, ragSessionId.value)) {
+      if (evt.type === 'delta') {
+        aiMsg.content += evt.content
+        scrollChatToBottom()
+      } else if (evt.type === 'done') {
+        doneInfo = evt
+        aiMsg.mode = evt.mode || 'fallback'
+        if (evt.answer) aiMsg.content = evt.answer
+        if (evt.sources) aiMsg.sources = evt.sources
+      }
+    }
+    // 若流式异常结束且无内容，给出兜底
+    if (!aiMsg.content && doneInfo?.answer) {
+      aiMsg.content = doneInfo.answer
+    }
     loadRagSessions()
     scrollChatToBottom()
   } catch (e) {
     ElMessage.error(e.message)
+    // 移除空 AI 气泡（若尚未渲染出内容）
+    const last = ragHistory.value[ragHistory.value.length - 1]
+    if (last && last.role === 'assistant' && !last.content) {
+      ragHistory.value.pop()
+    }
   } finally {
     ragLoading.value = false
   }
@@ -1388,7 +1406,11 @@ async function doBatchDelete() {
               >
                 <div class="chat-avatar">{{ m.role === 'user' ? '我' : 'AI' }}</div>
                 <div class="chat-body">
-                  <div class="chat-bubble">{{ m.content }}</div>
+                  <!-- AI 消息内容为空且加载中时显示打字点 -->
+                  <div v-if="m.role === 'assistant' && !m.content && ragLoading" class="chat-bubble chat-typing">
+                    <span class="typing-dot" /><span class="typing-dot" /><span class="typing-dot" />
+                  </div>
+                  <div v-else class="chat-bubble">{{ m.content }}</div>
                   <!-- AI 消息带来源引用 -->
                   <div
                     v-if="m.role === 'assistant' && m.sources && m.sources.length"
@@ -1415,16 +1437,6 @@ async function doBatchDelete() {
                         </div>
                       </el-collapse-item>
                     </el-collapse>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 打字中 -->
-              <div v-if="ragLoading" class="chat-msg assistant">
-                <div class="chat-avatar">AI</div>
-                <div class="chat-body">
-                  <div class="chat-bubble chat-typing">
-                    <span class="typing-dot" /><span class="typing-dot" /><span class="typing-dot" />
                   </div>
                 </div>
               </div>

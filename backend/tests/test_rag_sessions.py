@@ -236,3 +236,94 @@ async def test_batch_delete_sessions(client):
         headers=_auth(token_a),
     )
     assert resp.status_code == 422
+
+
+# ---------------- 流式问答（SSE） ----------------
+
+async def test_ask_stream_fallback(client, monkeypatch):
+    """未命中时流式接口逐 token 推送 delta，并以 done 结束，会话落库。"""
+    from app.api import rag as rag_api
+    from app.services import rag_service
+
+    async def _fake_stream(question, history=None, competitors_context=None):
+        for piece in ["流式", "回答", "内容"]:
+            yield piece
+
+    monkeypatch.setattr(rag_service, "_llm_fallback_stream", _fake_stream)
+
+    # mock retriever：未命中（vector_sim 低于阈值）
+    class _Retriever:
+        is_ready = True
+
+        def search(self, question, top_k=5):
+            return [{"doc_id": "A-001", "text": "x", "vector_sim": 0.3}]
+
+    monkeypatch.setattr(rag_api, "get_retriever", lambda: _Retriever())
+
+    _, token = await _register(client)
+    sid = secrets.token_hex(16)
+    async with client.stream(
+        "POST",
+        "/api/rag/ask/stream",
+        json={"question": "测试", "session_id": sid},
+        headers=_auth(token),
+    ) as resp:
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/event-stream")
+        body = ""
+        async for chunk in resp.aiter_text():
+            body += chunk
+
+    # 应包含 3 个 delta 和一个 done
+    assert "流式" in body and "回答" in body and "内容" in body
+    assert '"type": "done"' in body
+
+    # 会话已落库（2 条消息：user + assistant）
+    r = await client.get(f"/api/rag/sessions/{sid}", headers=_auth(token))
+    assert r.status_code == 200
+    msgs = r.json()["messages"]
+    assert len(msgs) == 2
+    assert msgs[1]["content"] == "流式回答内容"
+
+
+async def test_ask_stream_requires_auth(client):
+    """流式接口未登录返回 401。"""
+    async with client.stream(
+        "POST", "/api/rag/ask/stream", json={"question": "测试"}
+    ) as resp:
+        assert resp.status_code == 401
+
+
+async def test_ask_stream_hit_saves_session(client, monkeypatch):
+    """命中直出（mode=hit）时同样保存会话消息。"""
+    from app.api import rag as rag_api
+
+    class _HitRetriever:
+        is_ready = True
+
+        def search(self, question, top_k=5):
+            return [{"doc_id": "A-001", "text": "命中原文内容", "vector_sim": 0.8}]
+
+    monkeypatch.setattr(rag_api, "get_retriever", lambda: _HitRetriever())
+
+    _, token = await _register(client)
+    sid = secrets.token_hex(16)
+    async with client.stream(
+        "POST",
+        "/api/rag/ask/stream",
+        json={"question": "命中问题", "session_id": sid},
+        headers=_auth(token),
+    ) as resp:
+        body = ""
+        async for chunk in resp.aiter_text():
+            body += chunk
+
+    assert '"mode": "hit"' in body
+    assert "命中原文内容" in body
+
+    # 会话已落库
+    r = await client.get(f"/api/rag/sessions/{sid}", headers=_auth(token))
+    msgs = r.json()["messages"]
+    assert len(msgs) == 2
+    assert msgs[1]["content"] == "命中原文内容"
+

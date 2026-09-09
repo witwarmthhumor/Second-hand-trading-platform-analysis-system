@@ -13,6 +13,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +22,7 @@ from app.db import get_session
 from app.deps import get_current_user
 from app.models.chat_session import ChatSession
 from app.models.user import ROLE_ADMIN, User
+from app.rag.config import SIMILARITY_THRESHOLD
 from app.rag.retriever import get_retriever
 from app.schemas.rag import AskRequest, AskResponse
 from app.services import rag_service
@@ -105,6 +107,88 @@ async def ask(
         await session.commit()
 
     return response
+
+
+@router.post("/ask/stream")
+async def ask_stream(
+    payload: AskRequest,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """问答流式版本（SSE）。
+
+    - 检索命中：直出原文（一次性，非流式）后结束
+    - 未命中：LLM 兜底逐 token 推送（`data: {delta}`），结束推 `data: [DONE]`
+
+    会话保存与多轮记忆逻辑与 ask 一致（懒创建 + 归属校验）。
+    """
+    import json as _json
+
+    session_id = payload.session_id
+
+    history: list[dict] = []
+    existing: ChatSession | None = None
+    if session_id:
+        existing = await session.get(ChatSession, session_id)
+        if existing is not None and user.role != ROLE_ADMIN and existing.user_id != user.id:
+            raise HTTPException(status_code=404, detail="会话不存在或无权访问")
+        if existing is not None:
+            history = (existing.messages or [])[-(_HISTORY_ROUNDS * 2):]
+
+    competitors_context = await _load_competitors_context(session)
+
+    retriever = get_retriever()
+
+    async def _save_session(answer: str) -> None:
+        """保存本轮问答到会话（懒创建 + 归属校验已在前面完成）。"""
+        if not session_id:
+            return
+        new_messages = [
+            {"role": "user", "content": payload.question},
+            {"role": "assistant", "content": answer},
+        ]
+        if existing is None:
+            session.add(
+                ChatSession(session_id=session_id, user_id=user.id, messages=new_messages)
+            )
+        else:
+            existing.messages = (existing.messages or []) + new_messages
+        await session.commit()
+
+    async def event_stream():
+        if not retriever.is_ready:
+            yield "data: " + _json.dumps(
+                {"type": "done", "answer": "知识库尚未就绪，请先运行建库脚本。"},
+                ensure_ascii=False,
+            ) + "\n\n"
+            return
+
+        # 先做一次检索判定（命中直出，未命中走流式兜底）
+        results = retriever.search(payload.question, top_k=payload.top_k)
+        if results and results[0]["vector_sim"] >= SIMILARITY_THRESHOLD:
+            top = results[0]
+            full_answer = top["text"]
+            yield "data: " + _json.dumps(
+                {"type": "done", "answer": full_answer, "mode": "hit"}, ensure_ascii=False
+            ) + "\n\n"
+            await _save_session(full_answer)
+            return
+
+        # 未命中：流式兜底，逐 token 推送
+        full_answer_parts: list[str] = []
+        async for delta in rag_service._llm_fallback_stream(
+            payload.question, history=history, competitors_context=competitors_context
+        ):
+            full_answer_parts.append(delta)
+            yield "data: " + _json.dumps({"type": "delta", "content": delta}, ensure_ascii=False) + "\n\n"
+        yield "data: " + _json.dumps({"type": "done", "mode": "fallback"}, ensure_ascii=False) + "\n\n"
+        await _save_session("".join(full_answer_parts))
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/status")

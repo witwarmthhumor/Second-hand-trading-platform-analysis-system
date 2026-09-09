@@ -156,6 +156,58 @@ export const competitorApi = {
     if (sessionId) payload.session_id = sessionId
     return http.post('/rag/ask', payload)
   },
+  // 流式问答：返回 async 生成器，逐次 yield {type:'delta',content} | {type:'done',...}
+  // 用原生 fetch 读 ReadableStream，绕开 axios 不支持流式响应的问题
+  async *ragAskStream(question, topK = 5, sessionId = null) {
+    const payload = { question, top_k: topK }
+    if (sessionId) payload.session_id = sessionId
+    const token = getToken()
+    const resp = await fetch('/api/rag/ask/stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    })
+    if (!resp.ok) {
+      if (resp.status === 401) {
+        clearAuth()
+        window.dispatchEvent(new Event('auth-expired'))
+      }
+      let msg = '请求失败'
+      try {
+        const d = await resp.json()
+        msg = typeof d.detail === 'string' ? d.detail : msg
+      } catch {
+        /* ignore */
+      }
+      throw new Error(msg)
+    }
+    const reader = resp.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      // SSE 事件按 \n\n 分隔
+      let idx
+      while ((idx = buffer.indexOf('\n\n')) >= 0) {
+        const raw = buffer.slice(0, idx)
+        buffer = buffer.slice(idx + 2)
+        const line = raw.split('\n').find((l) => l.startsWith('data:'))
+        if (!line) continue
+        const data = line.slice(5).trim()
+        if (data === '[DONE]') return
+        try {
+          yield JSON.parse(data)
+        } catch {
+          /* 忽略无法解析的行 */
+        }
+      }
+    }
+  },
   ragStatus() {
     return http.get('/rag/status')
   },
