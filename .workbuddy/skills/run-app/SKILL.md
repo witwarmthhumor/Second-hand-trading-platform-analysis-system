@@ -44,21 +44,16 @@ description: 启动、检查或停止「二手交易平台分析系统（融合R
 
 ## 推荐实现
 
-优先执行项目自带的统一启动/停止脚本（它们已覆盖上述依赖与检查）：
+启动/停止统一走本技能自带脚本 `run-app.sh`（已覆盖 Docker/Postgres/向量库/Ollama/前后端全部依赖与检查，是项目唯一启动入口）：
 
 ```bash
 cd /e/AIDevelop/AIProject/Agent
-bash scripts/start.sh     # 启动 Postgres + 后端 + 前端
-bash scripts/stop.sh      # 停止前后端（保留 Postgres 容器）
+bash .workbuddy/skills/run-app/scripts/run-app.sh start    # 启动 Postgres + 后端 + 前端
+bash .workbuddy/skills/run-app/scripts/run-app.sh stop     # 停止前后端（保留 Postgres 容器）
+bash .workbuddy/skills/run-app/scripts/run-app.sh status   # 检查各项状态
 ```
 
 脚本会在 `.run-app/` 保存本地 PID 和日志；该目录是运行时状态，不应进入 Git。若脚本不存在或需要逐步诊断，按上面的固定顺序手动执行。
-
-`status` 脚本可复用本技能自带脚本：
-
-```bash
-bash .workbuddy/skills/run-app/scripts/run-app.sh status
-```
 
 完成后报告：
 
