@@ -10,6 +10,8 @@ dependencies = [
     "asyncpg>=0.29",
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
+    "PyJWT>=2.8",
+    "bcrypt>=4.0",
     "alembic>=1.13",
     "beautifulsoup4>=4.12",
     "apscheduler>=3.10",
@@ -19,6 +21,7 @@ dependencies = [
     "jieba>=0.42",
     "numpy>=2.0",
     "pyyaml>=6.0",
+    "pyjwt>=2.8",
 ]
 
 [dependency-groups]

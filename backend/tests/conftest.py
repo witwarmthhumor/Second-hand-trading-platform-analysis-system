@@ -27,12 +27,13 @@ from app.models import (  # noqa: E402, F401  # 注册模型到 Base
     ChatSession,
     Competitor,
     CompetitorChange,
+    User,
 )
 
 
 @pytest.fixture(scope="session", autouse=True)
 async def _init_db():
-    """确保测试库存在 → 建表（测试开始）→ 删表（测试结束）。"""
+    """确保测试库存在 → 建表 + seed 管理员（测试开始）→ 删表（测试结束）。"""
     # CREATE DATABASE 不能在事务内执行，用独立的 asyncpg 连接在管理库上执行
     conn = await asyncpg.connect(ADMIN_URL)
     try:
@@ -47,6 +48,12 @@ async def _init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
+
+    # seed 内置管理员（复用生产 init_db 的 seed 函数，保证测试与生产一致）
+    from app.init_db import seed_admin
+
+    await seed_admin()
+
     yield
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)

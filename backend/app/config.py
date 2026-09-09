@@ -21,6 +21,17 @@ class Settings(BaseSettings):
     llm_model: str = "gpt-5.6-luna"
     llm_api_key: str = ""
 
+    # ---- JWT 认证 ----
+    # 签名密钥：必须经 .env 的 JWT_SECRET 注入，缺失时启动报错，避免弱默认密钥
+    jwt_secret: str
+    # access token 有效期（分钟），默认 24h
+    jwt_expire_minutes: int = 60 * 24
+
+    # ---- 内置管理员 ----
+    # 首次启动自动 seed 的管理员账号（仅当 users 表为空时创建）
+    admin_username: str = "admin"
+    admin_password: str = "123456"
+
     # ---- LLM 成本熔断 ----
     # 会话累计消费超过该阈值（元）即中断并征询。默认 1 元；按公开单价单次抓取约 0.01 元，
     # 手动试用难以触发，可下调（如 0.05）让批量/试用也能触发。
