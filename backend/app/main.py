@@ -12,6 +12,7 @@ from app.api.compare import router as compare_router
 from app.api.competitors import router as competitors_router
 from app.api.cost import router as cost_router
 from app.api.fetch import router as fetch_router
+from app.api.kb import router as kb_router
 from app.api.rag import router as rag_router
 from app.api.report import router as report_router
 from app.api.settings import router as settings_router
@@ -73,6 +74,7 @@ app.include_router(report_router)
 app.include_router(cost_router)
 app.include_router(rag_router)
 app.include_router(changes_router)
+app.include_router(kb_router)
 
 
 @app.get("/health")
