@@ -2,7 +2,7 @@
 
 设计目标：
 - 统一提炼接口，调用方不关心底层是远程 API 还是本地规则。
-- RemoteLLMProvider：OpenAI 兼容接口（本项目接 gpt-5.4-mini）。
+- RemoteLLMProvider：OpenAI 兼容接口（本项目接 gpt-5.6-luna）。
 - RuleExtractor：纯规则兜底，无密钥也能跑通链路。
 """
 

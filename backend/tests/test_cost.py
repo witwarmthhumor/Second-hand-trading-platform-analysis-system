@@ -18,14 +18,14 @@ from app.main import app
 
 
 def _tracker(limit: float = 1.0):
-    # 单价默认：输入0.75/M 输出4.5/M，汇率7.1
+    # 单价默认：输入2.0/M 输出12.0/M（gpt-5.6-luna 经 rightapi 路由到 terra 的保守价），汇率7.1
     return CostTracker(cost_limit_cny=limit)
 
 
 def test_estimate_cost_cny():
     t = _tracker()
-    # 1M 输入 + 100k 输出 = 0.75*7.1 + 0.1*4.5*7.1 = 5.325 + 3.195 = 8.52
-    assert t.estimate_cost_cny(1_000_000, 100_000) == pytest.approx(8.52, abs=0.01)
+    # 1M 输入 + 100k 输出 = 2.0*7.1 + 0.1*12.0*7.1 = 14.2 + 8.52 = 22.72
+    assert t.estimate_cost_cny(1_000_000, 100_000) == pytest.approx(22.72, abs=0.01)
 
 
 def test_precheck_allows_within_limit():

@@ -1,0 +1,75 @@
+"""LLM Provider 工厂与提炼能力测试。
+
+覆盖：
+- get_provider() 工厂：有 key 走 RemoteLLMProvider，无 key 走 RuleExtractor。
+- RemoteLLMProvider._normalize：type 白名单归一、list 字段拼接、tags 规整。
+- RuleExtractor.extract：纯规则提炼（不依赖网络）。
+"""
+
+import pytest
+
+from app.ai import provider as prov
+
+
+def test_get_provider_with_key(monkeypatch):
+    """有 key → 远程提炼。"""
+    monkeypatch.setattr(prov.settings, "llm_api_key", "sk-test-123")
+    assert isinstance(prov.get_provider(), prov.RemoteLLMProvider)
+
+
+def test_get_provider_without_key(monkeypatch):
+    """无 key → 规则兜底。"""
+    monkeypatch.setattr(prov.settings, "llm_api_key", "")
+    assert isinstance(prov.get_provider(), prov.RuleExtractor)
+
+
+@pytest.mark.parametrize(
+    "raw_type, expected",
+    [
+        ("C2C 闲置交易", "C2C 闲置交易"),
+        ("回收置换", "回收置换"),
+        ("质检转卖", "质检转卖"),
+        ("乱七八糟的值", "C2C 闲置交易"),  # 白名单外 → 兜底默认
+    ],
+)
+def test_normalize_type_whitelist(raw_type, expected):
+    data = {"name": "x", "type": raw_type}
+    out = prov.RemoteLLMProvider._normalize(dict(data))
+    assert out["type"] == expected
+
+
+def test_normalize_list_fields_joined():
+    data = {
+        "name": "x",
+        "type": "C2C 闲置交易",
+        "features": ["a", "b", "c"],
+        "tags": ["t1", "t2"],
+    }
+    out = prov.RemoteLLMProvider._normalize(data)
+    assert out["features"] == "a；b；c"
+    assert out["tags"] == ["t1", "t2"]
+
+
+def test_normalize_tags_string_to_list():
+    data = {"name": "x", "type": "C2C 闲置交易", "tags": "单标签"}
+    out = prov.RemoteLLMProvider._normalize(data)
+    assert out["tags"] == ["单标签"]
+
+
+def test_parse_json_strips_code_fence():
+    content = "```json\n{\"name\": \"闲鱼\"}\n```"
+    assert prov.RemoteLLMProvider._parse_json(content) == {"name": "闲鱼"}
+
+
+async def test_rule_extractor_no_network():
+    """规则提炼兜底：从 HTML 抽 title/desc/正文，不依赖网络。"""
+    html = (
+        "<html><head><title>闲鱼</title>"
+        '<meta name="description" content="二手闲置平台"></head>'
+        "<body><p>第一段正文内容</p><p>第二段正文内容</p></body></html>"
+    )
+    r = await prov.RuleExtractor().extract("https://x.com", html)
+    assert r.name == "闲鱼"
+    assert r.type == "C2C 闲置交易"
+    assert r.positioning == "二手闲置平台"
+    assert "第一段正文内容" in r.features
