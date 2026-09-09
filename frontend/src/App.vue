@@ -1360,14 +1360,22 @@ async function doBatchDelete() {
           <!-- 对话区：气泡流 -->
           <div class="chat-main">
             <div class="chat-msgs" ref="chatMsgsEl">
-              <!-- 空会话：欢迎语 -->
+              <!-- 空会话：Right Code 式极简空状态 -->
               <div v-if="!ragHistory.length && !ragLoading" class="chat-welcome">
-                <div class="chat-welcome-icon">💬</div>
-                <h3>二手交易知识库问答</h3>
-                <p>
-                  你好，我是二手交易平台的知识库助手。基于约 1000 篇平台语料（规则制度 / 买卖指南 / 验货质检 /
-                  售后仲裁 / 案例 / 公告），命中知识库时直接返回原文并标注来源，未命中时由大模型兜底回答。
-                  支持多轮追问。
+                <div class="chat-welcome-icon">
+                  <svg viewBox="0 0 24 24" width="30" height="30" fill="none">
+                    <path
+                      d="M12 3C7.03 3 3 6.58 3 11c0 2.09.9 4 2.38 5.42-.17 1.08-.68 2.35-1.85 3.32-.24.2-.1.6.21.58 1.68-.12 3.13-.75 4.14-1.4 1.26.44 2.65.68 4.12.68 4.97 0 9-3.58 9-8s-4.03-8-9-8Z"
+                      fill="#fff"
+                    />
+                    <circle cx="8.5" cy="11" r="1.1" fill="#7b5cff" />
+                    <circle cx="12" cy="11" r="1.1" fill="#7b5cff" />
+                    <circle cx="15.5" cy="11" r="1.1" fill="#7b5cff" />
+                  </svg>
+                </div>
+                <p class="chat-welcome-title">开始新的对话吧</p>
+                <p class="chat-welcome-sub">
+                  支持多轮追问 · 命中知识库返回原文并标注来源，未命中由大模型兜底
                 </p>
               </div>
 
@@ -2168,7 +2176,7 @@ body {
 }
 .chat-welcome {
   text-align: center;
-  padding: 60px 20px 30px;
+  padding: 120px 20px 30px;
   max-width: 520px;
   margin: 0 auto;
 }
@@ -2181,18 +2189,15 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 30px;
-  color: #fff;
 }
-.chat-welcome h3 {
-  font-size: 18px;
-  margin-bottom: 10px;
-  color: #303133;
-}
-.chat-welcome p {
-  font-size: 13px;
+.chat-welcome-title {
+  font-size: 15px;
   color: #909399;
-  line-height: 1.8;
+  margin-bottom: 8px;
+}
+.chat-welcome-sub {
+  font-size: 12px;
+  color: #c0c4cc;
 }
 .chat-msg {
   display: flex;
