@@ -1,0 +1,31 @@
+"""RAG 问答会话 ORM 模型。
+
+用于多轮对话记忆：一次对话会话（session_id）关联多轮问答历史，
+历史消息以 JSON 数组存于 messages 字段，注入 LLM 兜底上下文时取最近若干轮。
+"""
+
+from datetime import datetime
+
+from sqlalchemy import JSON, DateTime, String, func
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db import Base
+
+
+class ChatSession(Base):
+    """问答会话：session_id 唯一，messages 存 [{role, content}, ...]。"""
+
+    __tablename__ = "chat_sessions"
+
+    session_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    # 历史消息 JSON：[{"role": "user"/"assistant", "content": "..."}, ...]
+    messages: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )

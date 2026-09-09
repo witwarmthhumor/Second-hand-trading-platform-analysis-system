@@ -425,6 +425,9 @@ const ragQuestion = ref('')
 const ragAnswer = ref(null) // { answer, mode, sources }
 const ragLoading = ref(false)
 const ragReady = ref(null) // null=未知, true/false
+const ragSessionId = ref(null) // 当前会话 ID（多轮记忆）
+const ragHistory = ref([]) // 本轮会话的问答历史 [{ role, content }]
+const ragSessions = ref([]) // 历史会话列表
 
 async function loadRagStatus() {
   try {
@@ -432,6 +435,27 @@ async function loadRagStatus() {
     ragReady.value = r.ready
   } catch (e) {
     ragReady.value = false
+  }
+}
+
+async function loadRagSessions() {
+  try {
+    ragSessions.value = await competitorApi.ragListSessions()
+  } catch (e) {
+    ragSessions.value = []
+  }
+}
+
+async function newRagSession() {
+  // 新对话：清空当前会话与历史，从后端拿新 session_id
+  ragSessionId.value = null
+  ragHistory.value = []
+  ragAnswer.value = null
+  try {
+    const r = await competitorApi.ragCreateSession()
+    ragSessionId.value = r.session_id
+  } catch (e) {
+    ElMessage.error('新建会话失败：' + e.message)
   }
 }
 
@@ -443,7 +467,13 @@ async function doAsk() {
   }
   ragLoading.value = true
   try {
-    ragAnswer.value = await competitorApi.ragAsk(q)
+    const resp = await competitorApi.ragAsk(q, 5, ragSessionId.value)
+    ragAnswer.value = resp
+    // 记录本轮问答到本地历史（与后端保持一致）
+    ragHistory.value.push({ role: 'user', content: q })
+    ragHistory.value.push({ role: 'assistant', content: resp.answer })
+    ragQuestion.value = ''
+    loadRagSessions()
   } catch (e) {
     ElMessage.error(e.message)
   } finally {
@@ -457,6 +487,8 @@ onMounted(() => {
   loadDims()
   loadCostStatus()
   loadRagStatus()
+  loadRagSessions()
+  newRagSession()
 })
 </script>
 
@@ -746,10 +778,15 @@ onMounted(() => {
           style="margin-bottom: 16px"
         />
         <div class="card">
-          <h3 class="card-title">二手交易知识库问答</h3>
+          <div class="rag-head">
+            <h3 class="card-title">二手交易知识库问答</h3>
+            <el-button size="small" text type="primary" @click="newRagSession">
+              新对话
+            </el-button>
+          </div>
           <p class="rag-tip">
             基于二手交易知识库（规则制度 / 买卖指南 / 验货质检 / 售后仲裁 / 案例 / 公告，共约 1000 篇语料）
-            的检索式问答。命中知识库时直接返回原文并标注来源；未命中时由大模型兜底回答。
+            的检索式问答。命中知识库时直接返回原文并标注来源；未命中时由大模型兜底回答。支持多轮追问。
           </p>
           <div class="rag-input">
             <el-input
@@ -762,15 +799,27 @@ onMounted(() => {
           </div>
         </div>
 
-        <div v-if="ragAnswer" class="card rag-answer">
+        <!-- 多轮会话历史 -->
+        <div v-if="ragHistory.length" class="card rag-history">
+          <div v-for="(m, i) in ragHistory" :key="i" class="rag-msg" :class="m.role">
+            <span class="rag-role">{{ m.role === 'user' ? '我' : 'AI' }}</span>
+            <div class="rag-msg-body">{{ m.content }}</div>
+          </div>
+          <div v-if="ragLoading" class="rag-msg assistant">
+            <span class="rag-role">AI</span>
+            <div class="rag-msg-body muted">正在思考…</div>
+          </div>
+        </div>
+
+        <!-- 最新回答的来源引用 -->
+        <div v-if="ragAnswer && ragAnswer.sources && ragAnswer.sources.length" class="card rag-answer">
           <div class="rag-mode">
             <el-tag :type="ragAnswer.mode === 'hit' ? 'success' : 'warning'" size="small">
               {{ ragAnswer.mode === 'hit' ? '知识库命中' : '大模型兜底' }}
             </el-tag>
             <span class="rag-q">Q：{{ ragAnswer.question }}</span>
           </div>
-          <div class="rag-body">{{ ragAnswer.answer }}</div>
-          <div v-if="ragAnswer.sources && ragAnswer.sources.length" class="rag-sources">
+          <div class="rag-sources">
             <h4>来源参考</h4>
             <ul>
               <li v-for="(s, i) in ragAnswer.sources" :key="i">
@@ -950,6 +999,14 @@ body {
   font-size: 15px;
   color: #303133;
 }
+.rag-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.rag-head .card-title {
+  margin: 0;
+}
 .radar {
   width: 100%;
   height: 420px;
@@ -960,7 +1017,7 @@ body {
 .rag-tip {
   color: #909399;
   font-size: 13px;
-  margin: 0 0 16px;
+  margin: 12px 0 16px;
   line-height: 1.6;
 }
 .rag-input {
@@ -987,6 +1044,47 @@ body {
   background: #f5f7fa;
   border-radius: 4px;
   padding: 14px 16px;
+}
+/* 多轮会话历史 */
+.rag-history {
+  margin-top: 16px;
+}
+.rag-msg {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.rag-msg.user {
+  flex-direction: row-reverse;
+}
+.rag-role {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  line-height: 28px;
+  text-align: center;
+  border-radius: 50%;
+  font-size: 12px;
+  color: #fff;
+  background: #909399;
+}
+.rag-msg.user .rag-role {
+  background: #409eff;
+}
+.rag-msg-body {
+  max-width: 78%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #f5f7fa;
+  color: #303133;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+.rag-msg.user .rag-msg-body {
+  background: #ecf5ff;
+}
+.rag-msg-body.muted {
+  color: #909399;
 }
 .rag-sources {
   margin-top: 16px;

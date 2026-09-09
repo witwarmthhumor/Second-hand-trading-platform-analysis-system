@@ -154,7 +154,7 @@ async def test_ask_hit_below_threshold_falls_back(monkeypatch):
     low = [{"doc_id": "A-006", "text": "无关", "vector_sim": 0.3}]
     monkeypatch.setattr(rag_service, "get_retriever", lambda: _ReadyRetriever(low))
 
-    async def _fake_fallback(question):
+    async def _fake_fallback(question, history=None):
         return "（mock 兜底回答）"
 
     monkeypatch.setattr(rag_service, "_llm_fallback", _fake_fallback)
@@ -171,7 +171,7 @@ async def test_ask_empty_results_falls_back(monkeypatch):
 
     monkeypatch.setattr(rag_service, "get_retriever", lambda: _ReadyRetriever([]))
 
-    async def _fake(q):
+    async def _fake(q, history=None):
         return "兜底"
 
     monkeypatch.setattr(rag_service, "_llm_fallback", _fake)
@@ -235,3 +235,89 @@ async def test_llm_fallback_blocked_returns_hint(monkeypatch):
     monkeypatch.setattr(rag_service, "get_cost_tracker", lambda: _BlockedTracker())
     answer = await rag_service._llm_fallback("随便问")
     assert "成本熔断" in answer
+
+
+# ---------------- 多轮会话记忆 ----------------
+
+async def test_ask_injects_history_to_fallback(monkeypatch):
+    """未命中走兜底时，把历史上下文传给 _llm_fallback。"""
+    from app.services import rag_service
+
+    monkeypatch.setattr(rag_service, "get_retriever", lambda: _ReadyRetriever([]))
+    captured = {}
+
+    async def _fake(q, history=None):
+        captured["history"] = history
+        return "兜底"
+
+    monkeypatch.setattr(rag_service, "_llm_fallback", _fake)
+
+    history = [
+        {"role": "user", "content": "闲鱼抽成多少"},
+        {"role": "assistant", "content": "闲鱼抽成约 X"},
+    ]
+    await rag_service.ask("那转转呢", session_id="s1", history=history)
+    assert captured["history"] == history
+
+
+def test_ask_returns_session_id(monkeypatch):
+    """带 session_id 时，响应回带 session_id。"""
+    from app.services import rag_service
+
+    monkeypatch.setattr(rag_service, "get_retriever", lambda: _ReadyRetriever(_hit_results()))
+    import asyncio
+
+    resp = asyncio.run(rag_service.ask("卖家入驻需要什么资质", session_id="s-abc"))
+    assert resp.session_id == "s-abc"
+    assert resp.mode == "hit"
+
+
+async def test_llm_fallback_history_limits_rounds(monkeypatch):
+    """历史超长时按最近 N 轮截断由调用方控制；此处验证兜底能接受任意历史列表。"""
+    from app.services import rag_service
+
+    class _T:
+        async def restore_from_db(self):
+            return None
+
+        def precheck(self, est_input):
+            return {"allowed": True, "blocked": False}
+
+        def record(self, *a, **k):
+            return None
+
+    monkeypatch.setattr(rag_service, "get_cost_tracker", lambda: _T())
+
+    # mock httpx 返回固定内容
+    class _C:
+        def __init__(self, timeout):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, *a, **k):
+            class _R:
+                def raise_for_status(self):
+                    return None
+
+                def json(self):
+                    return {
+                        "choices": [{"message": {"content": "多轮兜底回答"}}],
+                        "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+                    }
+
+            return _R()
+
+    monkeypatch.setattr(rag_service.httpx, "AsyncClient", lambda **k: _C(k.get("timeout")))
+    answer = await rag_service._llm_fallback(
+        "那转转呢",
+        history=[
+            {"role": "user", "content": "闲鱼抽成"},
+            {"role": "assistant", "content": "闲鱼抽成 X"},
+        ],
+    )
+    assert answer == "多轮兜底回答"

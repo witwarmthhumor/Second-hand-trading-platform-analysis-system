@@ -14,7 +14,11 @@ from app.api.report import router as report_router
 from app.api.settings import router as settings_router
 from app.config import settings
 from app.db import Base, engine
-from app.models import AppSetting, Competitor  # noqa: F401  # 确保模型被注册到 Base
+from app.models import (  # noqa: F401  # 确保模型被注册到 Base
+    AppSetting,
+    ChatSession,
+    Competitor,
+)
 
 
 @asynccontextmanager

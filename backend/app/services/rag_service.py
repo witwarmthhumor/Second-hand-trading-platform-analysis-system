@@ -26,13 +26,25 @@ def _estimate_tokens(text: str) -> int:
     return max(1, len(text) // 2)
 
 
-async def _llm_fallback(question: str) -> str:
-    """未命中时调用 LLM 兜底生成，接入成本熔断。"""
+async def _llm_fallback(question: str, history: list[dict] | None = None) -> str:
+    """未命中时调用 LLM 兜底生成，接入成本熔断；可注入多轮历史上下文。"""
     tracker = get_cost_tracker()
     await tracker.restore_from_db()
 
-    # 成本预检：预估输入 token，超限且未审批则中断
-    est_input = _estimate_tokens(_FALLBACK_SYSTEM_PROMPT + question)
+    # 组装带历史的 messages：system + 最近若干轮历史 + 当前问题
+    messages: list[dict] = [{"role": "system", "content": _FALLBACK_SYSTEM_PROMPT}]
+    for msg in (history or []):
+        role = msg.get("role")
+        content = msg.get("content")
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": question})
+
+    # 成本预检：预估输入 token（system + 历史 + 问题），超限且未审批则中断
+    est_input = _estimate_tokens(
+        _FALLBACK_SYSTEM_PROMPT
+        + "".join(m.get("content", "") for m in messages[1:])
+    )
     pre = tracker.precheck(est_input)
     if pre.get("blocked"):
         return "（已触发成本熔断，需在「成本」页确认后继续。当前问题未调用大模型。）"
@@ -47,10 +59,7 @@ async def _llm_fallback(question: str) -> str:
                 },
                 json={
                     "model": settings.llm_model,
-                    "messages": [
-                        {"role": "system", "content": _FALLBACK_SYSTEM_PROMPT},
-                        {"role": "user", "content": question},
-                    ],
+                    "messages": messages,
                     "temperature": 0.3,
                 },
             )
@@ -72,8 +81,13 @@ async def _llm_fallback(question: str) -> str:
         )
 
 
-async def ask(question: str, top_k: int = 5) -> AskResponse:
-    """问答主入口：检索命中直出，未命中 LLM 兜底。"""
+async def ask(
+    question: str,
+    top_k: int = 5,
+    session_id: str | None = None,
+    history: list[dict] | None = None,
+) -> AskResponse:
+    """问答主入口：检索命中直出，未命中 LLM 兜底（可注入多轮历史）。"""
     retriever = get_retriever()
     if not retriever.is_ready:
         return AskResponse(
@@ -81,6 +95,7 @@ async def ask(question: str, top_k: int = 5) -> AskResponse:
             mode="fallback",
             sources=[],
             question=question,
+            session_id=session_id,
         )
 
     results = retriever.search(question, top_k=top_k)
@@ -109,15 +124,17 @@ async def ask(question: str, top_k: int = 5) -> AskResponse:
             mode="hit",
             sources=sources,
             question=question,
+            session_id=session_id,
         )
 
-    # 未命中：LLM 兜底
-    answer = await _llm_fallback(question)
+    # 未命中：LLM 兜底（注入历史上下文，支持追问）
+    answer = await _llm_fallback(question, history=history)
     return AskResponse(
         answer=answer,
         mode="fallback",
         sources=[],
         question=question,
+        session_id=session_id,
     )
 
 

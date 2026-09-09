@@ -74,10 +74,22 @@ export const competitorApi = {
     return http.post('/cost/reset')
   },
   // —— RAG 知识库问答 ——
-  ragAsk(question, topK = 5) {
-    return http.post('/rag/ask', { question, top_k: topK })
+  ragAsk(question, topK = 5, sessionId = null) {
+    const payload = { question, top_k: topK }
+    if (sessionId) payload.session_id = sessionId
+    return http.post('/rag/ask', payload)
   },
   ragStatus() {
     return http.get('/rag/status')
+  },
+  // 多轮会话
+  ragCreateSession() {
+    return http.post('/rag/sessions')
+  },
+  ragListSessions() {
+    return http.get('/rag/sessions')
+  },
+  ragDeleteSession(sessionId) {
+    return http.delete(`/rag/sessions/${sessionId}`)
   },
 }

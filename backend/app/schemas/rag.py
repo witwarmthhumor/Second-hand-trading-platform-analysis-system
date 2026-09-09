@@ -8,6 +8,7 @@ class AskRequest(BaseModel):
 
     question: str = Field(..., min_length=1, max_length=500)
     top_k: int = Field(5, ge=1, le=10)
+    session_id: str | None = Field(None, max_length=64)  # 多轮会话 ID，缺省为单轮
 
 
 class SourceDoc(BaseModel):
@@ -26,3 +27,4 @@ class AskResponse(BaseModel):
     mode: str  # "hit"（检索命中直出）| "fallback"（LLM 兜底生成）
     sources: list[SourceDoc] = []
     question: str
+    session_id: str | None = None
