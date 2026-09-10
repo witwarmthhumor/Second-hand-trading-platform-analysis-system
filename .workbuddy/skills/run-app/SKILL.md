@@ -55,6 +55,21 @@ bash .workbuddy/skills/run-app/scripts/run-app.sh status   # 检查各项状态
 
 脚本会在 `.run-app/` 保存本地 PID 和日志；该目录是运行时状态，不应进入 Git。若脚本不存在或需要逐步诊断，按上面的固定顺序手动执行。
 
+## Agent 环境注意（踩坑记录）
+
+在 WorkBuddy/CodeBuddy Agent 里执行时，**不要只用脚本一次的 `start` 就把前后端留在后台**：脚本内部用 `nohup ... &` 起的后端/前端属于该次 Bash 调用的子进程，当这条 Bash 任务结束时会被一起回收。表现是——脚本当场打印"项目已启动"且健康检查通过，但紧接着再跑 `status` 就变成"后端/前端未运行"，端口 8000/5173 也没有监听。
+
+推荐做法：把后端和前端各自作为**独立的常驻后台任务**拉起（而不是依赖脚本里的 nohup）：
+
+```bash
+# 后端（单独一个常驻后台任务）
+cd /e/AIDevelop/AIProject/Agent/backend && exec .venv/Scripts/python -m uvicorn app.main:app --port 8000
+# 前端（另一个常驻后台任务）
+cd /e/AIDevelop/AIProject/Agent/frontend && exec npm run dev
+```
+
+`docker compose up -d db`（容器）与宿主机 Ollama 不受影响，照常由脚本负责。用 `curl` 复核时加 `--noproxy '*'`，避免本机代理把 `localhost:5173` 判成 502。
+
 完成后报告：
 
 ```text
