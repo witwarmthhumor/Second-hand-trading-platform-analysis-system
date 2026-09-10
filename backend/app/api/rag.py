@@ -23,7 +23,6 @@ from app.deps import get_current_user
 from app.models.chat_session import ChatSession
 from app.models.message_feedback import FEEDBACK_DISLIKE, FEEDBACK_LIKE, MessageFeedback
 from app.models.user import ROLE_ADMIN, User
-from app.rag.config import SIMILARITY_THRESHOLD
 from app.rag.retriever import get_retriever
 from app.schemas.rag import AskRequest, AskResponse, SourceDoc
 from app.services import rag_service
@@ -210,24 +209,11 @@ async def ask_stream(
         results = await rag_service.retrieve(
             payload.question, top_k=payload.top_k, retriever=retriever
         )
-        if results and results[0]["vector_sim"] >= SIMILARITY_THRESHOLD:
-            top = results[0]
-            full_answer = top["text"]
-            # 命中来源（按 doc_id 去重，与非流式 ask 保持一致）
-            seen: set[str] = set()
-            sources: list[SourceDoc] = []
-            for r in results:
-                if r["doc_id"] in seen:
-                    continue
-                seen.add(r["doc_id"])
-                sources.append(
-                    SourceDoc(
-                        doc_id=r["doc_id"],
-                        title=rag_service._title_from_doc_id(r["doc_id"]),
-                        text=r["text"],
-                        score=r["vector_sim"],
-                    )
-                )
+        # 命中判定 + 来源构造与非流式 ask 共用 build_hit_gate，避免两处逻辑漂移
+        hit = rag_service.build_hit_gate(results)
+        if hit is not None:
+            full_answer = hit["answer"]
+            sources = hit["sources"]
             yield (
                 "data: "
                 + _json.dumps(

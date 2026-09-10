@@ -65,8 +65,18 @@ def test_chunk_markdown_injects_title():
 def test_chunk_faq_each_item_is_chunk():
     payload = {
         "items": [
-            {"q_main": "密码错误怎么办", "q_variants": ["密码不对"], "a": "用忘记密码重置", "role": "buyer"},
-            {"q_main": "收不到验证码", "q_variants": [], "a": "检查拦截", "role": "buyer"},
+            {
+                "q_main": "密码错误怎么办",
+                "q_variants": ["密码不对"],
+                "a": "用忘记密码重置",
+                "role": "buyer",
+            },
+            {
+                "q_main": "收不到验证码",
+                "q_variants": [],
+                "a": "检查拦截",
+                "role": "buyer",
+            },
         ]
     }
     chunks = chunk_faq(_seed(), payload)
@@ -137,7 +147,9 @@ async def test_ask_hit_returns_direct_answer(monkeypatch):
     """命中：mode=hit，answer 直出首条原文，来源按 doc_id 去重。"""
     from app.services import rag_service
 
-    monkeypatch.setattr(rag_service, "get_retriever", lambda: _ReadyRetriever(_hit_results()))
+    monkeypatch.setattr(
+        rag_service, "get_retriever", lambda: _ReadyRetriever(_hit_results())
+    )
     resp = await rag_service.ask("卖家入驻需要什么资质")
 
     assert resp.mode == "hit"
@@ -239,6 +251,7 @@ async def test_llm_fallback_blocked_returns_hint(monkeypatch):
 
 # ---------------- 多轮会话记忆 ----------------
 
+
 async def test_ask_injects_history_to_fallback(monkeypatch):
     """未命中走兜底时，把历史上下文传给 _llm_fallback。"""
     from app.services import rag_service
@@ -264,7 +277,9 @@ def test_ask_returns_session_id(monkeypatch):
     """带 session_id 时，响应回带 session_id。"""
     from app.services import rag_service
 
-    monkeypatch.setattr(rag_service, "get_retriever", lambda: _ReadyRetriever(_hit_results()))
+    monkeypatch.setattr(
+        rag_service, "get_retriever", lambda: _ReadyRetriever(_hit_results())
+    )
     import asyncio
 
     resp = asyncio.run(rag_service.ask("卖家入驻需要什么资质", session_id="s-abc"))
@@ -312,7 +327,9 @@ async def test_llm_fallback_history_limits_rounds(monkeypatch):
 
             return _R()
 
-    monkeypatch.setattr(rag_service.httpx, "AsyncClient", lambda **k: _C(k.get("timeout")))
+    monkeypatch.setattr(
+        rag_service.httpx, "AsyncClient", lambda **k: _C(k.get("timeout"))
+    )
     answer = await rag_service._llm_fallback(
         "那转转呢",
         history=[
@@ -324,6 +341,7 @@ async def test_llm_fallback_history_limits_rounds(monkeypatch):
 
 
 # ---------------- 竞品数据联动（B2） ----------------
+
 
 class _FakeCompetitor:
     """模拟 Competitor ORM 实例。"""
@@ -379,11 +397,14 @@ async def test_ask_injects_competitors_context(monkeypatch):
         return "兜底"
 
     monkeypatch.setattr(rag_service, "_llm_fallback", _fake)
-    await rag_service.ask("闲鱼和转转哪个抽成高", competitors_context="【闲鱼】抽佣0.6%")
+    await rag_service.ask(
+        "闲鱼和转转哪个抽成高", competitors_context="【闲鱼】抽佣0.6%"
+    )
     assert captured["ctx"] == "【闲鱼】抽佣0.6%"
 
 
 # ---------------- rerank 精排 ----------------
+
 
 def test_rerank_by_vsim_pushes_bm25_noise_to_tail():
     """rerank 按向量相似度重排，vsim=0 的纯 BM25 命中沉到末尾。"""
@@ -416,3 +437,59 @@ def test_rerank_by_vsim_stable_on_ties():
     v_scores = {1: 0.5, 2: 0.5}
     out = rerank_by_vsim(ranked, v_scores, top_k=2)
     assert [p for p, _ in out] == [1, 2]
+
+
+# —— 命中闸门：来源过滤 + 阈值（回归：用户报「回答怎么对不上」）——
+
+
+def test_build_hit_gate_drops_pure_bm25_noise_sources():
+    """BM25 单独命中（vector_sim=0）不得作为来源展示。
+
+    回归背景：线上出现过「相关度 0.0%」的来源条目——那是 BM25 关键词偶然命中、
+    向量完全不相干的 chunk，展示给用户属于无意义引用。
+    """
+    from app.services.rag_service import build_hit_gate
+
+    results = [
+        {"doc_id": "FAQ-033", "text": "私下转账风险正文", "vector_sim": 0.72},
+        {"doc_id": "B-036", "text": "卖家要求私下交易", "vector_sim": 0.68},
+        {"doc_id": "E-051", "text": "极端情绪安抚", "vector_sim": 0.0},  # 纯 BM25 噪声
+    ]
+    gate = build_hit_gate(results)
+
+    assert gate is not None
+    # E-051（相关度 0.0%）被过滤，只剩余两条真实语义命中的来源
+    assert [s.doc_id for s in gate["sources"]] == ["FAQ-033", "B-036"]
+
+
+def test_build_hit_gate_blocks_gray_zone_out_of_domain_question():
+    """领域外问题的灰区相似度不应判为命中（应走 LLM 兜底）。
+
+    实测「你觉得转转这个平台怎么样」top1 相似度 0.6235：高于旧阈值 0.55 会直出
+    一条与问题无关的 FAQ 原文；现阈值 0.65 应判为未命中。
+    """
+    from app.services.rag_service import build_hit_gate
+
+    gray = [{"doc_id": "FAQ-033", "text": "私下转账风险正文", "vector_sim": 0.6235}]
+    assert build_hit_gate(gray) is None
+
+
+def test_build_hit_gate_accepts_in_domain_min_score():
+    """领域内正确样本的最低实测相似度 0.6660 仍应判为命中（阈值不得误伤）。
+
+    0.65 落在「错误样本最低 0.6483」与「正确样本最低 0.6660」之间的空隙，
+    这是 285 问扫描里选它的直接理由。
+    """
+    from app.services.rag_service import build_hit_gate
+
+    ok = [{"doc_id": "A-001", "text": "注册规定原文", "vector_sim": 0.6660}]
+    gate = build_hit_gate(ok)
+    assert gate is not None
+    assert [s.doc_id for s in gate["sources"]] == ["A-001"]
+
+
+def test_build_hit_gate_empty_results():
+    """检索无结果时视为未命中。"""
+    from app.services.rag_service import build_hit_gate
+
+    assert build_hit_gate([]) is None

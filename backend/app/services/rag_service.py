@@ -235,6 +235,40 @@ async def retrieve(
     return await _RETRIEVE_FLIGHT.run(cache.key_for(question, top_k, version), _compute)
 
 
+def build_hit_gate(results: list[dict]) -> dict | None:
+    """命中判定 + 来源构造（非流式 ask 与流式端点共用，避免两处逻辑各自漂移）。
+
+    返回 None 表示未命中，调用方应走 LLM 兜底；否则返回 {"answer", "sources"}。
+
+    判定用最高向量相似度（cosine 0~1），不用 RRF 得分——RRF 量级仅 0.016~0.033，
+    无法做绝对阈值。来源列表按同一阈值过滤：BM25 单独命中的 chunk 其 vector_sim
+    为 0，不过滤就会以「相关度 0.0%」混进来源，属于无意义引用。
+    """
+    if not results or results[0]["vector_sim"] < SIMILARITY_THRESHOLD:
+        return None
+
+    seen: set[str] = set()  # 同一文档多个 chunk 可能同时进 Top-K，按 doc_id 去重
+    sources: list[SourceDoc] = []
+    for r in results:
+        if r["vector_sim"] < SIMILARITY_THRESHOLD:
+            continue
+        if r["doc_id"] in seen:
+            continue
+        seen.add(r["doc_id"])
+        sources.append(
+            SourceDoc(
+                doc_id=r["doc_id"],
+                title=_title_from_doc_id(r["doc_id"]),
+                text=r["text"],
+                score=r["vector_sim"],
+            )
+        )
+    # results[0] 已过阈值，故 sources 必非空；此处仅作防御，避免「命中但无来源」的空壳回答。
+    if not sources:
+        return None
+    return {"answer": results[0]["text"], "sources": sources}
+
+
 async def ask(
     question: str,
     top_k: int = 5,
@@ -255,29 +289,12 @@ async def ask(
 
     results = await retrieve(question, top_k=top_k, retriever=retriever)
 
-    # 命中判定：最高向量相似度 ≥ 阈值（cosine 相似度 0~1，语义相关查询约 0.7+，
-    # 无关查询约 0.48；RRF 得分量级仅 0.016~0.033，不宜作阈值）
-    if results and results[0]["vector_sim"] >= SIMILARITY_THRESHOLD:
-        top = results[0]
-        # 按 doc_id 去重（同一文档多个 chunk 可能同时进 Top-K）
-        seen: set[str] = set()
-        sources: list[SourceDoc] = []
-        for r in results:
-            if r["doc_id"] in seen:
-                continue
-            seen.add(r["doc_id"])
-            sources.append(
-                SourceDoc(
-                    doc_id=r["doc_id"],
-                    title=_title_from_doc_id(r["doc_id"]),
-                    text=r["text"],
-                    score=r["vector_sim"],
-                )
-            )
+    hit = build_hit_gate(results)
+    if hit is not None:
         return AskResponse(
-            answer=top["text"],
+            answer=hit["answer"],
             mode="hit",
-            sources=sources,
+            sources=hit["sources"],
             question=question,
             session_id=session_id,
         )
