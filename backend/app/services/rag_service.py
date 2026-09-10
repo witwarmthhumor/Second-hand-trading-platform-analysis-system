@@ -1,7 +1,8 @@
 """RAG 问答服务：混合检索命中 → 原文直出 + 来源；未命中 → LLM 兜底生成。
 
-检索命中判定：最高 RRF 得分 ≥ SIMILARITY_THRESHOLD 视为命中，直接返回原文；
+检索命中判定：最高「向量相似度」≥ SIMILARITY_THRESHOLD 视为命中，直接返回原文；
 否则调用 LLM 兜底（OpenAI 兼容接口，复用 settings 的 LLM 配置与成本熔断记账）。
+注意：判据是向量相似度而非 RRF 得分——RRF 量级仅 0.016~0.033，无法做绝对阈值。
 """
 
 from __future__ import annotations
