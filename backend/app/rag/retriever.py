@@ -25,11 +25,24 @@ from app.rag.config import (
     CHROMA_COLLECTION,
     FACTS_DIR,
     QUERY_N_RESULTS,
+    RERANK_BY_VSIM,
     RRF_K,
     VECTOR_STORE_DIR,
 )
 
 _BM25_JSON = VECTOR_STORE_DIR / "bm25_index.json"
+
+
+def rerank_by_vsim(ranked: list[tuple[int, float]], v_scores: dict[int, float], top_k: int) -> list[tuple[int, float]]:
+    """RRF 排序结果按向量相似度二次排序（rerank 精排）。
+
+    动机：BM25 独有命中的 chunk 向量相似度≈0（纯关键词、语义无关），却会
+    通过 RRF 排到靠前位置，挤掉真正相关的 chunk。按 vsim 重排能把这类
+    噪声（vsim 缺失按 0 处理）沉到末尾。纯函数，便于单测。
+
+    实验依据：scripts/experiments/ragas_eval/README.md（Hit@5 0.9825→1.0000）。
+    """
+    return sorted(ranked, key=lambda x: -v_scores.get(x[0], 0.0))[:top_k]
 
 
 # ---------------------------------------------------------------------------
@@ -229,6 +242,12 @@ class HybridRetriever:
             rrf[pos] = rrf.get(pos, 0.0) + 1.0 / (RRF_K + rank)
 
         ranked = sorted(rrf.items(), key=lambda x: -x[1])[:top_k]
+
+        # rerank 精排（可选，默认开）：用向量相似度对 RRF 候选二次排序。
+        # 见 rerank_by_vsim 函数文档与 scripts/experiments/ragas_eval/README.md。
+        if RERANK_BY_VSIM:
+            ranked = rerank_by_vsim(ranked, v_scores, top_k)
+
         results: list[dict] = []
         for pos, score in ranked:
             results.append(

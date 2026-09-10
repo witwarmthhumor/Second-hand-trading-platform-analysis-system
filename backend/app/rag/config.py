@@ -34,6 +34,11 @@ RRF_K = 60
 TOP_K = 5  # 问答返回的候选文档数
 QUERY_N_RESULTS = 20  # 向量/BM25 各自召回数（供 RRF 融合）
 SIMILARITY_THRESHOLD = 0.55  # 命中阈值：最高向量相似度(cosine 0~1)低于此视为未命中，走 LLM 兜底。
+# rerank 精排：RRF 融合后按向量相似度二次排序（压掉 BM25 纯关键词误命中噪声）。
+# RAGAS 实验（scripts/experiments/ragas_eval）验证：开启后 Hit@5 0.9825→1.0000、
+# MRR@10 0.9186→0.9506、nDCG@10 0.7960→0.8280。代价是 chunk 级 context_precision
+# 在多文档问题上略降（0.7414→0.7370），但 doc 级指标全面大幅提升，净收益明确。
+RERANK_BY_VSIM = True
 # 实测：相关查询约 0.70~0.74，无关查询约 0.48。注意不能用 RRF 得分(量级仅 0.016~0.033)。
 
 # ---- Chroma 配置 ----

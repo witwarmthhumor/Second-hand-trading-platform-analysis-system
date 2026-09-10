@@ -381,3 +381,38 @@ async def test_ask_injects_competitors_context(monkeypatch):
     monkeypatch.setattr(rag_service, "_llm_fallback", _fake)
     await rag_service.ask("闲鱼和转转哪个抽成高", competitors_context="【闲鱼】抽佣0.6%")
     assert captured["ctx"] == "【闲鱼】抽佣0.6%"
+
+
+# ---------------- rerank 精排 ----------------
+
+def test_rerank_by_vsim_pushes_bm25_noise_to_tail():
+    """rerank 按向量相似度重排，vsim=0 的纯 BM25 命中沉到末尾。"""
+    from app.rag.retriever import rerank_by_vsim
+
+    # RRF 排序结果：pos=5 是 BM25 独有命中（vsim 缺失），却排在第 1 位
+    ranked = [(5, 0.033), (1, 0.032), (2, 0.031)]
+    v_scores = {1: 0.72, 2: 0.68}  # pos=5 无向量分数
+    out = rerank_by_vsim(ranked, v_scores, top_k=3)
+    # 重排后：vsim 高的在前，vsim 缺失的沉底
+    assert [p for p, _ in out] == [1, 2, 5]
+
+
+def test_rerank_by_vsim_respects_top_k():
+    """rerank 截断到 top_k。"""
+    from app.rag.retriever import rerank_by_vsim
+
+    ranked = [(1, 0.033), (2, 0.032), (3, 0.031), (4, 0.030)]
+    v_scores = {1: 0.9, 2: 0.8, 3: 0.7, 4: 0.6}
+    out = rerank_by_vsim(ranked, v_scores, top_k=2)
+    assert len(out) == 2
+    assert [p for p, _ in out] == [1, 2]
+
+
+def test_rerank_by_vsim_stable_on_ties():
+    """vsim 相同时保持 RRF 原顺序（稳定排序）。"""
+    from app.rag.retriever import rerank_by_vsim
+
+    ranked = [(1, 0.033), (2, 0.032)]
+    v_scores = {1: 0.5, 2: 0.5}
+    out = rerank_by_vsim(ranked, v_scores, top_k=2)
+    assert [p for p, _ in out] == [1, 2]
