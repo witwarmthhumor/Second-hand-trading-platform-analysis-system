@@ -23,7 +23,9 @@
 - **断点续跑**：加 ``--resume`` 跳过已完成的问题，只补跑缺的；``--no-resume`` 强制重跑。
 - **致命即停**：网关 401/402/403（欠费/鉴权）立即中止，不再做无谓重试；
   已完成的逐问结果照常写出，部分样例汇总仍可查看。
-- 退出码：0=完整跑完（自动清理断点）；2=被网关中断（断点保留，可续跑）。
+- **成本闸门**：``--budget-cny``（默认 ¥2）按 token 实时折算花费，**在开跑下一问之前**
+  检查，超限即停，不会"先花钱再报错"；单价取高峰价属保守上限，实际花费更低。
+- 退出码：0=完整跑完（自动清理断点）；2=被网关中断；3=触达成本闸门（断点均保留，可续跑）。
 """
 
 from __future__ import annotations
@@ -39,6 +41,9 @@ from pathlib import Path
 from common import load_golden
 from gen_answers import answer_direct, answer_synth, parse_citations
 from llm_common import (
+    DEFAULT_BUDGET_CNY,
+    USAGE,
+    BudgetExceeded,
     LLMFatalError,
     build_judge_embeddings,
     build_judge_llm,
@@ -136,6 +141,8 @@ def load_existing(strategy: str) -> dict[str, dict]:
 def ckpt_path(sample: int, styles: list[str], skip_direct: bool, seed: int) -> Path:
     """断点文件路径（按运行配置区分，避免不同配置互相覆盖）。"""
     key = "+".join(styles) + ("_nodirect" if skip_direct else "")
+    if not key:
+        key = "directonly"  # --skip-synth：只跑直出基线
     return RESULTS_DIR / f"gen_ckpt_s{sample}_{seed}_{key}.json"
 
 
@@ -174,10 +181,13 @@ async def evaluate(
     skip_direct: bool,
     ckpt: Path,
     resume: bool,
+    budget_cny: float,
 ) -> list[dict]:
     """逐问：检索 → 基线/各风格生成 → 打分，返回逐问明细（策略键为 direct/synth_{style}）。
 
-    每问结束即写断点；网关欠费/鉴权失败时抛 ``RunAborted``，已完成部分不丢失。
+    每问结束即写断点；网关欠费/鉴权失败时抛 ``RunAborted``，
+    预估花费超过 ``budget_cny`` 时抛 ``BudgetExceeded``——两条路径都已完成的
+    部分都不会丢失，且都在**开跑下一问之前**就中止，不会先花钱再报错。
     """
     retriever = get_retriever()
     if not retriever.is_ready:
@@ -219,6 +229,11 @@ async def evaluate(
         if q["id"] in done:
             rows.append(done[q["id"]])
             continue
+
+        # 预算闸门：在开始下一问（即产生新花费）之前检查，超预算立即停并落盘
+        if USAGE.cost_cny > budget_cny:
+            save_ckpt(ckpt, rows, meta)
+            raise BudgetExceeded(f"{USAGE.summary()}，已超预算 ¥{budget_cny:.2f}")
 
         t0 = time.time()
         try:
@@ -277,7 +292,11 @@ async def evaluate(
         brief = " ".join(
             f"{k}:{row[k]['faithfulness']}/{row[k]['answer_relevancy']}" for k in metrics if k in row
         )
-        print(f"  [{idx}/{len(questions)}] {q['id']} 期望{len(expected)}篇 | {brief} | {time.time() - t0:.1f}s", flush=True)
+        print(
+            f"  [{idx}/{len(questions)}] {q['id']} 期望{len(expected)}篇 | {brief} "
+            f"| {time.time() - t0:.1f}s | 累计 ¥{USAGE.cost_cny:.3f}",
+            flush=True,
+        )
     return rows
 
 
@@ -356,11 +375,21 @@ def main() -> int:
     ap.add_argument("--concurrency", type=int, default=3, help="并发（过高易触网关限流）")
     ap.add_argument("--synth-styles", default="v1", help="合成提示词风格，逗号分隔（v1/v2）")
     ap.add_argument("--skip-direct", action="store_true", help="复用已有 gen_direct.json，不重跑基线")
+    ap.add_argument("--skip-synth", action="store_true", help="只跑直出原文基线，不做 LLM 合成")
     ap.add_argument("--resume", action="store_true", help="从断点续跑，跳过已完成的问")
     ap.add_argument("--no-resume", action="store_true", help="忽略断点，从头重跑")
+    ap.add_argument(
+        "--budget-cny",
+        type=float,
+        default=DEFAULT_BUDGET_CNY,
+        help=f"预估花费上限（人民币元，默认 {DEFAULT_BUDGET_CNY}），超过即中止并保留断点",
+    )
     args = ap.parse_args()
 
-    styles = [s.strip() for s in args.synth_styles.split(",") if s.strip()]
+    styles = [] if args.skip_synth else [s.strip() for s in args.synth_styles.split(",") if s.strip()]
+    if args.skip_synth and args.skip_direct:
+        print("!! --skip-synth 与 --skip-direct 同时指定：没有任何要跑的项目")
+        return 1
     golden = load_golden()
     questions = stratified_sample(golden, args.sample, args.seed)
     n_multi = sum(1 for q in questions if len(q["expected_ids"]) > 1)
@@ -375,8 +404,10 @@ def main() -> int:
     resume = args.resume and not args.no_resume
 
     t0 = time.time()
+    USAGE.reset()  # 本轮独立计费
     rows: list[dict] = []
     aborted_msg = ""
+    budget_hit = False
     try:
         rows = asyncio.run(
             evaluate(
@@ -387,22 +418,34 @@ def main() -> int:
                 args.skip_direct,
                 ckpt,
                 resume,
+                args.budget_cny,
             )
         )
+    except BudgetExceeded as exc:
+        aborted_msg = f"已达成本闸门：{exc}"
+        budget_hit = True
+        rows = list(load_ckpt(ckpt).values())
     except RunAborted as exc:
         aborted_msg = str(exc)
         rows = list(load_ckpt(ckpt).values())
     except KeyboardInterrupt:
         aborted_msg = "用户中断"
         rows = list(load_ckpt(ckpt).values())
-    print(f"\n总耗时 {time.time() - t0:.1f}s")
+    print(f"\n总耗时 {time.time() - t0:.1f}s | 本轮花费 {USAGE.summary()}")
 
     if aborted_msg:
-        print(
-            f"\n!! 评估中止：{aborted_msg}\n"
-            "   已完成的逐问结果保留在断点文件中，网关恢复后加 --resume 可继续。\n"
-            "   下面按已完成的部分样例出汇总（样本不足，仅供参考）。"
-        )
+        if budget_hit:
+            print(
+                f"\n!! 评估因【成本闸门】中止：{aborted_msg}\n"
+                f"   预算上限 ¥{args.budget_cny:.2f} 已用满，未继续产生花费。\n"
+                "   已完成的逐问结果保留在断点文件中，确认后可加 --resume 继续。"
+            )
+        else:
+            print(
+                f"\n!! 评估中止：{aborted_msg}\n"
+                "   已完成的逐问结果保留在断点文件中，网关恢复后加 --resume 可继续。\n"
+                "   下面按已完成的部分样例出汇总（样本不足，仅供参考）。"
+            )
 
     write_outputs(rows, args, styles, planned=len(questions))
 
@@ -414,7 +457,7 @@ def main() -> int:
         )
 
     if aborted_msg:
-        return 2
+        return 3 if budget_hit else 2
     ckpt.unlink(missing_ok=True)  # 完整跑完则清理断点
     return 0
 
