@@ -227,6 +227,10 @@ export const competitorApi = {
   ragDeleteSession(sessionId) {
     return http.delete(`/rag/sessions/${sessionId}`)
   },
+  // 问答反馈（👍/👎）
+  ragFeedback(payload) {
+    return http.post('/rag/feedback', payload)
+  },
   // —— 竞品变化记录 ——
   listChanges(params) {
     return http.get('/changes', { params })

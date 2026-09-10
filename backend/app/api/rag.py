@@ -21,10 +21,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_session
 from app.deps import get_current_user
 from app.models.chat_session import ChatSession
+from app.models.message_feedback import FEEDBACK_DISLIKE, FEEDBACK_LIKE, MessageFeedback
 from app.models.user import ROLE_ADMIN, User
 from app.rag.config import SIMILARITY_THRESHOLD
 from app.rag.retriever import get_retriever
-from app.schemas.rag import AskRequest, AskResponse
+from app.schemas.rag import AskRequest, AskResponse, SourceDoc
 from app.services import rag_service
 from app.services.change_service import list_stored_competitors
 
@@ -56,6 +57,18 @@ class BatchDeleteRequest(BaseModel):
     """批量删除会话请求体。"""
 
     session_ids: list[str] = Field(..., min_length=1, max_length=100)
+
+
+class FeedbackRequest(BaseModel):
+    """问答反馈请求体。"""
+
+    session_id: str = Field(..., max_length=64)
+    rating: str = Field(...)  # "like" | "dislike"
+    question: str = Field(..., min_length=1, max_length=500)
+    answer: str = Field("", max_length=20000)
+    mode: str = Field("fallback")  # "hit" | "fallback"
+    source_doc_ids: list[str] = Field(default_factory=list)
+    comment: str | None = Field(None, max_length=2000)
 
 
 @router.post("/ask", response_model=AskResponse)
@@ -98,7 +111,12 @@ async def ask(
     if session_id:
         new_messages = [
             {"role": "user", "content": payload.question},
-            {"role": "assistant", "content": response.answer},
+            {
+                "role": "assistant",
+                "content": response.answer,
+                "mode": response.mode,
+                "sources": [s.model_dump() for s in response.sources],
+            },
         ]
         if existing is None:
             session.add(
@@ -149,13 +167,21 @@ async def ask_stream(
 
     retriever = get_retriever()
 
-    async def _save_session(answer: str) -> None:
-        """保存本轮问答到会话（懒创建 + 归属校验已在前面完成）。"""
+    async def _save_session(answer: str, mode: str, sources: list[SourceDoc]) -> None:
+        """保存本轮问答到会话（懒创建 + 归属校验已在前面完成）。
+
+        answer/mode/sources 一并落库，使历史会话回显时能还原来源引用。
+        """
         if not session_id:
             return
         new_messages = [
             {"role": "user", "content": payload.question},
-            {"role": "assistant", "content": answer},
+            {
+                "role": "assistant",
+                "content": answer,
+                "mode": mode,
+                "sources": [s.model_dump() for s in sources],
+            },
         ]
         if existing is None:
             session.add(
@@ -187,15 +213,35 @@ async def ask_stream(
         if results and results[0]["vector_sim"] >= SIMILARITY_THRESHOLD:
             top = results[0]
             full_answer = top["text"]
+            # 命中来源（按 doc_id 去重，与非流式 ask 保持一致）
+            seen: set[str] = set()
+            sources: list[SourceDoc] = []
+            for r in results:
+                if r["doc_id"] in seen:
+                    continue
+                seen.add(r["doc_id"])
+                sources.append(
+                    SourceDoc(
+                        doc_id=r["doc_id"],
+                        title=rag_service._title_from_doc_id(r["doc_id"]),
+                        text=r["text"],
+                        score=r["vector_sim"],
+                    )
+                )
             yield (
                 "data: "
                 + _json.dumps(
-                    {"type": "done", "answer": full_answer, "mode": "hit"},
+                    {
+                        "type": "done",
+                        "answer": full_answer,
+                        "mode": "hit",
+                        "sources": [s.model_dump() for s in sources],
+                    },
                     ensure_ascii=False,
                 )
                 + "\n\n"
             )
-            await _save_session(full_answer)
+            await _save_session(full_answer, "hit", sources)
             return
 
         # 未命中：流式兜底，逐 token 推送
@@ -214,7 +260,7 @@ async def ask_stream(
             + _json.dumps({"type": "done", "mode": "fallback"}, ensure_ascii=False)
             + "\n\n"
         )
-        await _save_session("".join(full_answer_parts))
+        await _save_session("".join(full_answer_parts), "fallback", [])
 
     return StreamingResponse(
         event_stream(),
@@ -322,3 +368,37 @@ async def create_session(
     session.add(ChatSession(session_id=session_id, user_id=user.id, messages=[]))
     await session.commit()
     return {"session_id": session_id}
+
+
+@router.post("/feedback")
+async def submit_feedback(
+    payload: FeedbackRequest,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """提交问答反馈（👍/👎），用于检索质量评测与 rerank 调参。
+
+    校验：rating 必须为 like/dislike；会话需属于当前用户（admin 可对任意会话反馈）。
+    """
+    if payload.rating not in (FEEDBACK_LIKE, FEEDBACK_DISLIKE):
+        raise HTTPException(status_code=422, detail="rating 仅支持 like / dislike")
+
+    # 校验会话归属（与其它会话接口一致）
+    if payload.session_id:
+        row = await _get_owned_session(payload.session_id, user, session)
+        if row is None:
+            raise HTTPException(status_code=404, detail="会话不存在或无权访问")
+
+    fb = MessageFeedback(
+        user_id=user.id,
+        session_id=payload.session_id,
+        rating=payload.rating,
+        question=payload.question,
+        answer=payload.answer,
+        mode=payload.mode,
+        source_doc_ids=payload.source_doc_ids,
+        comment=payload.comment,
+    )
+    session.add(fb)
+    await session.commit()
+    return {"ok": True, "id": fb.id}
