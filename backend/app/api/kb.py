@@ -108,14 +108,26 @@ def _run_rebuild() -> None:
     try:
         result = kb_service.rebuild_vector_store()
         _rebuild_state["last_result"] = {"ok": True, **result}
-        # 重建后清空检索缓存，避免命中旧语料的过期结果
+
+        # 刷新进程内检索器单例：重建会先删集合再建，单例里持有的是旧 collection 句柄，
+        # 不换新实例会导致重建后检索取不到数据（且语料版本指纹也随之刷新）。
+        from app.rag.retriever import reload_retriever
+
+        _rebuild_state["last_result"]["retriever_reloaded"] = reload_retriever()
+
+        # 重建后清空检索缓存，避免命中旧语料的过期结果。
+        # 这里在后台线程里跑 asyncio.run（独立事件循环），必须用一次性连接：
+        # 复用进程内单例 client 会把它绑到随后关闭的临时循环上，
+        # 之后主循环里的请求全部 `Event loop is closed`，缓存永久静默失效。
         import asyncio
 
-        from app.rag.cache import get_search_cache
+        from app.config import settings
+        from app.rag.cache import get_search_cache, purge_all
 
-        cleared = asyncio.run(get_search_cache().clear())
-        if cleared:
-            _rebuild_state["last_result"]["cache_cleared"] = cleared
+        cleared = asyncio.run(purge_all(settings.redis_url))
+        _rebuild_state["last_result"]["cache_cleared"] = cleared
+        # L1 是进程内字典，purge_all 只清 Redis；这里同步清掉本进程 L1
+        _rebuild_state["last_result"]["l1_cleared"] = get_search_cache().clear_l1()
     except Exception as exc:  # noqa: BLE001 - 后台任务需兜底所有异常
         _rebuild_state["last_result"] = {"ok": False, "error": str(exc)}
     finally:
@@ -123,9 +135,7 @@ def _run_rebuild() -> None:
 
 
 @router.post("/rebuild")
-async def rebuild(
-    background_tasks: BackgroundTasks, _=Depends(require_admin)
-) -> dict:
+async def rebuild(background_tasks: BackgroundTasks, _=Depends(require_admin)) -> dict:
     """触发重建向量库（后台执行，返回当前状态）。"""
     if _rebuild_state["running"]:
         raise HTTPException(status_code=409, detail="重建已在进行中")

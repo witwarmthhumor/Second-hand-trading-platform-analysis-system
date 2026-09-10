@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6380/0"
     # 检索缓存 TTL（秒），默认 1 小时
     rag_cache_ttl: int = 3600
+    # 检索缓存总开关：测试与故障排查时可置 false 完全关闭（不建连、不走缓存）
+    rag_cache_enabled: bool = True
 
     # LLM 配置（OpenAI 兼容接口，通过 .env 注入）
     llm_api_base: str = "https://www.rightapi.ai/codex/v1"

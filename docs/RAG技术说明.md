@@ -52,7 +52,7 @@
 2. **稀疏 BM25 检索**：jieba 分词（加载 glossary 同义词扩充词典），`rank_bm25` 召回 Top-20。
 3. **RRF 融合**：`score(d) = Σ 1/(k + rank)`，`k = 60`，两路排名融合后取 Top-K。
 
-**BM25 持久化**：分词后的文档 tokens pickle 到 `rag_data/vector_store/bm25_index.pkl`，服务重启后 `load()` 完整恢复，避免退化为纯向量检索。
+**BM25 持久化**：分词后的文档 tokens 序列化为 JSON 落到 `rag_data/vector_store/bm25_index.json`（不用 pickle，避免不可信反序列化风险），服务重启后 `load()` 完整恢复，避免退化为纯向量检索。
 
 ## 4. 命中判定与兜底
 
@@ -80,15 +80,45 @@ bash scripts/build_vector_store.sh
 | 接口 | 方法 | 说明 |
 |------|------|------|
 | `/api/rag/ask` | POST | 请求 `{"question": "...", "top_k": 5}`，返回 `answer` / `mode`（`hit` 或 `fallback`）/ `sources` |
+| `/api/rag/ask/stream` | POST | 流式（SSE）：命中直出，未命中逐 token 推 `delta`，结束推 `done` |
 | `/api/rag/status` | GET | 返回知识库是否就绪 `{"ready": true}` |
 
-## 7. 检索质量（评测）
+## 7. 检索缓存（L1 进程内 + Redis L2）
+
+检索是问答链路里最重的一段（实测完整检索 ≈150ms/次，其中 bge-m3 embedding 占 62%），
+相同问法重复检索纯属浪费，故做两级缓存 + 并发合并。
+
+| 层 | 位置 | 内容 | 说明 |
+|----|------|------|------|
+| L1 | 进程内 `OrderedDict` LRU（256 条，TTL ≤60s） | 检索结果 | 命中 <0.05ms；同时也是 Redis 故障时的兜底 |
+| L2 | Redis（`RAG_CACHE_TTL`，默认 3600s，写时 ±10% 抖动） | 检索结果 JSON | 多进程/多 worker 共享；命中 ≈0.34ms |
+
+**缓存 key**：`rag:search:v2:{语料版本}:k{top_k}:{归一化问题}`
+
+- 归一化：全角→半角、去空白、小写（「忘记密码」与「忘记密码！」同一个 key）
+- `top_k` 与**语料版本**（`bm25_index.json` + `chroma.sqlite3` 的 mtime 指纹）都必须进 key，
+  否则不同 `top_k` 会串用结果、语料被替换后仍命中旧结果
+- 知识库重建：刷新检索器单例（换掉旧 collection 句柄）→ 用**一次性连接**按前缀清空缓存。
+  不要复用进程内单例 client：后台线程里的 `asyncio.run` 会建临时事件循环，
+  单例连接绑上去后随即随循环关闭，之后主循环全部 `Event loop is closed`，缓存永久失效
+
+**防击穿**：`SingleFlight` 合并同 key 并发 miss，只放 1 个请求回源，其余 await 同一结果。
+
+**降级与熔断**：Redis 不可用时静默跳过缓存，不影响问答主流程；一次失败即进入 30s 熔断窗口，
+窗口内不再尝试建连（否则每次操作都要白等 2s 连接超时，比不加缓存更慢）。
+
+**总开关**：`RAG_CACHE_ENABLED`（默认 true），测试与故障排查时置 false 完全关闭。
+
+> 注意两个端点都走 `rag_service.retrieve()`。流式端点若自行调用 `retriever.search`，
+> 会绕过缓存 —— 而前端默认走流式，等于缓存收益归零。
+
+## 8. 检索质量（评测）
 
 复用 B 项目的 `golden_queries.yaml`（285 问，含 `expected_ids` 期望命中文档）对 A 项目向量库做检索评测，指标与 B 项目同口径：**Hit@5 / MRR@10 / nDCG@10**。评测脚本见 `scripts/eval_retrieval.py`，结果见 `docs/检索评测报告.md`。
 
 > **同源偏差声明**：golden 问题与语料出自同一生成流程，评测结果天然偏乐观。
 
-## 8. 检索策略对比实验（父子文档检索）
+## 9. 检索策略对比实验（父子文档检索）
 
 为验证「父块+子块」两层检索能否提升召回，另建了独立实验
 `scripts/experiments/parent_child_retrieval/`，对「标题分块 900 / 递归 900 / 仅子块 400 /

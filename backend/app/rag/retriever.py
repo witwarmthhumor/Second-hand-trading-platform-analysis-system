@@ -19,6 +19,7 @@ import jieba
 import yaml
 from rank_bm25 import BM25Okapi
 
+from app.rag.cache import corpus_fingerprint
 from app.rag.config import (
     CHROMA_ADD_BATCH,
     CHROMA_COLLECTION,
@@ -86,6 +87,22 @@ class HybridRetriever:
         self._bm25: BM25Index | None = None
         self._doc_ids: list[str] = []
         self._ready = False
+        # 语料指纹（作为检索缓存的 key 维度），首次访问时计算
+        self._corpus_version: str | None = None
+
+    # ---- 语料版本 ----
+
+    @property
+    def corpus_version(self) -> str:
+        """语料版本指纹：bm25_index.json + chroma.sqlite3 的 mtime 哈希。
+
+        用于缓存 key：语料被替换后指纹变化，旧缓存自然失效。
+        """
+        if self._corpus_version is None:
+            self._corpus_version = corpus_fingerprint(
+                (_BM25_JSON, VECTOR_STORE_DIR / "chroma.sqlite3")
+            )
+        return self._corpus_version
 
     # ---- 建库 ----
 
@@ -124,6 +141,7 @@ class HybridRetriever:
         self._doc_ids = doc_ids
         self._bm25 = BM25Index(tokens)
         self._ready = True
+        self._corpus_version = None  # 语料已变，指纹下次访问重算
         return len(chunks)
 
     # ---- 加载已有库 ----
@@ -169,7 +187,9 @@ class HybridRetriever:
         qemb = query_embedding(query)
 
         # ① 向量检索
-        vres = self._collection.query(query_embeddings=[qemb], n_results=QUERY_N_RESULTS)
+        vres = self._collection.query(
+            query_embeddings=[qemb], n_results=QUERY_N_RESULTS
+        )
         v_scores: dict[int, float] = {}
         v_texts: dict[int, str] = {}
         for cid, dist, doc in zip(
@@ -184,8 +204,18 @@ class HybridRetriever:
         if self._bm25 is not None:
             for i, s in self._bm25.search(query, top_n=QUERY_N_RESULTS):
                 b_scores[i] = s
-                if i not in v_texts:
-                    v_texts[i] = self._collection.get(ids=[f"c{i}"])["documents"][0]
+
+        # BM25 命中但向量结果里没有的 chunk，一次批量取回原文。
+        # 注意：不要逐个 collection.get(ids=[...])（实测每次检索约 17 次单点查，占
+        # 完整检索耗时约 19%）；批量取回后按返回的 ids 建映射，不依赖返回顺序。
+        missing = [i for i in b_scores if i not in v_texts]
+        if missing:
+            got = self._collection.get(ids=[f"c{i}" for i in missing])
+            doc_by_id = dict(zip(got["ids"], got["documents"], strict=False))
+            for i in missing:
+                doc = doc_by_id.get(f"c{i}")
+                if doc is not None:
+                    v_texts[i] = doc
 
         # ③ RRF 融合（k=60）
         rrf: dict[int, float] = {}
@@ -203,7 +233,9 @@ class HybridRetriever:
         for pos, score in ranked:
             results.append(
                 {
-                    "doc_id": self._doc_ids[pos] if pos < len(self._doc_ids) else f"c{pos}",
+                    "doc_id": self._doc_ids[pos]
+                    if pos < len(self._doc_ids)
+                    else f"c{pos}",
                     "text": v_texts.get(pos, ""),
                     "rrf_score": round(score, 6),
                     "vector_sim": round(v_scores.get(pos, 0.0), 4),
@@ -224,3 +256,17 @@ def get_retriever() -> HybridRetriever:
         if not _retriever.load():
             _retriever = HybridRetriever()  # 库未建，保持未就绪状态
     return _retriever
+
+
+def reload_retriever() -> bool:
+    """重建向量库后刷新单例：丢弃旧的 Chroma collection 句柄并重新加载。
+
+    必要性：`kb_service.rebuild_vector_store()` 会先删集合再重建，而单例里持有的
+    是**旧 collection 句柄**，重建后继续用它检索会失败/取不到数据，必须换新实例。
+    返回库是否加载成功。
+    """
+    global _retriever
+    fresh = HybridRetriever()
+    ok = fresh.load()
+    _retriever = fresh
+    return ok

@@ -72,11 +72,15 @@ async def ask(
     existing: ChatSession | None = None
     if session_id:
         existing = await session.get(ChatSession, session_id)
-        if existing is not None and user.role != ROLE_ADMIN and existing.user_id != user.id:
+        if (
+            existing is not None
+            and user.role != ROLE_ADMIN
+            and existing.user_id != user.id
+        ):
             # 会话存在但不属于当前用户：拒绝，避免越权读写他人会话
             raise HTTPException(status_code=404, detail="会话不存在或无权访问")
         if existing is not None:
-            history = (existing.messages or [])[-(_HISTORY_ROUNDS * 2):]
+            history = (existing.messages or [])[-(_HISTORY_ROUNDS * 2) :]
         # 会话不存在：懒创建模式，保存阶段落库归属当前用户（前端本地生成 session_id）
 
     # 读取已入库竞品数据作为对比类问题的上下文
@@ -121,6 +125,8 @@ async def ask_stream(
     - 未命中：LLM 兜底逐 token 推送（`data: {delta}`），结束推 `data: [DONE]`
 
     会话保存与多轮记忆逻辑与 ask 一致（懒创建 + 归属校验）。
+    检索走 `rag_service.retrieve`（缓存 + singleflight），与非流式端点共用同一套
+    缓存 key —— 否则前端默认走的这条路会完全绕过缓存。
     """
     import json as _json
 
@@ -130,10 +136,14 @@ async def ask_stream(
     existing: ChatSession | None = None
     if session_id:
         existing = await session.get(ChatSession, session_id)
-        if existing is not None and user.role != ROLE_ADMIN and existing.user_id != user.id:
+        if (
+            existing is not None
+            and user.role != ROLE_ADMIN
+            and existing.user_id != user.id
+        ):
             raise HTTPException(status_code=404, detail="会话不存在或无权访问")
         if existing is not None:
-            history = (existing.messages or [])[-(_HISTORY_ROUNDS * 2):]
+            history = (existing.messages or [])[-(_HISTORY_ROUNDS * 2) :]
 
     competitors_context = await _load_competitors_context(session)
 
@@ -149,7 +159,9 @@ async def ask_stream(
         ]
         if existing is None:
             session.add(
-                ChatSession(session_id=session_id, user_id=user.id, messages=new_messages)
+                ChatSession(
+                    session_id=session_id, user_id=user.id, messages=new_messages
+                )
             )
         else:
             existing.messages = (existing.messages or []) + new_messages
@@ -157,20 +169,32 @@ async def ask_stream(
 
     async def event_stream():
         if not retriever.is_ready:
-            yield "data: " + _json.dumps(
-                {"type": "done", "answer": "知识库尚未就绪，请先运行建库脚本。"},
-                ensure_ascii=False,
-            ) + "\n\n"
+            yield (
+                "data: "
+                + _json.dumps(
+                    {"type": "done", "answer": "知识库尚未就绪，请先运行建库脚本。"},
+                    ensure_ascii=False,
+                )
+                + "\n\n"
+            )
             return
 
-        # 先做一次检索判定（命中直出，未命中走流式兜底）
-        results = retriever.search(payload.question, top_k=payload.top_k)
+        # 先做一次检索判定（命中直出，未命中走流式兜底）；
+        # 走 retrieve 以复用检索缓存，避免流式路径每次都重算 embedding
+        results = await rag_service.retrieve(
+            payload.question, top_k=payload.top_k, retriever=retriever
+        )
         if results and results[0]["vector_sim"] >= SIMILARITY_THRESHOLD:
             top = results[0]
             full_answer = top["text"]
-            yield "data: " + _json.dumps(
-                {"type": "done", "answer": full_answer, "mode": "hit"}, ensure_ascii=False
-            ) + "\n\n"
+            yield (
+                "data: "
+                + _json.dumps(
+                    {"type": "done", "answer": full_answer, "mode": "hit"},
+                    ensure_ascii=False,
+                )
+                + "\n\n"
+            )
             await _save_session(full_answer)
             return
 
@@ -180,8 +204,16 @@ async def ask_stream(
             payload.question, history=history, competitors_context=competitors_context
         ):
             full_answer_parts.append(delta)
-            yield "data: " + _json.dumps({"type": "delta", "content": delta}, ensure_ascii=False) + "\n\n"
-        yield "data: " + _json.dumps({"type": "done", "mode": "fallback"}, ensure_ascii=False) + "\n\n"
+            yield (
+                "data: "
+                + _json.dumps({"type": "delta", "content": delta}, ensure_ascii=False)
+                + "\n\n"
+            )
+        yield (
+            "data: "
+            + _json.dumps({"type": "done", "mode": "fallback"}, ensure_ascii=False)
+            + "\n\n"
+        )
         await _save_session("".join(full_answer_parts))
 
     return StreamingResponse(
@@ -197,7 +229,9 @@ async def status() -> dict:
     retriever = get_retriever()
     return {
         "ready": retriever.is_ready,
-        "message": "知识库就绪" if retriever.is_ready else "知识库未就绪，请先运行建库脚本",
+        "message": "知识库就绪"
+        if retriever.is_ready
+        else "知识库未就绪，请先运行建库脚本",
     }
 
 

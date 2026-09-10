@@ -6,14 +6,19 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 
 from app.ai.cost import get_cost_tracker
 from app.config import settings
-from app.rag.cache import get_search_cache
+from app.rag.cache import SingleFlight, get_search_cache
 from app.rag.config import SIMILARITY_THRESHOLD
-from app.rag.retriever import get_retriever
+from app.rag.retriever import HybridRetriever, get_retriever
 from app.schemas.rag import AskResponse, SourceDoc
+
+# 同 key 并发合并：热点 key 刚过期时，只放 1 个请求回源，其余复用同一结果
+_RETRIEVE_FLIGHT = SingleFlight()
 
 _FALLBACK_SYSTEM_PROMPT = (
     "你是二手交易平台知识库的智能助手。请根据用户问题给出简洁、准确、有帮助的回答。"
@@ -37,7 +42,7 @@ def _build_fallback_messages(
     if competitors_context:
         system_prompt += f"\n\n以下是系统中已录入的竞品数据（供对比类问题参考）：\n{competitors_context}"
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
-    for msg in (history or []):
+    for msg in history or []:
         role = msg.get("role")
         content = msg.get("content")
         if role in ("user", "assistant") and content:
@@ -62,8 +67,7 @@ async def _llm_fallback_stream(
     messages = _build_fallback_messages(question, history, competitors_context)
 
     est_input = _estimate_tokens(
-        _FALLBACK_SYSTEM_PROMPT
-        + "".join(m.get("content", "") for m in messages[1:])
+        _FALLBACK_SYSTEM_PROMPT + "".join(m.get("content", "") for m in messages[1:])
     )
     pre = tracker.precheck(est_input)
     if pre.get("blocked"):
@@ -91,7 +95,7 @@ async def _llm_fallback_stream(
                 async for line in resp.aiter_lines():
                     if not line or not line.startswith("data:"):
                         continue
-                    data = line[len("data:"):].strip()
+                    data = line[len("data:") :].strip()
                     if data == "[DONE]":
                         break
                     import json as _json
@@ -113,9 +117,7 @@ async def _llm_fallback_stream(
 
             # 记账：优先真实 usage，否则估算
             input_tokens = int(usage.get("prompt_tokens") or est_input)
-            output_tokens = int(
-                usage.get("completion_tokens") or 0
-            )
+            output_tokens = int(usage.get("completion_tokens") or 0)
             if output_tokens > 0 or not usage:
                 tracker.record(input_tokens, output_tokens)
     except (httpx.TimeoutException, httpx.HTTPError) as exc:
@@ -187,7 +189,9 @@ async def _llm_fallback(
 
             usage = data.get("usage") or {}
             input_tokens = int(usage.get("prompt_tokens") or est_input)
-            output_tokens = int(usage.get("completion_tokens") or _estimate_tokens(content))
+            output_tokens = int(
+                usage.get("completion_tokens") or _estimate_tokens(content)
+            )
             tracker.record(input_tokens, output_tokens)
 
         return content.strip()
@@ -197,6 +201,38 @@ async def _llm_fallback(
             "抱歉，知识库中未找到与您问题直接相关的内容，且兜底大模型暂时不可用"
             f"（{type(exc).__name__}）。请稍后重试，或换个更具体的问题。"
         )
+
+
+async def retrieve(
+    question: str,
+    top_k: int = 5,
+    retriever: HybridRetriever | None = None,
+) -> list[dict]:
+    """带缓存 + singleflight 的检索：命中缓存直接返回，未命中才真正回源。
+
+    分层防护：
+    - 缓存：热点问题命中时免 embedding + 向量/BM25 检索（key 含语料版本与 top_k）
+    - singleflight：同一 key 的并发 miss 只放一个回源，其余 await 同一结果（防击穿）
+    - 线程池：检索是同步阻塞调用（Ollama HTTP + Chroma），放到线程里避免堵事件循环
+    """
+    rtv = retriever if retriever is not None else get_retriever()
+    cache = get_search_cache()
+    # 语料版本：mock/未实现该属性的检索器按空版本处理，不影响缓存可用性
+    version = getattr(rtv, "corpus_version", "")
+    cached = await cache.get(question, top_k, version)
+    if cached is not None:
+        return cached
+
+    async def _compute() -> list[dict]:
+        # 二次检查：等锁期间可能已被其它请求写入
+        again = await cache.get(question, top_k, version)
+        if again is not None:
+            return again
+        results = await asyncio.to_thread(rtv.search, question, top_k)
+        await cache.set(question, results, top_k, version)
+        return results
+
+    return await _RETRIEVE_FLIGHT.run(cache.key_for(question, top_k, version), _compute)
 
 
 async def ask(
@@ -217,13 +253,7 @@ async def ask(
             session_id=session_id,
         )
 
-    # 检索缓存：热点问题命中缓存时直接复用上次结果（免 embedding+向量检索），
-    # 未命中才真正检索并写回缓存。
-    search_cache = get_search_cache()
-    results = await search_cache.get(question)
-    if results is None:
-        results = retriever.search(question, top_k=top_k)
-        await search_cache.set(question, results)
+    results = await retrieve(question, top_k=top_k, retriever=retriever)
 
     # 命中判定：最高向量相似度 ≥ 阈值（cosine 相似度 0~1，语义相关查询约 0.7+，
     # 无关查询约 0.48；RRF 得分量级仅 0.016~0.033，不宜作阈值）
