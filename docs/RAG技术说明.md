@@ -87,3 +87,14 @@ bash scripts/build_vector_store.sh
 复用 B 项目的 `golden_queries.yaml`（285 问，含 `expected_ids` 期望命中文档）对 A 项目向量库做检索评测，指标与 B 项目同口径：**Hit@5 / MRR@10 / nDCG@10**。评测脚本见 `scripts/eval_retrieval.py`，结果见 `docs/检索评测报告.md`。
 
 > **同源偏差声明**：golden 问题与语料出自同一生成流程，评测结果天然偏乐观。
+
+## 8. 检索策略对比实验（父子文档检索）
+
+为验证「父块+子块」两层检索能否提升召回，另建了独立实验
+`scripts/experiments/parent_child_retrieval/`，对「标题分块 900 / 递归 900 / 仅子块 400 /
+ParentDocumentRetriever」四组同源策略做 doc 级 recall@k 对比。
+
+**结论**：本知识库（短文档、结构清晰）上父子检索**未提升 doc 级召回**，反略低于基线；
+消融表明损失**全部来自子块粒度**（400 vs 900），**父块回填对召回贡献 ≈ 0**——父块回填的
+价值在生成阶段的上下文完整性，而非检索召回。详见该目录 `README.md`。
+

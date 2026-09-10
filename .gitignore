@@ -39,6 +39,8 @@ backend/reports/
 rag_data/vector_store/
 rag_data/emb_cache/
 rag_data/*.npy
+# 实验向量库（建库产物，不入库；实验结论 results/*.json 入库）
+rag_data/experiments/vector_store/
 
 # IDE / 编辑器
 .idea/

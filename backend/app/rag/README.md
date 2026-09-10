@@ -10,3 +10,11 @@
 | `store.py` | Chroma 向量库建库与加载 |
 
 > 详见 `docs/融合规划.md` 与 `docs/RAG技术说明.md`（待建）。
+
+## 相关实验
+
+- **父子文档检索实验**（`scripts/experiments/parent_child_retrieval/`）：对比「标题分块 900 /
+  递归 900 / 仅子块 400 / ParentDocumentRetriever」四组同源策略的 doc 级 recall@k。
+  结论：本语料上父子检索未提升召回（损失全部来自子块粒度，父块回填对召回贡献≈0）。
+  详见该目录 `README.md`。
+
