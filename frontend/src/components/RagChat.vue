@@ -23,14 +23,21 @@ async function loadRagSessions() {
   }
 }
 
+const chatInputEl = ref(null) // 输入框实例，供「新建对话」后聚焦
+
 function newRagSession() {
   // 新对话：仅本地清空（不再立即落库）。首问时前端生成 session_id，
   // 后端 ask 懒创建会话，避免侧栏堆积「空会话」。
   ragSessionId.value = null
   ragHistory.value = []
   ragAnswer.value = null
+  ragQuestion.value = '' // 清掉输入框里可能残留的上一条问题
   batchMode.value = false
   checkedSessions.value = []
+  // 因为「懒创建」，点击后侧栏不会新增条目；若当前本来就是空对话，清空更无可见变化，
+  // 会被误认为「点了没反应」。故这里给出确定反馈：聚焦输入框 + 一条提示。
+  nextTick(() => chatInputEl.value?.focus())
+  ElMessage.success('已开启新对话')
 }
 
 async function doAsk() {
@@ -146,14 +153,25 @@ async function switchSession(sessionId) {
   try {
     // 从后端拉取该会话的完整消息历史并回显到对话区
     const detail = await competitorApi.ragGetSession(sessionId)
-    ragHistory.value = (detail.messages || []).map((m) => ({
-      role: m.role,
-      content: m.content,
-      mode: m.mode || 'fallback',
-      sources: m.sources || [],
-      // 反馈状态：历史消息默认未反馈
-      feedback: null,
-    }))
+    // 消息表只存 role/content，不存「这条回答对应的提问」，因此回显时按顺序
+    // 把每条 AI 回答与其上一条用户提问配成对，赋给 question 供 👍/👎 反馈落库；
+    // 否则历史消息的反馈按钮会一律提示「当前消息暂不支持反馈」。
+    let lastUserQuestion = ''
+    ragHistory.value = (detail.messages || []).map((m) => {
+      if (m.role === 'user') {
+        lastUserQuestion = m.content
+        return { role: 'user', content: m.content }
+      }
+      return {
+        role: 'assistant',
+        content: m.content,
+        mode: m.mode || 'fallback',
+        sources: m.sources || [],
+        question: lastUserQuestion,
+        // 反馈状态：历史消息默认未反馈
+        feedback: null,
+      }
+    })
     scrollChatToBottom()
   } catch (e) {
     ElMessage.error('加载会话失败：' + e.message)
@@ -367,6 +385,7 @@ onMounted(() => {
         <!-- 底部输入框 -->
         <div class="chat-input-bar">
           <el-input
+            ref="chatInputEl"
             v-model="ragQuestion"
             placeholder="输入问题，例如：忘记密码怎么办 / 卖家入驻需要什么资质"
             clearable
