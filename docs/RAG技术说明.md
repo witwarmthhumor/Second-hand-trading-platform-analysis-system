@@ -51,6 +51,7 @@
 1. **稠密向量检索**：`bge-m3`（1024 维）对 query 编码，Chroma 余弦相似度召回 Top-20。
 2. **稀疏 BM25 检索**：jieba 分词（加载 glossary 同义词扩充词典），`rank_bm25` 召回 Top-20。
 3. **RRF 融合**：`score(d) = Σ 1/(k + rank)`，`k = 60`，两路排名融合后取 Top-K。
+4. **重排与文档级去重**：RRF 之后先按向量相似度**精排**（`RERANK_BY_VSIM`，压掉「BM25 独有命中、语义无关」的噪声），再做**文档级去重 + 保底补位**（`DOC_DEDUP_ENABLED`，2026-09-11 开启）：每篇文档保底保留 1 个最相关 chunk，名额不足 Top-K 时回填同文档次优 chunk。用于解决「同文档多 chunk 抱团占位、多文档问题召回不全」（详见 `docs/RAG优化方案.md`）。
 
 **BM25 持久化**：分词后的文档 tokens 序列化为 JSON 落到 `rag_data/vector_store/bm25_index.json`（不用 pickle，避免不可信反序列化风险），服务重启后 `load()` 完整恢复，避免退化为纯向量检索。
 

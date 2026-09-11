@@ -36,7 +36,10 @@ logger = logging.getLogger(__name__)
 # 缓存 key 前缀（便于重建时按前缀清空）
 _CACHE_PREFIX = "rag:search:"
 # key 结构版本：结构调整时递增，天然淘汰旧格式 key
-_CACHE_VERSION = "v2"
+# v2→v3（2026-09-11）：检索策略变更（DOC_DEDUP_ENABLED 开启，多文档召回去重+补位）。
+# key 里不含检索策略，若只改配置不升版本，旧策略写入的结果会在 TTL 内继续命中，
+# 表现为「调了参数但线上检索结果没变」。
+_CACHE_VERSION = "v3"
 
 # Redis 故障熔断窗口（秒）：一次失败后窗口内不再尝试建连
 _CIRCUIT_COOLDOWN = 30.0

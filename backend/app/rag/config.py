@@ -54,8 +54,12 @@ RERANK_BY_VSIM = True
 # 名额不足再回填同文档次优 chunk。
 # 实测（285 问，top_k=5，docs/RAG优化方案.md）：多文档 coverage 0.3755→0.5052、
 # 单文档 0.9755→1.0000、Hit(任意一篇) 0.9825→1.0000，三项同时变好。
-# 默认 False：方案已实测验证，待评审后开启（开启前需重跑覆盖诊断与生成侧评估）。
-DOC_DEDUP_ENABLED = False
+# 已开启（2026-09-11 评审通过）。开启前按第三节验收标准复测 285 问（生产 top_k=5）：
+#   多文档 coverage 0.3755→0.5052（+12.97pp）、单文档 0.9755→1.0000、Hit 0.9825→1.0000
+#   —— 三项均不劣于 baseline，单文档与 Hit 打满，属帕累托改进（docs/RAG优化方案.md）。
+# 注意：上线同时需把检索缓存 key 版本升级（cache.py 的 _CACHE_VERSION → v3），
+# 否则旧策略下写入的缓存在 TTL 内仍会命中，导致「改了配置但线上没变」。
+DOC_DEDUP_ENABLED = True
 
 # ---- Chroma 配置 ----
 CHROMA_COLLECTION = "second_hand_kb"
