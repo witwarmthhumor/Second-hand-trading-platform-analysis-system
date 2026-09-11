@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.rag.embedding import query_embedding
-from app.rag.retriever import HybridRetriever
+from app.rag.retriever import HybridRetriever, diversify_with_refill
 
 
 @dataclass
@@ -28,6 +28,10 @@ class SearchParams:
     # 再按该 chunk 的 RRF 分数重排。让 top_k 覆盖更多不同文档，避免单文档多 chunk
     # 重复占位挤掉其它相关文档。>0 时启用。
     max_chunks_per_doc: int = 0  # 0=关闭（生产默认行为）
+    # 保底 + 补位（配合 max_chunks_per_doc>0 使用）：去重后若文档数不足 top_k，
+    # 用同文档次优 chunk 补满名额，避免单文档问题因去重白白损失上下文。
+    # 见 diversify_with_refill 的 docstring（这是生产接入的正确形态）。
+    refill: bool = False
     # rerank 精排：RRF 融合后，用向量相似度二次排序（而非纯 RRF 分数）。
     # 动机：BM25 独有命中的 chunk 向量相似度为 0（纯关键词、语义无关），
     # 却通过 RRF 排到靠前位置，挤掉真正相关的 chunk。vsim 能压掉这类噪声。
@@ -103,15 +107,24 @@ class ConfigurableRetriever:
         # 文档多样性重排（可选）：每文档最多 max_chunks_per_doc 个 chunk，
         # 按 doc 内最高 RRF 分数排序文档，再展开。目标是让 top_k 覆盖更多文档。
         if p.max_chunks_per_doc > 0:
-            best_per_doc: dict[str, float] = {}
-            ordered: list[tuple[int, float]] = []
-            for pos, score in sorted(rrf.items(), key=lambda x: -x[1]):
-                did = doc_ids[pos] if pos < len(doc_ids) else f"c{pos}"
-                if best_per_doc.get(did, -1.0) >= score:
-                    continue
-                best_per_doc[did] = score
-                ordered.append((pos, score))
-            ranked = ordered[:top_k]
+            if p.refill:
+                # 保底 + 补位：在**全量候选**上按 vsim 降序做文档级去重，
+                # 名额不足时回填同文档次优 chunk（生产接入形态）。
+                ranked_all = sorted(
+                    rrf.items(), key=lambda x: -v_scores.get(x[0], 0.0)
+                )
+                ranked = diversify_with_refill(ranked_all, v_scores, doc_ids, top_k)
+            else:
+                # 硬去重：每文档只留 RRF 最高分 chunk，直接截断 top_k。
+                best_per_doc: dict[str, float] = {}
+                ordered: list[tuple[int, float]] = []
+                for pos, score in sorted(rrf.items(), key=lambda x: -x[1]):
+                    did = doc_ids[pos] if pos < len(doc_ids) else f"c{pos}"
+                    if best_per_doc.get(did, -1.0) >= score:
+                        continue
+                    best_per_doc[did] = score
+                    ordered.append((pos, score))
+                ranked = ordered[:top_k]
 
         results: list[dict] = []
         for pos, score in ranked:
@@ -139,6 +152,22 @@ PARAM_SETS: dict[str, SearchParams] = {
     # 文档多样性 + 更大候选池
     "diverse80": SearchParams(
         query_n_results=80, bm25_weight=1.0, rrf_k=60.0, max_chunks_per_doc=1
+    ),
+    # 保底 + 补位（生产接入形态）：候选池 50，每文档保底 1 篇，
+    # 名额不足时用同文档次优 chunk 补满 —— 多文档最大化覆盖、单文档不损失。
+    "diverse_refill": SearchParams(
+        query_n_results=50,
+        bm25_weight=1.0,
+        rrf_k=60.0,
+        max_chunks_per_doc=1,
+        refill=True,
+    ),
+    "diverse_refill20": SearchParams(
+        query_n_results=20,
+        bm25_weight=1.0,
+        rrf_k=60.0,
+        max_chunks_per_doc=1,
+        refill=True,
     ),
     # rerank 精排：RRF 候选 + vsim 二次排序（压掉 BM25 噪声）
     "rerank": SearchParams(

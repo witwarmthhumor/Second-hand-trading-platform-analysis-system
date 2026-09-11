@@ -1,0 +1,300 @@
+# RAG 优化方案（多文档召回 · 兜底路径 · 生成侧上线）
+
+> 生成时间：2026-09-11
+> 依据：`scripts/experiments/ragas_eval/` 全部实测（285 问金标准 + 40 问生成侧分层抽样）、
+> `coverage_by_param.py` 多文档覆盖诊断、`RAGAS 评估实验.md` 第一~九节。
+> 定位：**可执行方案**。每条给出改动点、实测依据、验收标准、回滚方式。
+> 优先级：P0 = 本周做；P1 = 1~2 周；P2/P3 = 按节奏。
+
+---
+
+## 一、一句话结论
+
+**端到端质量只卡在一件事上：多文档召回。** 其余方向（兜底路径、生成侧上线、评测口径）
+都是「顺带修」，不动它；而多文档召回已有实测验证的方案，且是**帕累托改进**——
+三项指标同时变好，没有取舍。方案代码已就位（默认关闭），评审后改一个布尔值即可上线。
+
+---
+
+## 二、问题定义：一个被指标掩盖的短板
+
+### 2.1 三个指标，测的是三种能力
+
+| 指标 | 问的问题 | 会不会暴露「中1篇漏4篇」 |
+|---|---|---|
+| **Hit@5**（doc 级） | 期望文档里**至少有一篇**进 top-5 吗？ | ❌ **不会**（这就是长期没发现问题的原因） |
+| **coverage@5** | top-5 命中的期望文档数 / 期望文档总数 | ✅ 会 |
+| **distinct_docs@5** | top-5 里有多少篇**不同**文档 | ✅ 会（衡量同文档 chunk 抱团） |
+
+举例：`Q-C1-00「卖家入驻该怎么做？」` 期望 `C-001~C-005` 共 5 篇。
+若 top-5 全是 `C-001` 的 5 个 chunk，Hit@5 = 1.0（满分），**coverage@5 = 0.2**。
+只看 Hit@5 会得出「检索没问题」的反向结论。
+
+### 2.2 实测基线（285 问：多文档 122 / 单文档 163，生产 top_k=5）
+
+| 指标 | 实测 | 解读 |
+|---|---|---|
+| 多文档 coverage@5 | **0.3755** | 该召回的文档里只有 38% 进了 top-5 |
+| 多文档 distinct_docs@5 | **2.84** | top-5 平均只落在 2.84 篇不同文档上（期望平均 7 篇以上） |
+| 单文档 coverage | 0.9755 | 单文档问题几乎不受影响 |
+| Hit(任意一篇) | 0.9825 | **98%——所以这个短板长期不可见** |
+
+根因：**top_k 是固定预算（5 个格子），而同一文档的 chunk 主题相近、向量相似度相近，
+会「抱团占位」。** 与候选池大小无关——把候选池从 20 扩到 50 几乎无效（0.3755→0.3865），
+说明瓶颈在**排序阶段的文档聚簇**，不在「候选不够」。
+
+---
+
+## 三、优化目标与验收标准
+
+| 编号 | 目标 | 现状 | 目标值 | 验收方式 |
+|---|---|---|---|---|
+| G1 | 多文档 coverage@5 | 0.3755 | **≥ 0.50** | `coverage_by_param.py` |
+| G2 | 单文档 coverage | 0.9755 | **≥ 0.99**（不得倒退） | 同上 |
+| G3 | Hit(任意一篇) | 0.9825 | **≥ 0.98**（不得倒退） | 同上 |
+| G4 | 生成侧多文档 coverage | 0.400 | **≥ 0.45** | `run_gen_eval.py` 重跑 |
+| G5 | 全量测试 | 165 passed | 不减少 | `pytest -q` |
+
+---
+
+## 四、P0：多文档召回 —— 文档级去重 + 保底补位
+
+### 4.1 算法
+
+把「5 个格子谁分高谁占」改成「先保证每篇文档有代表，再补位」：
+
+1. **保底**：按向量相似度降序扫描候选，**每篇文档只留第一个**（= 该文档 vsim 最高的
+   那个 chunk）作为代表 → 让 top_k 尽量覆盖**不同**文档；
+2. **补位**：若不同文档数**不足 top_k**（单文档/双文档问题常见），把剩余名额回填给
+   **同文档的次优 chunk**（按 vsim 降序）→ 不浪费名额、不丢上下文。
+
+实现：`backend/app/rag/retriever.py` → `diversify_with_refill()`（模块级纯函数，便于单测）。
+
+```python
+def diversify_with_refill(ranked_all, v_scores, doc_ids, top_k):
+    # ① 保底：每文档取 vsim 最高的一个 chunk
+    picked, picked_pos, seen_docs = [], set(), set()
+    for pos, score in ranked_all:          # ranked_all 已按 vsim 降序
+        did = doc_ids[pos] if pos < len(doc_ids) else f"c{pos}"
+        if did in seen_docs:
+            continue
+        seen_docs.add(did); picked.append((pos, score)); picked_pos.add(pos)
+        if len(picked) >= top_k:
+            break
+    # ② 补位：名额未满，回填同文档次优 chunk
+    if len(picked) < top_k:
+        rest = [(p, s) for p, s in ranked_all if p not in picked_pos]
+        rest.sort(key=lambda x: -v_scores.get(x[0], 0.0))
+        picked.extend(rest[: top_k - len(picked)])
+    picked.sort(key=lambda x: -v_scores.get(x[0], 0.0))
+    return picked[:top_k]
+```
+
+### 4.2 实测收益（285 问，生产 top_k=5）
+
+| 参数组 | 多文档 coverage@5 | distinct_docs@5 | 单文档 coverage | Hit(任意一篇) |
+|---|---|---|---|---|
+| baseline | 0.3755 | 2.84 | 0.9755 | 0.9825 |
+| rerank（当前生产） | 0.3755 | 2.84 | 0.9755 | 0.9825 |
+| diverse50（硬去重，作对照） | 0.5187 | 5.00 | 0.9693 | 0.9754 |
+| **diverse_refill（本方案）** | **0.5052** | **5.00** | **1.0000** | **1.0000** |
+| diverse_refill20（候选池 20） | 0.5031 | 4.97 | 1.0000 | 1.0000 |
+
+相对 baseline（=生产现状）：多文档 **+12.97pp**、单文档 **+2.45pp**、Hit **+1.75pp**
+——**三项同时变好，无取舍（帕累托改进）**。G1/G2/G3 全部达标。
+
+> 观察：候选池 20 与 50 差异仅 0.2pp（0.5031 vs 0.5052），再次印证「瓶颈不在候选池」。
+> **因此落地时不必动 `QUERY_N_RESULTS=20`，改动面最小。**
+
+### 4.3 为什么不用硬去重（diverse50）
+
+硬去重（每文档只留 1 个 chunk、直接截断）多文档略高 1.35pp，但**单文档 coverage
+从 0.9755 掉到 0.9693、Hit 从 0.9825 掉到 0.9754**——单文档问题被白白扔掉了 4 个名额。
+补位把这块损失全部捞回（单文档打满 1.0000），代价只是多文档少 1.35pp。
+**综合三项指标，补位严格占优。**
+
+### 4.4 生产接入
+
+改动点（均已就位，**默认关闭**）：
+
+| 文件 | 改动 |
+|---|---|
+| `backend/app/rag/retriever.py` | 新增纯函数 `diversify_with_refill()`；`HybridRetriever.search()` 中 RRF 之后增加分支 |
+| `backend/app/rag/config.py` | 新增开关 `DOC_DEDUP_ENABLED = False`（注释含实测依据） |
+| `scripts/experiments/ragas_eval/strategies.py` | 参数组 `diverse_refill` / `diverse_refill20`，**直接 import 生产函数**（避免两份实现漂移） |
+| `backend/tests/test_rag_doc_diversify.py` | 6 个纯逻辑单测 |
+
+`search()` 中的分支：
+
+```python
+ranked = sorted(rrf.items(), key=lambda x: -x[1])[:top_k]
+
+if DOC_DEDUP_ENABLED:
+    # 必须在**全量 RRF 候选**上去重：只看已截断的 top_k 就永远救不回被挤掉的文档
+    ranked_all = sorted(rrf.items(), key=lambda x: -v_scores.get(x[0], 0.0))
+    ranked = diversify_with_refill(ranked_all, v_scores, self._doc_ids, top_k)
+elif RERANK_BY_VSIM:
+    ranked = rerank_by_vsim(ranked, v_scores, top_k)
+```
+
+**上线动作 = 把 `DOC_DEDUP_ENABLED` 改成 `True`**（并保留 rerank 开启；两者不冲突）。
+
+### 4.5 影响面分析
+
+| 关注点 | 结论 |
+|---|---|
+| **命中判定口径** | **不变**。输出整体按 vsim 降序，`results[0]` 仍是全局最相似 chunk，`vector_sim >= SIMILARITY_THRESHOLD` 判据原样生效 |
+| **来源列表** | 更全。`build_hit_gate()` 已按 `doc_id` 去重，多文档问题会展示多个来源（原来常被同一文档占满） |
+| **检索缓存** | **需要留意**：缓存 key 是 `rag:search:v2:{语料版本}:k{top_k}:{问题}`，**不含检索策略**。上线时若不改 key 前缀，旧缓存（策略关闭时的结果）会在 TTL 内继续命中。建议把版本前缀升到 `v3` 或清一次缓存 |
+| **top_k 语义** | 不变（仍是 5）；补位保证单文档问题也填满 5 个 |
+| **延迟/成本** | 纯排序操作，无额外 embedding / 网络调用；实测耗时与 baseline 持平（33~43s/285 问） |
+| **与 rerank 的关系** | rerank 解决「正确的**那一篇**排前面」（MRR/nDCG），本方案解决「该有的**都在**」（coverage）。两者互补，不互斥 |
+
+### 4.6 验收与回滚
+
+**验收**：见第三节 G1~G3、G5。
+
+```bash
+# 覆盖诊断（生产 top_k=5 口径）
+backend/.venv/Scripts/python scripts/experiments/ragas_eval/coverage_by_param.py \
+    --params baseline,diverse_refill --out coverage_after.json
+
+# 全量测试
+cd backend && .venv/Scripts/python -m pytest -q
+```
+
+**回滚**：`DOC_DEDUP_ENABLED = False` 即恢复原行为（分支短路，rerank 继续生效）。
+
+---
+
+## 五、P1：兜底路径注入检索上下文
+
+### 5.1 现状与风险
+
+`rag_service._llm_fallback()` 目前**完全不携带检索结果**——只用 system 提示词
+（「知识库没有就说没有，不要编造费率/时限/制度条款」）+ 历史 + 问题，让模型**凭参数知识**作答。
+
+两个变化让这条路径的风险放大：
+
+1. 命中阈值已从 0.55 上调到 **0.65**（commit `940743c`）→ **更多问题会走到兜底路径**；
+2. 兜底答案没有来源可核验，用户无法判断它是从知识库来的还是模型「想」出来的。
+
+### 5.2 方案（两档，建议都做）
+
+1. **注入「临界片段」**：把相似度落在 `[0.4, SIMILARITY_THRESHOLD)` 的 top-k 片段
+   带**标注相似度**注入 prompt，明确告诉模型「以下是与问题可能相关的知识库片段，
+   相似度不高，请仅作参考、不要编造」；
+2. **明确拒答**：若连 0.4 都不到，直接回「知识库暂无相关内容」，**不调用 LLM**
+   （省成本，也杜绝编造）。
+
+### 5.3 改动点
+
+- `build_hit_gate()` → 未命中时返回临界片段（而非 `None` 丢弃），或新增
+  `build_fallback_context(results)`；
+- `_build_fallback_messages()` → 增加 `retrieved_context` 参数拼进 system prompt
+  （与现有 `competitors_context` 同构）；
+- `ask()` / 流式端点 → 把临界片段透传给兜底函数。
+
+### 5.4 验收
+
+- 构造 20 条**领域外**问题（如「你觉得转转这个平台怎么样」）+ 20 条**临界**问题，
+  人工/LLM 双评：**编造条款数 = 0**；
+- 兜底调用率（`mode=fallback`）与 LLM 成本不得显著上升（拒答档应**降低成本**）。
+
+---
+
+## 六、P1：合成答案按问题类型分流上线
+
+### 6.1 消融结论回顾（40 问分层抽样，DeepSeek 通道，实花 ¥1.36）
+
+| 指标 | 直出原文 | 合成 v1（内联来源） | 合成 v2（末尾集中） |
+|---|---|---|---|
+| faithfulness | 0.9944 | 0.9682 | 0.9439 |
+| answer_relevancy | 0.8455 | 0.8986 | 0.9084 |
+| 来源覆盖度 | 0.6025 | 0.7000 | 0.7000 |
+| 平均耗时 | 0s | 2.02s | 1.97s |
+
+- **v1 优于 v2**：v1 要求边写边挂来源，模型全程被约束 → 忠实度更高；v2 行文自由但更易漂移。
+- **直出 faithfulness≈1 是天花板效应**（答案就是片段原文），不能读成「合成在编造」。
+
+### 6.2 分流策略
+
+| 问题类型 | 策略 | 理由 |
+|---|---|---|
+| 单文档（coverage 已达 1.00） | **直出原文** | 合成收益仅 +1.9pp，却白付 2 秒延迟 |
+| 多文档 | **v1 合成** | 覆盖度 +9.8pp、相关性 +5.3pp，是真实收益所在 |
+
+并加「**来源可点验**」：合成答案每条来源仍挂 `doc_id`，前端可点击查看原文。
+
+### 6.3 成本与延迟
+
+- 每问 +2s、+¥0.0118（低谷价，含裁判成本，实际线上可省去裁判）。
+- 复用已有成本熔断 + 检索缓存；对同问同片段走**答案缓存**（建议 key 加「答案风格」维度）。
+
+### 6.4 验收
+
+- 生成侧重跑：多文档 coverage ≥ 0.45，`faithfulness` 无 `<0.6` 样本（不出现编造）；
+- 灰度：先只对多文档问题开，观察 👍/👎 反馈与 `mode` 分布。
+
+---
+
+## 七、P2：评测基建
+
+| 项 | 说明 |
+|---|---|
+| **coverage@5 固化为一等指标** | 当前是独立脚本 `coverage_by_param.py`；建议并入 `run_eval.py` 的默认输出，让「至少中一篇」与「该中的都中了没」每次都一起看 |
+| **chunk 级 golden** | 现 golden 的 `expected_ids` 是 **doc 级**，coverage 分母偏粗（一篇文档任意 chunk 命中即算命中）。补 chunk 级标注后，coverage 口径才真正可信 |
+| **指标选择纪律** | 评价检索策略**必须同时**看 Hit@5 与 coverage@5——只看 Hit@5 曾把 `diverse` 误判为「无效」，得出反向结论（见 `RAGAS 评估实验.md` 第九节） |
+
+---
+
+## 八、P3：语料 / 分块观察项
+
+- **FAQ 按条分块（24 条 / 文档）导致 chunk 极碎**：同一 FAQ 文档会有 20+ 个 chunk
+  争抢 top-5 名额，与「文档聚簇」问题同源。可评估：FAQ 整篇合成一个 chunk、
+  或对 FAQ 类文档单独设 `max_chunks_per_doc`。
+- **golden 与语料同源偏差**：285 问与语料出自同一生成流程，绝对分偏乐观，
+  横向比较（A/B）可靠、绝对值仅作参考。
+
+---
+
+## 九、实施顺序
+
+1. **本周（P0）**：评审 → 开 `DOC_DEDUP_ENABLED=True` → 清缓存/升 key 前缀 →
+   跑覆盖诊断 + 生成侧重跑 → 观察线上。
+2. **下周（P1）**：兜底路径注入临界片段 + 拒答档 → 领域外问题回归。
+3. **再下周（P1）**：合成 v1 按问题类型分流灰度。
+4. **随后（P2/P3）**：coverage 并入 `run_eval.py`、补 chunk 级 golden、FAQ 分块观察。
+
+---
+
+## 十、附：复现命令
+
+```bash
+cd <项目根目录>
+
+# 多文档覆盖诊断（生产 top_k=5）
+backend/.venv/Scripts/python scripts/experiments/ragas_eval/coverage_by_param.py \
+    --params baseline,rerank,diverse50,diverse_refill,diverse_refill20
+
+# 检索侧 A/B
+backend/.venv/Scripts/python scripts/experiments/ragas_eval/run_eval.py \
+    --params baseline --strategy baseline --out baseline.json
+
+# 生成侧（需在 backend/.env 配好 LLM_API_BASE / LLM_API_KEY / LLM_MODEL）
+backend/.venv/Scripts/python scripts/experiments/ragas_eval/run_gen_eval.py \
+    --sample 40 --skip-synth
+backend/.venv/Scripts/python scripts/experiments/ragas_eval/run_gen_eval.py \
+    --sample 40 --synth-styles v1,v2 --skip-direct --resume --budget-cny 2.0
+backend/.venv/Scripts/python scripts/experiments/ragas_eval/compare_gen.py
+```
+
+---
+
+## 与既有文档的关系
+
+| 文档 | 关系 |
+|---|---|
+| `scripts/experiments/ragas_eval/RAGAS 评估实验.md` | **实测记录**（第一~九节）：本方案的每个数字都出自那里 |
+| `docs/现状分析与优化方向.md` | 仓库级体检报告。其 **F4「多文档召回」原标 P1，并把短板写成「单文档 coverage」**——经本次实测应**升级为 P0**，且短板在**多文档**（单文档 coverage 已达 0.9755→1.0000） |
+| `docs/RAG技术说明.md` | 架构说明。本次改动若上线，其第 3 节「混合检索」需补一句文档去重 |

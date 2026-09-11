@@ -48,6 +48,15 @@ SIMILARITY_THRESHOLD = 0.65  # 命中阈值：最高向量相似度(cosine 0~1)�
 RERANK_BY_VSIM = True
 # 实测：相关查询约 0.70~0.74，无关查询约 0.48。注意不能用 RRF 得分(量级仅 0.016~0.033)。
 
+# 多文档召回：文档级去重 + 保底补位（见 retriever.diversify_with_refill）。
+# 动机：top_k=5 是固定预算，同文档 chunk 抱团占位导致多文档问题期望文档覆盖率
+# 仅 0.3755（distinct_docs@5 平均 2.84）。开启后每篇文档保底 1 个 chunk、
+# 名额不足再回填同文档次优 chunk。
+# 实测（285 问，top_k=5，docs/RAG优化方案.md）：多文档 coverage 0.3755→0.5052、
+# 单文档 0.9755→1.0000、Hit(任意一篇) 0.9825→1.0000，三项同时变好。
+# 默认 False：方案已实测验证，待评审后开启（开启前需重跑覆盖诊断与生成侧评估）。
+DOC_DEDUP_ENABLED = False
+
 # ---- Chroma 配置 ----
 CHROMA_COLLECTION = "second_hand_kb"
 CHROMA_ADD_BATCH = 4096  # Chroma 单次 add 上限余量

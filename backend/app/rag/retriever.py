@@ -23,6 +23,7 @@ from app.rag.cache import corpus_fingerprint
 from app.rag.config import (
     CHROMA_ADD_BATCH,
     CHROMA_COLLECTION,
+    DOC_DEDUP_ENABLED,
     FACTS_DIR,
     QUERY_N_RESULTS,
     RERANK_BY_VSIM,
@@ -43,6 +44,66 @@ def rerank_by_vsim(ranked: list[tuple[int, float]], v_scores: dict[int, float], 
     实验依据：scripts/experiments/ragas_eval/README.md（Hit@5 0.9825→1.0000）。
     """
     return sorted(ranked, key=lambda x: -v_scores.get(x[0], 0.0))[:top_k]
+
+
+def diversify_with_refill(
+    ranked_all: list[tuple[int, float]],
+    v_scores: dict[int, float],
+    doc_ids: list[str],
+    top_k: int,
+) -> list[tuple[int, float]]:
+    """文档级去重 + 保底补位（多文档召回的核心算法）。
+
+    问题：top_k 是固定预算（默认 5 个格子），而同一文档的 chunk 主题相近、
+    向量相似度相近，会「抱团占位」——多文档问题的 top-5 平均只落在 2.84 个
+    不同文档上（而期望平均 7 篇以上），期望文档覆盖率仅 0.3755。注意这一
+    短板**不会被 Hit@5 暴露**：Hit@5 只问「至少中一篇」，不惩罚「中 1 篇漏 4 篇」。
+
+    算法（与「硬去重」的区别在第 ② 步）：
+    ① 保底：按 vsim 降序扫描，每篇文档只留第一个（= 该文档 vsim 最高）的 chunk，
+       保证 top_k 尽量覆盖不同文档；
+    ② 补位：不同文档数不足 top_k 时（单文档/双文档问题常见），把剩余名额回填
+       给同文档的次优 chunk —— 硬去重会白扔名额、损失上下文，这里不扔。
+
+    前提：``ranked_all`` 须按**向量相似度降序**传入。如此每篇文档的「代表」
+    就是该文档 vsim 最高的 chunk，输出排序后 ``[0]`` 仍是全局最相似 chunk，
+    **命中判定口径（``vector_sim >= SIMILARITY_THRESHOLD``）不变**。
+
+    实测（285 问，生产 top_k=5，见 docs/RAG优化方案.md）：
+    baseline 多文档 coverage 0.3755 / 单文档 0.9755 / Hit(任意) 0.9825
+    → 本算法 0.5052 / **1.0000** / **1.0000**，三项同时变好（帕累托改进）。
+    对比硬去重（diverse50）：多文档仅 -1.35pp，但单文档 +3.07pp、Hit +2.46pp。
+
+    纯函数，便于单测。
+    """
+
+    def _did(pos: int) -> str:
+        return doc_ids[pos] if pos < len(doc_ids) else f"c{pos}"
+
+    # ① 保底：每文档取排序中最靠前（vsim 最高）的一个 chunk
+    picked: list[tuple[int, float]] = []
+    picked_pos: set[int] = set()
+    seen_docs: set[str] = set()
+    for pos, score in ranked_all:
+        did = _did(pos)
+        if did in seen_docs:
+            continue
+        seen_docs.add(did)
+        picked.append((pos, score))
+        picked_pos.add(pos)
+        if len(picked) >= top_k:
+            break
+
+    # ② 补位：名额未满（不同文档数 < top_k），回填同文档次优 chunk（按 vsim 降序）
+    if len(picked) < top_k:
+        rest = [(pos, score) for pos, score in ranked_all if pos not in picked_pos]
+        rest.sort(key=lambda x: -v_scores.get(x[0], 0.0))
+        picked.extend(rest[: top_k - len(picked)])
+
+    # 输出保持全局按 vsim 降序：补位 chunk 的 vsim 必不高于其同文档代表，
+    # 故首位仍是全局最相似 chunk，命中判定不受影响。
+    picked.sort(key=lambda x: -v_scores.get(x[0], 0.0))
+    return picked[:top_k]
 
 
 # ---------------------------------------------------------------------------
@@ -243,9 +304,15 @@ class HybridRetriever:
 
         ranked = sorted(rrf.items(), key=lambda x: -x[1])[:top_k]
 
+        # 多文档召回（可选，默认关）：文档级去重 + 保底补位。
+        # 注意要在**全量 RRF 候选**上做——若只看已截断的 top_k，就永远救不回
+        # 被同文档 chunk 挤掉的其它文档。见 diversify_with_refill 与 docs/RAG优化方案.md。
+        if DOC_DEDUP_ENABLED:
+            ranked_all = sorted(rrf.items(), key=lambda x: -v_scores.get(x[0], 0.0))
+            ranked = diversify_with_refill(ranked_all, v_scores, self._doc_ids, top_k)
         # rerank 精排（可选，默认开）：用向量相似度对 RRF 候选二次排序。
         # 见 rerank_by_vsim 函数文档与 scripts/experiments/ragas_eval/README.md。
-        if RERANK_BY_VSIM:
+        elif RERANK_BY_VSIM:
             ranked = rerank_by_vsim(ranked, v_scores, top_k)
 
         results: list[dict] = []

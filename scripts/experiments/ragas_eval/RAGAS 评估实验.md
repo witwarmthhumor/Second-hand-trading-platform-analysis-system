@@ -270,6 +270,33 @@ rerank 把 doc 级检索推到满分后，下一步验证**生成环节**：生�
 这样：多文档问题最大化文档覆盖；单文档问题仍填满 top_k、不损失原有表现；且
 `results[0]` 仍是全局最相似 chunk，**命中判定口径（`vector_sim >= 阈值`）不变**。
 
+### 9.5 实测：保底 + 补位是**帕累托改进**
+
+把 9.4 的算法实现为 `diversify_with_refill()`（生产 `backend/app/rag/retriever.py`，
+实验侧 `strategies.py` 直接 import 它，避免两份实现漂移），复测 285 问（top_k=5）：
+
+| 参数组 | 多文档 coverage@5 | distinct_docs@5 | 单文档 coverage | Hit(任意一篇) |
+|--------|-------------------|-----------------|-----------------|---------------|
+| baseline | 0.3755 | 2.84 | 0.9755 | 0.9825 |
+| rerank（当前生产） | 0.3755 | 2.84 | 0.9755 | 0.9825 |
+| diverse50（硬去重，对照） | 0.5187 | 5.00 | 0.9693 | 0.9754 |
+| **diverse_refill（本方案）** | **0.5052** | **5.00** | **1.0000** | **1.0000** |
+| diverse_refill20（候选池 20） | 0.5031 | 4.97 | 1.0000 | 1.0000 |
+
+三条读法：
+
+1. **相对 baseline 是帕累托改进**：多文档 **+12.97pp**、单文档 **+2.45pp**、
+   Hit **+1.75pp**——三项同时变好，没有取舍。
+2. **补位严格优于硬去重**：diverse50 多文档虽高 1.35pp，但单文档 -0.62pp、
+   Hit -0.71pp（硬去重把单文档的剩余名额白扔了）；补位把这块全部捞回。
+3. **候选池不必动**：20 与 50 差异仅 0.2pp（0.5031 vs 0.5052），又一次印证
+   「瓶颈不在候选池，在排序阶段的文档聚簇」。
+
+**落地**：`config.py` 的 `DOC_DEDUP_ENABLED`（默认 `False`）改 `True` 即生效，
+与 rerank 不冲突。完整方案（含影响面、验收、回滚）见 `docs/RAG优化方案.md`。
+⚠️ 上线时记得**升缓存 key 前缀**（`rag:search:v2` → `v3`）或清一次检索缓存——
+缓存 key 不含检索策略，否则旧缓存会在 TTL 内继续命中。
+
 ## 复现
 
 ```bash
@@ -303,7 +330,7 @@ backend/.venv/Scripts/python scripts/experiments/ragas_eval/compare_gen.py
 # ---------- 多文档召回诊断（第九节） ----------
 # 7. 各参数组在 top_k=5（生产口径）下的多文档覆盖率
 backend/.venv/Scripts/python scripts/experiments/ragas_eval/coverage_by_param.py \
-    --params baseline,rerank,pool50,diverse50,diverse80
+    --params baseline,rerank,pool50,diverse50,diverse80,diverse_refill,diverse_refill20
 ```
 
 > 依赖：`ragas==0.3.5` + `rapidfuzz`（非 LLM 指标需 rapidfuzz 做字符串相似度）。
