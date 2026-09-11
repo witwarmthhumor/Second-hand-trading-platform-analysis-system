@@ -2,17 +2,16 @@
 /**
  * 设置页：评分维度配置。
  *
- * 维度变更会影响雷达图、竞品评分与报告导出，保存成功后 emit saved，
- * 由 App 更新全局 ratingDims 并传递给录入表单。
+ * 维度变更会影响雷达图、竞品评分与报告导出；保存成功后直接回写 store，
+ * 录入表单与对比面板会立刻读到新维度，不再经 App 中转。
  */
 import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { competitorApi } from '../api'
+import { useCompetitorStore } from '../stores/competitor'
 
-const props = defineProps({
-  dims: { type: Array, default: () => [] },
-})
-const emit = defineEmits(['saved'])
+// 评分维度由 store 统一维护，保存后直接回写 store（录入表单/对比/报告立即生效）
+const { ratingDims, setRatingDims } = useCompetitorStore()
 
 const MIN_DIMENSIONS = 3
 const MAX_DIMENSIONS = 8
@@ -22,7 +21,7 @@ const newDim = ref('')
 const dimsSaving = ref(false)
 
 watch(
-  () => props.dims,
+  ratingDims,
   (d) => {
     dimsDraft.value = [...(d || [])]
   },
@@ -60,7 +59,7 @@ async function saveDims() {
   dimsSaving.value = true
   try {
     const r = await competitorApi.setRatingDimensions(dimsDraft.value)
-    emit('saved', r.dimensions)
+    setRatingDims(r.dimensions)
     ElMessage.success('评分维度已更新（新维度对雷达图、对比与报告立即生效）')
   } catch (e) {
     ElMessage.error(e.message)

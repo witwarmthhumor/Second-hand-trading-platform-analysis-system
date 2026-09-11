@@ -2,41 +2,24 @@
 /**
  * 待校对页：AI 抓取提炼出的草稿列表，人工确认后入库。
  *
- * 自持草稿数据；向上通过 count 事件告知数量（侧栏徽标与统计卡片要用），
- * 并在任何增删改后触发 refresh（App 据此刷新侧栏计数）。
+ * 草稿数据收敛在 store 内共享（徽标数量与列表页统计卡看到的是同一份），
+ * 因此本页不再自持数据、也不再向上抛 count —— 避免同一份数据被反复拉取。
+ * 增删改后仍通过 changed 事件通知壳层（M3 step3 将统一为 store.notifyChanged）。
  */
-import { ref, watch, onMounted } from 'vue'
+import { onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { competitorApi } from '../api'
+import { useCompetitorStore } from '../stores/competitor'
 import { typeTag, dataStatusTag } from '../utils/tags'
 
-const props = defineProps({
-  // 外部数据变化（如列表页抓取新草稿）时递增，触发本页重新拉取
-  refreshKey: { type: Number, default: 0 },
-})
+const emit = defineEmits(['edit', 'changed'])
 
-const emit = defineEmits(['edit', 'count', 'changed'])
-
-const pending = ref([])
-const pendingLoading = ref(false)
-
-async function fetchPending() {
-  pendingLoading.value = true
-  try {
-    pending.value = await competitorApi.list({ data_status: '待校对' })
-    emit('count', pending.value.length)
-  } catch (e) {
-    ElMessage.error(e.message)
-  } finally {
-    pendingLoading.value = false
-  }
-}
+const { pendingRows, pendingLoading, loadPending } = useCompetitorStore()
 
 async function approve(row) {
   try {
     await competitorApi.approve(row.id)
     ElMessage.success('已确认入库')
-    await fetchPending()
     emit('changed')
   } catch (e) {
     ElMessage.error(e.message)
@@ -52,15 +35,13 @@ async function remove(row) {
   try {
     await competitorApi.remove(row.id)
     ElMessage.success('已删除')
-    await fetchPending()
     emit('changed')
   } catch (e) {
     ElMessage.error(e.message)
   }
 }
 
-watch(() => props.refreshKey, fetchPending)
-onMounted(fetchPending)
+onMounted(loadPending)
 </script>
 
 <template>
@@ -72,7 +53,7 @@ onMounted(fetchPending)
       show-icon
       style="margin-bottom: 16px"
     />
-    <el-table v-loading="pendingLoading" :data="pending" border stripe>
+    <el-table v-loading="pendingLoading" :data="pendingRows" border stripe>
       <el-table-column prop="name" label="名称" min-width="140" />
       <el-table-column prop="type" label="类型" width="80">
         <template #default="{ row }">
@@ -99,14 +80,14 @@ onMounted(fetchPending)
 
     <!-- 空态：说明「待校对」的来源，避免新用户困惑 -->
     <el-empty
-      v-if="!pending.length && !pendingLoading"
+      v-if="!pendingRows.length && !pendingLoading"
       description="暂无待校对草稿"
     >
       <p class="empty-guide-tip">
         在「竞品列表」页点击「抓取竞品」输入官网 URL，AI 提炼后的结果会出现在这里等待确认。
       </p>
     </el-empty>
-    <p v-else class="count">共 {{ pending.length }} 条待校对</p>
+    <p v-else class="count">共 {{ pendingRows.length }} 条待校对</p>
   </div>
 </template>
 

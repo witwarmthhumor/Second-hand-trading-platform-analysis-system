@@ -8,12 +8,11 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { competitorApi } from '../api'
+import { useCompetitorStore } from '../stores/competitor'
 import { typeTag, statusTag, TYPE_OPTIONS } from '../utils/tags'
 
-const props = defineProps({
-  // 待校对数量由 App 统一维护（侧栏徽标也用），此处仅用于统计卡片展示
-  pendingCount: { type: Number, default: 0 },
-})
+// 待校对数量来自 store（与侧栏徽标同源），此处仅用于统计卡片展示
+const { pendingCount } = useCompetitorStore()
 
 const emit = defineEmits(['create', 'edit', 'compare', 'changed'])
 
@@ -33,7 +32,7 @@ const typeOptions = TYPE_OPTIONS
 const compStats = computed(() => {
   const total = competitors.value.length
   const online = competitors.value.filter((c) => c.launch_status === '已上线').length
-  return { total, online, offline: total - online, pending: props.pendingCount }
+  return { total, online, offline: total - online, pending: pendingCount.value }
 })
 
 // 前端分页切片

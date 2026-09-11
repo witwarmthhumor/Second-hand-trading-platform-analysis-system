@@ -8,15 +8,17 @@
 import { ref, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { competitorApi } from '../api'
+import { useCompetitorStore } from '../stores/competitor'
 import { TYPE_OPTIONS, STATUS_OPTIONS } from '../utils/tags'
 
 const props = defineProps({
   // 待编辑的竞品对象；null 表示新建
   model: { type: Object, default: null },
-  // 评分维度（来自设置页配置）
-  dims: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['saved', 'cancel'])
+
+// 评分维度（来自设置页配置）由 store 统一维护
+const { ratingDims } = useCompetitorStore()
 
 const typeOptions = TYPE_OPTIONS
 const statusOptions = STATUS_OPTIONS
@@ -26,7 +28,7 @@ const isEdit = computed(() => !!(props.model && props.model.id))
 
 function emptyRatings() {
   const r = {}
-  props.dims.forEach((d) => {
+  ratingDims.value.forEach((d) => {
     r[d] = 0
   })
   return r
@@ -79,7 +81,7 @@ function buildForm(row) {
 
 // model 或评分维度变化时重建表单（维度变了，评分项也要跟着变）
 watch(() => props.model, buildForm, { immediate: true })
-watch(() => props.dims, () => buildForm(props.model))
+watch(ratingDims, () => buildForm(props.model))
 
 async function save() {
   if (!form.value.name.trim()) {
@@ -165,7 +167,7 @@ async function save() {
       </el-form-item>
 
       <h3 class="section">评分（用于对比雷达图）</h3>
-      <el-form-item v-for="d in dims" :key="d" :label="d">
+      <el-form-item v-for="d in ratingDims" :key="d" :label="d">
         <el-slider
           v-model="form.ratings[d]"
           :min="0"

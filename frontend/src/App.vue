@@ -13,6 +13,7 @@
 import { ref, onMounted, computed, defineAsyncComponent } from 'vue'
 import { ElMessage } from 'element-plus'
 import { competitorApi, authApi, setAuth, clearAuth, getStoredUser } from './api'
+import { useCompetitorStore } from './stores/competitor'
 
 // 竞品侧功能页（懒加载）
 const CompetitorList = defineAsyncComponent(() => import('./components/CompetitorList.vue'))
@@ -41,8 +42,7 @@ function enterApp(token, user) {
   currentUser.value = user
   activeTab.value = 'list'
   // 登录后初始化壳层级数据（各功能页数据由其组件自行加载）
-  refreshPendingCount()
-  loadDims()
+  initShellData()
   loadRagStatus()
 }
 
@@ -93,7 +93,9 @@ function doLogout() {
   clearAuth()
   currentUser.value = null
   activeTab.value = 'list'
-  // 清空问答组件状态：用 key 强制重建（见 template 里 RagChat 的 :key）
+  // 清空共享状态与问答组件内部状态，避免下一个账号看到上一个账号的残留数据
+  resetStore()
+  // 问答组件用 key 强制重建（见 template 里 RagChat 的 :key）
   ragChatKey.value++
   ElMessage.success('已退出登录')
 }
@@ -162,33 +164,22 @@ const currentTitle = computed(() => pageMeta[activeTab.value]?.[0] || '')
 const currentSub = computed(() => pageMeta[activeTab.value]?.[1] || '')
 
 // —— 跨组件共享状态 ——
-// 待校对数量：侧栏徽标与列表页统计卡片共用，由待校对页 / 列表页事件触发刷新
-const pendingCount = ref(0)
-// 评分维度：录入表单与设置页共用
-const ratingDims = ref([])
+// 待校对数量与评分维度已收敛到 stores/competitor.js，组件直接从 store 读写，
+// 不再经 App 中转；此处只保留壳层自用部分（侧栏徽标计数）。
+const { pendingCount, loadPending, loadRatingDims, reset: resetStore } = useCompetitorStore()
+
+/** 壳层初始化数据（各功能页的数据由其组件自行加载）。 */
+function initShellData() {
+  loadPending()
+  // 维度加载失败需要提示，否则录入表单的评分项会静默消失
+  loadRatingDims().catch((e) => ElMessage.error(e.message))
+}
+
 // 录入/编辑：formTarget 为待编辑行（null = 新建）；formKey 变化强制重建表单
 const formTarget = ref(null)
 const formKey = ref(0)
 // 对比选中的竞品 id（由列表页勾选后传入）
 const compareIds = ref([])
-
-async function refreshPendingCount() {
-  try {
-    const rows = await competitorApi.list({ data_status: '待校对' })
-    pendingCount.value = rows.length
-  } catch {
-    /* 非关键，静默 */
-  }
-}
-
-async function loadDims() {
-  try {
-    const r = await competitorApi.getRatingDimensions()
-    ratingDims.value = r.dimensions
-  } catch (e) {
-    ElMessage.error(e.message)
-  }
-}
 
 // —— 由子组件事件驱动的跳转 ——
 function onCreate() {
@@ -206,7 +197,7 @@ function onEdit(row) {
 function onFormSaved() {
   // 列表页在重新挂载时会自取最新数据，这里只需回到列表
   activeTab.value = 'list'
-  refreshPendingCount()
+  loadPending()
 }
 
 function onFormCancel() {
@@ -218,13 +209,9 @@ function onCompare(ids) {
   activeTab.value = 'compare'
 }
 
-// 列表/待校对页发生增删后：刷新侧栏徽标计数
+// 列表/待校对页发生增删后：刷新待校对数据（侧栏徽标计数由它派生）
 function onDataChanged() {
-  refreshPendingCount()
-}
-
-function onDimsSaved(dims) {
-  ratingDims.value = dims
+  loadPending()
 }
 
 // —— RAG 知识库就绪状态（顶栏显示用；问答组件 RagChat 自持其余状态）——
@@ -249,8 +236,7 @@ onMounted(() => {
   })
   if (isLoggedIn.value) {
     // 已有 token，直接初始化壳层级数据
-    refreshPendingCount()
-    loadDims()
+    initShellData()
     loadRagStatus()
   }
 })
@@ -372,7 +358,6 @@ onMounted(() => {
         <!-- 竞品列表 -->
         <CompetitorList
           v-if="activeTab === 'list'"
-          :pending-count="pendingCount"
           @create="onCreate"
           @edit="onEdit"
           @compare="onCompare"
@@ -383,7 +368,6 @@ onMounted(() => {
         <PendingReview
           v-else-if="activeTab === 'pending'"
           @edit="onEdit"
-          @count="pendingCount = $event"
           @changed="onDataChanged"
         />
 
@@ -392,7 +376,6 @@ onMounted(() => {
           v-else-if="activeTab === 'form'"
           :key="formKey"
           :model="formTarget"
-          :dims="ratingDims"
           @saved="onFormSaved"
           @cancel="onFormCancel"
         />
@@ -414,11 +397,7 @@ onMounted(() => {
         <KbManage v-else-if="activeTab === 'kb'" />
 
         <!-- 设置 -->
-        <SettingsPanel
-          v-else-if="activeTab === 'settings'"
-          :dims="ratingDims"
-          @saved="onDimsSaved"
-        />
+        <SettingsPanel v-else-if="activeTab === 'settings'" />
 
         <!-- 修改密码对话框 -->
         <el-dialog v-model="pwdDialog" title="修改密码" width="420px">
