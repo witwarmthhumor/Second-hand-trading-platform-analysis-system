@@ -245,15 +245,23 @@ cd backend && .venv/Scripts/python -m pytest -q
 - `test_build_fallback_context_*`：灰区筛选 / 命中区排除 / `doc_id` 去重 / 条数上限；
 - `test_format_fallback_context_annotates_doc_and_score`：注入文本带来源与相似度标注。
 
-**误伤面（逻辑论证，依据既有实测）**：下限 0.4 远低于 285 问实测的最低 top1——
-正确样本（261 条）最低 **0.6660**、错误样本（24 条）最低 **0.6483**，且领域外闲聊 top1
-也有 **0.6235**。即**领域内问题无一落入拒答档**，拒答档只截「连沾边都算不上」的输入。
-（该分布见 `backend/app/rag/config.py` 阈值注释与 `RAGAS 评估实验.md`。）
+**误伤面（实时探针实测，`fallback_gate_probe.py`，耗时 43.9s）**：
 
-> **实时探针待补**：新增 `scripts/experiments/ragas_eval/fallback_gate_probe.py` 用于实测
-> 三档分布（领域内误伤数 + 领域外落档分布）。执行当日并行会话正在重建生产向量库，
-> 重建后的库 `chromadb` 查询即 segfault（纯 chromadb 直连、真实 1024 维向量亦复现），
-> 实时验证受阻，待向量库稳定后补跑。
+| 集合 | 条数 | 命中直出 | 注入兜底 | 拒答 |
+|---|---|---|---|---|
+| 领域内（golden 285 问） | 285 | **285** | **0** | **0** |
+| 领域外（人工构造） | 15 | **0** | 12 | 3 |
+
+- **领域内零误伤**：285 问全部落在命中直出档，无一被注入档或拒答档截走。
+- **领域外零漏挡**：15 条闲聊/通用问题（天气、写诗、减肥、1+1、股市…）**没有一条**
+  进入命中直出档；其中 12 条落 `[0.4, 0.65)` 注入档（会带标注片段再让 LLM 作答，
+  最差情况也有「来源 + 相似度」可核验），3 条（写诗 / 科幻小说推荐 / 特朗普是谁）
+  落 `< 0.4` 拒答档。
+- 与逻辑论证一致：下限 0.4 远低于领域内最低 top1（正确样本 0.6660 / 错误样本 0.6483），
+  领域外最高仅 0.5427（iPhone vs 安卓）——**两档之间存在安全间隔**。
+
+原始数据：`scripts/experiments/ragas_eval/results/fallback_gate_probe.json`。
+复现：`backend/.venv/Scripts/python scripts/experiments/ragas_eval/fallback_gate_probe.py`。
 
 **上线后建议监控**：`mode=fallback` 占比与「拒答」占比。若拒答率过高（如 > 5%），
 说明下限 0.4 仍偏高，应下调或改为「注入但不拒答」。

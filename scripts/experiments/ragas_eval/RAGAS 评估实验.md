@@ -298,6 +298,32 @@ rerank 把 doc 级检索推到满分后，下一步验证**生成环节**：生�
 且 `results[0]` 的 vsim 与开启前完全一致（命中口径不变）。
 完整方案（含影响面、验收、回滚）见 `docs/RAG优化方案.md`。
 
+## 十、兜底路径三档分流实测（P1）
+
+背景：原兜底路径「未命中 → 一律调 LLM」且**完全不携带检索结果**，是全局最容易编造
+费率/时限/制度条款的地方。改为按 `results[0].vector_sim` 三档分流（`4baaba1`）：
+
+| 档位 | 条件 | 行为 |
+|---|---|---|
+| 命中直出 | `>= 0.65` | 直出原文 + 来源（原行为不变） |
+| 注入兜底 | `[0.4, 0.65)` | 注入灰区片段（带「来源 + 相似度」标注、上限 3 条）再调 LLM |
+| 直接拒答 | `< 0.4` 或空 | 回「知识库暂无相关内容」，**不调 LLM** |
+
+**实测（`fallback_gate_probe.py`，纯检索无 LLM 成本，耗时 43.9s）**：
+
+| 集合 | 条数 | 命中直出 | 注入兜底 | 拒答 |
+|---|---|---|---|---|
+| 领域内（golden 285 问） | 285 | **285** | **0** | **0** |
+| 领域外（人工构造 15 条） | 15 | **0** | 12 | 3 |
+
+- **领域内零误伤 / 领域外零漏挡**：285 问全部命中直出；15 条领域外问题无一被当命中答案直出。
+- 领域外最高 top1 = 0.5427（iPhone vs 安卓），领域内最低 top1 = 0.6483（错误样本）/
+  0.6660（正确样本）→ **两档之间存在安全间隔**，下限 0.4 与命中线 0.65 均无重叠风险。
+- 落拒答档的 3 条：`帮我写一首诗`（0.3677）、`推荐几本科幻小说`（0.3738）、
+  `特朗普是谁`（0.3653）—— 均为彻底无关的输入。
+
+原始数据 `results/fallback_gate_probe.json`；完整方案见 `docs/RAG优化方案.md` 第五节。
+
 ## 复现
 
 ```bash
@@ -332,6 +358,10 @@ backend/.venv/Scripts/python scripts/experiments/ragas_eval/compare_gen.py
 # 7. 各参数组在 top_k=5（生产口径）下的多文档覆盖率
 backend/.venv/Scripts/python scripts/experiments/ragas_eval/coverage_by_param.py \
     --params baseline,rerank,pool50,diverse50,diverse80,diverse_refill,diverse_refill20
+
+# ---------- 兜底三档分流（第十节） ----------
+# 8. 领域内误伤面 + 领域外落档分布（纯检索，无 LLM 成本）
+backend/.venv/Scripts/python scripts/experiments/ragas_eval/fallback_gate_probe.py
 ```
 
 > 依赖：`ragas==0.3.5` + `rapidfuzz`（非 LLM 指标需 rapidfuzz 做字符串相似度）。
