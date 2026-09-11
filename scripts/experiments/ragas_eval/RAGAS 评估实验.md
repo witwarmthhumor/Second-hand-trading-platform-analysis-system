@@ -491,6 +491,78 @@ FAQ 20~25 块），「命中 1 块」远不等于「拿到该文档的内容」�
 原始数据 `results/coverage_by_param_gate.json`（阈值扫描）与
 `results/coverage_by_param_anchor.json`（锚定配额扫描）。
 
+## 十三、P0-2 生成侧裁定：深度消除「无谓拒答」
+
+第十二节的锚定曲线在检索指标上**无支配点**（广度与深度不可兼得），故用**答案质量**
+裁定取值。方法：40 问（单/多文档各 20，seed 42）、v1 提示词、DeepSeek 通道，唯一变量
+是 `ANCHOR_QUOTA`（1 vs 4）；两次运行之间**清空 `rag:search:*`（40 个 key）**，否则
+第二个 arm 会命中第一个 arm 的缓存。实花 ¥1.28（¥0.517 + ¥0.760）。
+
+### 13.1 先验证机制真的生效（不依赖 LLM）
+
+由 per_q 的 `retrieved_ids` 直接算（`compare_anchor_gen.py` 的「检索组成诊断」）：
+
+| 组成指标 | 配额 1 | 配额 4 | 预期 |
+|---|---|---|---|
+| distinct_docs（top-5 不同文档数） | 4.95 | **3.08** | 广度 ↓ ✔ |
+| anchor_share（top1 文档占比） | 0.21 | **0.59** | 深度 ↑ ✔ |
+
+### 13.2 结果（40 问）
+
+| 指标 | 配额 1 | 配额 4 | Δ |
+|---|---|---|---|
+| faithfulness | 0.7907 | **0.9662** | **+0.1755** |
+| answer_relevancy | 0.7398 | **0.9078** | **+0.1680** |
+| 来源覆盖度 | 0.7325 | 0.7025 | -0.0300 |
+| 答案平均字数 | 442 | 761 | +319 |
+| 忠实度 · 多文档问题 | 0.8968 | **0.9744** | +0.0776 |
+| 忠实度 · 单文档问题 | 0.6847 | **0.9579** | **+0.2732** |
+| 相关性 · 单文档问题 | 0.6060 | **0.9126** | **+0.3066** |
+| 覆盖度 · 单文档问题 | 1.0000 | 1.0000 | ＝ |
+| 覆盖度 · 多文档问题 | 0.4650 | 0.4050 | -0.0600 |
+
+逐问翻转：faithfulness 变好 15 / 变差 6 / 持平 19；answer_relevancy 15/8/17；
+coverage 0/3/37（即 37 问完全相同）。候选组**零** faithfulness<0.6 样本。
+
+### 13.3 归因：差距不在「编造」，在「拒答」
+
+拉开逐问明细后发现，差距的**绝大部分来自拒答率**：
+
+| 组 | 拒答数（答案=「知识库中未找到相关信息。」） | 全体 faithfulness | **剔除拒答后** faithfulness / relevancy |
+|---|---|---|---|
+| 配额 1 | **8/40（20%）** | 0.7907 | 0.9520 / 0.9248 |
+| 配额 4 | **0/40** | 0.9662 | 0.9662 / 0.9078 |
+
+同样 6 个最典型的样本（如 `Q-A2-06`、`Q-A6-00`、`Q-G3-00`）在配额 1 下 faithfulness
+全为 0.0、在配额 4 下全部为 0.70~1.00。
+
+**读法**：广度上下文（5 篇各 1 块）会让模型判断「这些片段答不了这个问题」而**主动拒答**；
+深度上下文（top1 文档连续块）让它有完整依据作答。剔除拒答后两组的忠实度其实相当
+（0.9520 vs 0.9662），可见**深度并没有让答案"更忠实"，而是消除了 20% 的无谓拒答**。
+这比「忠实度低 17pp」更严重——用户直接拿不到答案。
+
+### 13.4 三条结论与上线决策
+
+1. **深度是合成路径的硬需求**：配额 1→4 把无谓拒答从 20% 降到 0，faithfulness /
+   relevancy 同步回到 P0 上线前的水准（`gen_synth_v1.json` 为 0.9682 / 0.8986，
+   那是**无去重**时的形态）。
+2. **但今天不能直接切**：生产 `ask()` 命中即**直出 `results[0]` 原文**（`build_hit_gate`
+   返回 `results[0]["text"]`，无 LLM 合成），top-5 的唯一消费者是**来源列表**，它需要
+   广度。实测用户可见来源覆盖：配额 1 **0.7873** / 配额 4 0.7416（仍高于 baseline
+   0.7187），多文档来源覆盖 0.5031→0.4046。**为一个尚未上线的消费者牺牲线上来源列表
+   不划算** → 维持 `ANCHOR_QUOTA=1`，现网行为不变（缓存版本也无需升）。
+3. **配额 4 成为 P1-②（合成答案上线）的前置条件**：合成上线时必须与深度上下文配套，
+   两条路径——① 直接把 `ANCHOR_QUOTA` 调到 4（简单，但来源列表同步变窄，需接受）；
+   ② 实现**双视图**（推荐）：检索层同时产出「广度视图（每文档 1 块，供来源列表）」
+   与「深度视图（top1 文档连续块，供合成上下文）」，两个消费者各取所需、互不牺牲。
+
+> ⚠️ 复现时注意：`results/gen_synth_v1.json` 是**被 git 跟踪的历史产物**（P0 上线前的
+> 无去重形态），跑 `run_gen_eval.py` 会覆盖它。本节的 A/B 结果另存为
+> `gen_synth_v1_aq1.json` / `gen_synth_v1_aq4.json` 以免混淆。
+
+原始数据 `results/gen_synth_v1_aq1.json`（配额 1）与
+`results/gen_synth_v1_aq4.json`（配额 4）。
+
 ## 复现
 
 ```bash
@@ -561,6 +633,30 @@ backend/.venv/Scripts/python -m pytest backend/tests/test_rag_doc_diversify.py -
 
 # 15. 判据诊断：噪声/期望文档代表块的 vsim 分布（为什么阈值行不通）
 backend/.venv/Scripts/python scripts/experiments/ragas_eval/gate_band_probe.py
+
+# ---------- P0-2 生成侧裁定（第十三节，需 LLM 通道） ----------
+# 16. 两个 arm 各跑一遍（唯一变量是配额）；**arm 间必须清缓存**，否则第二个 arm 命中第一个的缓存
+#     配额 1（现线上形态）
+backend/.venv/Scripts/python -c "import sys,asyncio; sys.path.insert(0,'backend'); \
+from dotenv import load_dotenv; load_dotenv('backend/.env'); \
+from app.rag.cache import purge_all; from app.config import settings; \
+print('purged', asyncio.run(purge_all(settings.redis_url)))"
+ANCHOR_QUOTA=1 backend/.venv/Scripts/python scripts/experiments/ragas_eval/run_gen_eval.py \
+    --sample 40 --top-k 5 --synth-styles v1 --skip-direct --budget-cny 1.2
+cp scripts/experiments/ragas_eval/results/gen_synth_v1.json \
+   scripts/experiments/ragas_eval/results/gen_synth_v1_aq1.json
+git checkout -- scripts/experiments/ragas_eval/results/gen_synth_v1.json   # 该文件被跟踪，勿覆盖
+
+#     配额 4（深度形态）
+ANCHOR_QUOTA=4 backend/.venv/Scripts/python scripts/experiments/ragas_eval/run_gen_eval.py \
+    --sample 40 --top-k 5 --synth-styles v1 --skip-direct --budget-cny 1.2
+cp scripts/experiments/ragas_eval/results/gen_synth_v1.json \
+   scripts/experiments/ragas_eval/results/gen_synth_v1_aq4.json
+git checkout -- scripts/experiments/ragas_eval/results/gen_synth_v1.json
+
+# 17. 生成侧 A/B 对比表（含检索组成诊断与逐问翻转）
+backend/.venv/Scripts/python scripts/experiments/ragas_eval/compare_anchor_gen.py \
+    --base gen_synth_v1_aq1.json --cand gen_synth_v1_aq4.json
 ```
 
 > 依赖：`ragas==0.3.5` + `rapidfuzz`（非 LLM 指标需 rapidfuzz 做字符串相似度）。
