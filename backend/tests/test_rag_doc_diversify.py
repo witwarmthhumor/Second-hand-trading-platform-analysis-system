@@ -15,7 +15,7 @@
 不依赖 Ollama / Chroma / LLM，纯函数直接构造输入。
 """
 
-from app.rag.retriever import diversify_with_refill
+from app.rag.retriever import diversify_with_refill, dual_views
 
 
 def _ranked(v_scores: dict[int, float]) -> list[tuple[int, float]]:
@@ -205,5 +205,73 @@ def test_锚定_默认配额等价于1():
         for p, _ in diversify_with_refill(ranked, v_scores, doc_ids, top_k=5, anchor_quota=1)
     ]
     assert default == explicit == [0, 3, 4, 5, 6]
+
+
+# ---------------------------------------------------------------------------
+# 双视图（P1-② 合成答案分流，docs/合成答案分流方案.md）
+# ---------------------------------------------------------------------------
+# 同一候选池按不同配额各排一次 → 广度（来源列表）+ 深度（合成上下文），
+# 零额外检索成本。守卫重点：广度视图与现网 search() 的输出逐位一致——
+# 这是「上线合成不牺牲现网来源」承诺的技术前提。
+
+
+def test_双视图_广度视图与现网diversify逐位一致():
+    """对拍守卫：dual_views 的广度 == diversify_with_refill(anchor_quota=1) 同输入输出。"""
+    doc_ids = ["A", "A", "A", "B", "C", "D", "E", "F"]
+    v_scores = {
+        0: 0.90, 1: 0.86, 2: 0.82, 3: 0.70, 4: 0.68, 5: 0.66, 6: 0.64, 7: 0.62
+    }
+    ranked = _ranked(v_scores)
+    breadth, _ = dual_views(
+        ranked, v_scores, doc_ids, top_k=5, breadth_quota=1, depth_quota=4
+    )
+    baseline = diversify_with_refill(ranked, v_scores, doc_ids, top_k=5, anchor_quota=1)
+    assert breadth == baseline
+
+
+def test_双视图_深度视图锚定多占名额():
+    """depth_quota=4：深度视图 top1 文档占 4 块；广度视图仍是 5 篇各 1 块。"""
+    doc_ids = ["A", "A", "A", "A", "A", "B", "C", "D", "E", "F"]
+    v_scores = {
+        0: 0.90, 1: 0.86, 2: 0.82, 3: 0.78, 4: 0.74,
+        5: 0.70, 6: 0.68, 7: 0.66, 8: 0.64, 9: 0.62,
+    }
+    ranked = _ranked(v_scores)
+    breadth, depth = dual_views(
+        ranked, v_scores, doc_ids, top_k=5, breadth_quota=1, depth_quota=4
+    )
+    assert [p for p, _ in breadth] == [0, 5, 6, 7, 8]
+    assert [p for p, _ in depth] == [0, 1, 2, 3, 5]
+    assert [doc_ids[p] for p, _ in depth] == ["A", "A", "A", "A", "B"]
+
+
+def test_双视图_两视图首位一致_命中口径不受影响():
+    """两个视图的首位都是全局 vsim 最高 chunk——直出/命中判定与视图选择无关。"""
+    doc_ids = ["A", "A", "A", "B", "C"]
+    v_scores = {0: 0.90, 1: 0.86, 2: 0.82, 3: 0.70, 4: 0.68}
+    breadth, depth = dual_views(
+        _ranked(v_scores), v_scores, doc_ids, top_k=4, breadth_quota=1, depth_quota=3
+    )
+    assert breadth[0][0] == depth[0][0] == 0
+
+
+def test_双视图_纯函数不修改输入():
+    """ranked_all / v_scores 传入后不被原地修改（diversify 复用安全的前提）。"""
+    doc_ids = ["A", "A", "B", "C"]
+    v_scores = {0: 0.90, 1: 0.86, 2: 0.70, 3: 0.68}
+    ranked = _ranked(v_scores)
+    ranked_snapshot = list(ranked)
+    scores_snapshot = dict(v_scores)
+    dual_views(ranked, v_scores, doc_ids, top_k=3, breadth_quota=1, depth_quota=2)
+    assert ranked == ranked_snapshot
+    assert v_scores == scores_snapshot
+
+
+def test_双视图_广度配额默认跟随现网锚定():
+    """config 守卫：BREADTH_QUOTA 默认 == ANCHOR_QUOTA —— 这是「广度视图 =
+    现网 search() 输出」成立的前提；两者脱钩则来源列表口径漂移。"""
+    from app.rag.config import ANCHOR_QUOTA, BREADTH_QUOTA
+
+    assert BREADTH_QUOTA == ANCHOR_QUOTA
 
 

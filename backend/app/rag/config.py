@@ -97,6 +97,19 @@ DOC_MIN_SIM = 0.0
 # （或升级 cache._CACHE_VERSION），否则 TTL 内仍命中旧策略的结果。
 ANCHOR_QUOTA = int(os.getenv("ANCHOR_QUOTA", "1"))
 
+# ---- 双视图配额（P1-② 合成答案分流，见 docs/合成答案分流方案.md）----
+# 一次检索产出两个 top-k 视图（同一候选池，diversify_with_refill 纯函数各排一次，
+# 零额外 embedding/向量检索成本）：
+#   广度视图（BREADTH_QUOTA，默认跟随 ANCHOR_QUOTA=1）→ 来源列表（用户点验入口，需广度）；
+#   深度视图（DEPTH_QUOTA，默认 4）→ 合成上下文（top1 文档多占名额，消除无谓拒答）。
+# 依据：116b933 生成侧 A/B——配额 4 使合成 faithfulness 0.7907→0.9662（拒答率
+# 20%→0），但全局切 4 会让用户可见来源覆盖 0.7873→0.7416，故来源与上下文
+# 各用各的视图，互不牺牲。
+# ⚠️ 检索缓存 key 不含配额维度：改动这两个值后必须清 `rag:search:*`
+# （或升级 cache._CACHE_VERSION），否则 TTL 内仍命中旧配额的结果。
+BREADTH_QUOTA = int(os.getenv("BREADTH_QUOTA", str(ANCHOR_QUOTA)))
+DEPTH_QUOTA = int(os.getenv("DEPTH_QUOTA", "4"))
+
 # 兜底路径（未命中时）：把相似度落在 [FALLBACK_CONTEXT_MIN_SIM, SIMILARITY_THRESHOLD)
 # 的 top-k 片段作为「临界片段」注入 prompt，让模型有据可依，而不是凭参数知识作答。
 # 依据：`_llm_fallback` 原先完全不携带检索结果，是全局最容易编造费率/时限/制度条款的

@@ -22,8 +22,10 @@ from rank_bm25 import BM25Okapi
 from app.rag.cache import corpus_fingerprint
 from app.rag.config import (
     ANCHOR_QUOTA,
+    BREADTH_QUOTA,
     CHROMA_ADD_BATCH,
     CHROMA_COLLECTION,
+    DEPTH_QUOTA,
     DOC_DEDUP_ENABLED,
     DOC_MIN_SIM,
     FACTS_DIR,
@@ -136,6 +138,37 @@ def diversify_with_refill(
     # 故首位仍是全局最相似 chunk，命中判定不受影响。
     picked.sort(key=lambda x: -v_scores.get(x[0], 0.0))
     return picked[:top_k]
+
+
+def dual_views(
+    ranked_all: list[tuple[int, float]],
+    v_scores: dict[int, float],
+    doc_ids: list[str],
+    top_k: int,
+    breadth_quota: int,
+    depth_quota: int,
+) -> tuple[list[tuple[int, float]], list[tuple[int, float]]]:
+    """同一候选池产出「广度/深度」两个 top-k 名单（P1-② 双视图核心，纯函数）。
+
+    `diversify_with_refill` 是纯函数 → 对同一份 ``ranked_all`` 按不同配额各排
+    一次即得两视图，**零额外检索成本**（一次 embedding + 一次 RRF 的产物复用）：
+
+    - 广度视图（``breadth_quota``，生产默认 = ``ANCHOR_QUOTA`` = 1）：来源列表用，
+      与现网 ``search()`` 的输出**逐位一致**（同候选池 + 同配额，单测对拍守卫）；
+    - 深度视图（``depth_quota``，默认 4）：合成上下文用，top1 文档多占名额，
+      生成侧实测消除 20% 无谓拒答（116b933）。
+
+    ``DOC_DEDUP_ENABLED`` 关闭时（非生产形态）调用方应让两视图退化为同一份
+    rerank 结果，不经过本函数。输入契约同 diversify_with_refill：``ranked_all``
+    须按 vsim 降序传入。纯函数，便于单测。
+    """
+    breadth = diversify_with_refill(
+        ranked_all, v_scores, doc_ids, top_k, anchor_quota=breadth_quota
+    )
+    depth = diversify_with_refill(
+        ranked_all, v_scores, doc_ids, top_k, anchor_quota=depth_quota
+    )
+    return breadth, depth
 
 
 # ---------------------------------------------------------------------------
@@ -283,8 +316,14 @@ class HybridRetriever:
     def is_ready(self) -> bool:
         return self._ready
 
-    def search(self, query: str, top_k: int) -> list[dict]:
-        """混合检索，返回 top_k 条结果，每项含 doc_id/chunk_id/text/rrf_score/vector_sim。"""
+    def _hybrid_candidates(
+        self, query: str
+    ) -> tuple[dict[int, float], dict[int, float], dict[int, str]]:
+        """search 公共主体：embedding → 向量 + BM25 → RRF 融合。
+
+        ``search`` 与 ``search_dual`` 共用，保证两个视图天然同源（同一份候选
+        池），不重复调用 embedding。返回 (rrf, v_scores, v_texts)。
+        """
         if self._collection is None:
             raise RuntimeError("向量库未就绪，请先运行 build_vector_store.py")
 
@@ -334,6 +373,12 @@ class HybridRetriever:
         ):
             rrf[pos] = rrf.get(pos, 0.0) + 1.0 / (RRF_K + rank)
 
+        return rrf, v_scores, v_texts
+
+    def search(self, query: str, top_k: int) -> list[dict]:
+        """混合检索，返回 top_k 条结果，每项含 doc_id/chunk_id/text/rrf_score/vector_sim。"""
+        rrf, v_scores, v_texts = self._hybrid_candidates(query)
+
         ranked = sorted(rrf.items(), key=lambda x: -x[1])[:top_k]
 
         # 多文档召回（可选，默认关）：文档级去重 + 保底补位。
@@ -354,6 +399,49 @@ class HybridRetriever:
         elif RERANK_BY_VSIM:
             ranked = rerank_by_vsim(ranked, v_scores, top_k)
 
+        return self._assemble_results(ranked, v_scores, v_texts)
+
+    def search_dual(self, query: str, top_k: int) -> tuple[list[dict], list[dict]]:
+        """一次检索产出双视图：(广度视图, 深度视图)（P1-②，见 docs/合成答案分流方案.md）。
+
+        广度视图（BREADTH_QUOTA，默认 = ANCHOR_QUOTA）与 ``search()`` 输出**逐位
+        一致**（同候选池 + 同配额，单测对拍守卫），供来源列表使用；深度视图
+        （DEPTH_QUOTA，默认 4）top1 文档多占名额，仅供 rag_service 的合成路径
+        作上下文，不出现在任何用户可见输出。
+
+        DOC_DEDUP_ENABLED 关闭时（非生产形态）无法做名额分配，两个视图退化为
+        同一份 rerank 结果。
+        """
+        rrf, v_scores, v_texts = self._hybrid_candidates(query)
+
+        if DOC_DEDUP_ENABLED:
+            ranked_all = sorted(rrf.items(), key=lambda x: -v_scores.get(x[0], 0.0))
+            breadth, depth = dual_views(
+                ranked_all,
+                v_scores,
+                self._doc_ids,
+                top_k,
+                breadth_quota=BREADTH_QUOTA,
+                depth_quota=DEPTH_QUOTA,
+            )
+            return (
+                self._assemble_results(breadth, v_scores, v_texts),
+                self._assemble_results(depth, v_scores, v_texts),
+            )
+
+        ranked = rerank_by_vsim(
+            sorted(rrf.items(), key=lambda x: -x[1])[:top_k], v_scores, top_k
+        )
+        results = self._assemble_results(ranked, v_scores, v_texts)
+        return results, results
+
+    def _assemble_results(
+        self,
+        ranked: list[tuple[int, float]],
+        v_scores: dict[int, float],
+        v_texts: dict[int, str],
+    ) -> list[dict]:
+        """把 (pos, rrf_score) 名单组装为结果 dict 列表（search/search_dual 共用）。"""
         results: list[dict] = []
         for pos, score in ranked:
             results.append(
