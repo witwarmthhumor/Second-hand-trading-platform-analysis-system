@@ -23,6 +23,7 @@ const ComparePanel = defineAsyncComponent(() => import('./components/ComparePane
 const ChangesPanel = defineAsyncComponent(() => import('./components/ChangesPanel.vue'))
 const KbManage = defineAsyncComponent(() => import('./components/KbManage.vue'))
 const SettingsPanel = defineAsyncComponent(() => import('./components/SettingsPanel.vue'))
+const FeedbackPanel = defineAsyncComponent(() => import('./components/FeedbackPanel.vue'))
 // 知识库问答（自持会话、来源、反馈等全部状态）
 const RagChat = defineAsyncComponent(() => import('./components/RagChat.vue'))
 
@@ -145,6 +146,7 @@ const menuItems = [
   { name: 'rag', label: '知识库问答', icon: '💬' },
   { name: 'changes', label: '变化记录', icon: '🔔' },
   { name: 'kb', label: '知识库管理', icon: '📚', adminOnly: true },
+  { name: 'feedback', label: '反馈管理', icon: '📈', adminOnly: true },
   { name: 'settings', label: '设置', icon: '⚙️' },
 ]
 // 可见菜单：普通用户过滤掉 adminOnly
@@ -158,6 +160,7 @@ const pageMeta = {
   rag: ['知识库问答', '融合 RAG 的智能问答助手'],
   changes: ['变化记录', '竞品信息变更历史追踪'],
   kb: ['知识库管理', '知识库语料维护（管理员专属）'],
+  feedback: ['反馈管理', '问答 👍/👎 反馈回流可视化（管理员专属）'],
   settings: ['设置', '评分维度与系统配置'],
 }
 const currentTitle = computed(() => pageMeta[activeTab.value]?.[0] || '')
@@ -361,6 +364,9 @@ onMounted(() => {
 
         <!-- 知识库管理（admin 专属） -->
         <KbManage v-else-if="activeTab === 'kb'" />
+
+        <!-- 反馈管理（admin 专属） -->
+        <FeedbackPanel v-else-if="activeTab === 'feedback'" />
 
         <!-- 设置 -->
         <SettingsPanel v-else-if="activeTab === 'settings'" />

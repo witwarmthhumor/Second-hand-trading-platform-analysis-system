@@ -231,6 +231,13 @@ export const competitorApi = {
   ragFeedback(payload) {
     return http.post('/rag/feedback', payload)
   },
+  // 反馈回流可视化（管理面板，仅管理员）
+  ragFeedbackStats() {
+    return http.get('/rag/feedback/stats')
+  },
+  ragFeedbackList(page = 1, pageSize = 20) {
+    return http.get('/rag/feedback', { params: { page, page_size: pageSize } })
+  },
   // —— 竞品变化记录 ——
   listChanges(params) {
     return http.get('/changes', { params })

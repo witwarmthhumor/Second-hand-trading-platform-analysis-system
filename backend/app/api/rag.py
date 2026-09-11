@@ -12,14 +12,16 @@
 - DELETE /api/rag/sessions/{session_id}   ：删除会话（仅本人或 admin）
 - POST   /api/rag/sessions/batch-delete   ：批量删除会话
 - POST   /api/rag/feedback                ：提交 👍/👎 反馈
+- GET    /api/rag/feedback                ：反馈列表（仅管理员，分页）
+- GET    /api/rag/feedback/stats          ：反馈统计聚合（仅管理员）
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.deps import get_current_user
+from app.deps import get_current_user, require_admin
 from app.models.chat_session import ChatSession
 from app.models.message_feedback import FEEDBACK_DISLIKE, FEEDBACK_LIKE, MessageFeedback
 from app.models.user import User
@@ -32,7 +34,7 @@ from app.schemas.rag import (
     SourceDoc,
 )
 from app.services import chat_session_service as sessions
-from app.services import rag_service
+from app.services import feedback_service, rag_service
 from app.services.change_service import list_stored_competitors
 
 router = APIRouter(prefix="/api/rag", tags=["rag"])
@@ -327,3 +329,23 @@ async def submit_feedback(
     session.add(fb)
     await session.commit()
     return {"ok": True, "id": fb.id}
+
+
+@router.get("/feedback/stats")
+async def feedback_stats(
+    session: AsyncSession = Depends(get_session),
+    _: User = Depends(require_admin),
+) -> dict:
+    """反馈统计聚合（仅管理员），供「反馈回流可视化」面板展示。"""
+    return await feedback_service.feedback_stats(session)
+
+
+@router.get("/feedback")
+async def list_feedback(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+    session: AsyncSession = Depends(get_session),
+    _: User = Depends(require_admin),
+) -> dict:
+    """分页列出问答反馈（仅管理员，最新在前）。"""
+    return await feedback_service.list_feedback(session, page, page_size)
