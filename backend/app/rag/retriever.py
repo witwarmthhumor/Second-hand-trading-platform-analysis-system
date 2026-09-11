@@ -252,7 +252,7 @@ class HybridRetriever:
         return self._ready
 
     def search(self, query: str, top_k: int) -> list[dict]:
-        """混合检索，返回 top_k 条结果，每项含 doc_id/title/text/rrf_score/vector_sim。"""
+        """混合检索，返回 top_k 条结果，每项含 doc_id/chunk_id/text/rrf_score/vector_sim。"""
         if self._collection is None:
             raise RuntimeError("向量库未就绪，请先运行 build_vector_store.py")
 
@@ -319,6 +319,11 @@ class HybridRetriever:
         for pos, score in ranked:
             results.append(
                 {
+                    # chunk_id = 全局位置编号（"c<pos>"），与向量库 / BM25 索引同源。
+                    # 供评测做 **chunk 级** 覆盖率：doc 级口径只要某一篇期望文档的
+                    # 任意一个 chunk 进 top-k 就算覆盖整篇，而一篇平均切 9.46 块
+                    # （FAQ 达 25 块），会把「命中 6 块里的 1 块」也算满分。
+                    "chunk_id": f"c{pos}",
                     "doc_id": self._doc_ids[pos]
                     if pos < len(self._doc_ids)
                     else f"c{pos}",

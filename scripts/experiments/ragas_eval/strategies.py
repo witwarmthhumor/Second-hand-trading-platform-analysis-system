@@ -130,6 +130,8 @@ class ConfigurableRetriever:
         for pos, score in ranked:
             results.append(
                 {
+                    # chunk_id 与生产 retriever.search 保持一致（评测 chunk 级覆盖率用）
+                    "chunk_id": f"c{pos}",
                     "doc_id": doc_ids[pos] if pos < len(doc_ids) else f"c{pos}",
                     "text": v_texts.get(pos, ""),
                     "rrf_score": round(score, 6),

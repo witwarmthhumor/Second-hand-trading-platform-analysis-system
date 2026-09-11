@@ -6,11 +6,18 @@
 
 输出：控制台汇总 + JSON（逐问明细 + 总指标 + 对照的 Hit@5/MRR/nDCG + **覆盖率**）。
 
-**覆盖率是一等指标**（与 Hit@5 并列输出）：Hit@5 只问「期望文档里至少有一篇进
-top-5」，对多文档问题偏乐观，不惩罚「只中 1 篇、漏掉 4 篇」。覆盖率（多文档
-coverage@5 + 单文档 coverage@5）才能暴露「该召回的文档有没有都进来」。
-两者必须一起看——只看 Hit@5 曾把 `diverse` 这类有效策略误判为无效（见
-`RAGAS 评估实验.md` 第九节）。口径实现在 `metrics.py`。
+**覆盖率是一等指标**（与 Hit@5 并列输出），分两级：
+
+- **doc 级**（多文档 coverage@5 + 单文档 coverage@5）：Hit@5 只问「期望文档里
+  至少有一篇进 top-5」，对多文档问题偏乐观，不惩罚「只中 1 篇、漏掉 4 篇」；
+  coverage 才能暴露「该召回的文档有没有都进来」。两者必须一起看——只看 Hit@5
+  曾把 `diverse` 这类有效策略误判为无效（见 `RAGAS 评估实验.md` 第九节）。
+- **chunk 级**（recall / recall_norm / precision / hit1）：doc 级只要命中某篇
+  期望文档的任意一块就算整篇覆盖，而一篇平均切 9.46 块，会系统性高估「内容
+  覆盖」；chunk 级把分母细化到块，并按期望块数分箱（小/中/大）看
+  「文档越大覆盖越差」。
+
+口径实现均在 `metrics.py`。
 """
 
 from __future__ import annotations
@@ -25,8 +32,14 @@ import sys
 import time
 from pathlib import Path
 
-from common import load_golden, reference_contexts_for
-from metrics import PRODUCTION_TOP_K, aggregate, coverage_at_k
+from common import expected_chunk_ids, load_golden, reference_contexts_for
+from metrics import (
+    PRODUCTION_TOP_K,
+    aggregate,
+    aggregate_chunks,
+    chunk_coverage_at_k,
+    coverage_at_k,
+)
 from ragas import SingleTurnSample
 from ragas.metrics import NonLLMContextPrecisionWithReference, NonLLMContextRecall
 
@@ -89,6 +102,8 @@ async def evaluate(questions: list[dict], top_k: int, retriever=None) -> dict:
     ndcg_sum = 0.0
     cov_rows_5: list[dict] = []
     cov_rows_k: list[dict] = []
+    chunk_rows_5: list[dict] = []
+    chunk_rows_k: list[dict] = []
     per_q: list[dict] = []
     failed = 0
 
@@ -135,6 +150,19 @@ async def evaluate(questions: list[dict], top_k: int, retriever=None) -> dict:
         cov_rows_5.append(cov5)
         cov_rows_k.append(covk)
 
+        # chunk 级覆盖率：分母从「文档」细化到「块」（期望块 = 期望文档下全部
+        # chunk）。doc 级只要某篇文档的任意一块进 top-k 就算整篇覆盖，会高估
+        # 「内容覆盖」——chunk 级才看得出「进对了文档，却只带了一小块上下文」。
+        # chunk_id 缺失（旧缓存 / 桩对象）用 "" 兜底，视作未命中。
+        exp_chunks = expected_chunk_ids(expected)
+        ranked_chunks = [r.get("chunk_id") or "" for r in results]
+        chunk5 = chunk_coverage_at_k(ranked_chunks, exp_chunks, PRODUCTION_TOP_K)
+        chunkk = chunk_coverage_at_k(ranked_chunks, exp_chunks, top_k)
+        chunk5["is_multi"] = cov5["is_multi"]
+        chunkk["is_multi"] = covk["is_multi"]
+        chunk_rows_5.append(chunk5)
+        chunk_rows_k.append(chunkk)
+
         per_q.append(
             {
                 "id": q.get("id"),
@@ -149,6 +177,9 @@ async def evaluate(questions: list[dict], top_k: int, retriever=None) -> dict:
                 "distinct_docs_at5": cov5["distinct_docs"],
                 "coverage_at_k": covk["coverage"],
                 "distinct_docs_at_k": covk["distinct_docs"],
+                "chunk_recall_at5": chunk5["recall"],
+                "chunk_recall_norm_at5": chunk5["recall_norm"],
+                "chunk_hit1": chunk5["hit1"],
                 "ranked_ids": ranked_ids[:10],
             }
         )
@@ -158,6 +189,8 @@ async def evaluate(questions: list[dict], top_k: int, retriever=None) -> dict:
     elapsed = time.time() - start
     cov5 = aggregate(cov_rows_5)
     covk = aggregate(cov_rows_k)
+    ch5 = aggregate_chunks(chunk_rows_5)
+    chk = aggregate_chunks(chunk_rows_k)
     return {
         "n": n,
         "top_k": top_k,
@@ -172,6 +205,12 @@ async def evaluate(questions: list[dict], top_k: int, retriever=None) -> dict:
             "production_comparable": top_k == PRODUCTION_TOP_K,
             "at5": cov5,
             "at_k": covk,
+        },
+        # chunk 级覆盖率：overall / multi / single / by_size（见 metrics.aggregate_chunks）
+        "chunk_coverage": {
+            "production_k": PRODUCTION_TOP_K,
+            "at5": ch5,
+            "at_k": chk,
         },
         "elapsed": round(elapsed, 1),
         "failed": failed,
@@ -219,6 +258,18 @@ def main() -> int:
         f"单文档 coverage@5={c5['single_coverage']:.4f} (n={c5['single_n']})  "
         f"Hit(任意@5)={c5['hit_any']:.4f}"
     )
+    o = results["chunk_coverage"]["at5"]["overall"]
+    print(
+        f"[内容覆盖] chunk recall@5={o['recall']:.4f} "
+        f"(名额内={o['recall_norm']:.4f}, 上界={o['coverable']:.4f})  "
+        f"precision@5={o['precision']:.4f}  hit1={o['hit1']:.4f}"
+    )
+    for _name, _b in results["chunk_coverage"]["at5"]["by_size"].items():
+        if _b["n"]:
+            print(
+                f"           {_name} n={_b['n']} recall={_b['recall']:.4f} "
+                f"名额内={_b['recall_norm']:.4f} hit1={_b['hit1']:.4f}"
+            )
     if not results["coverage"]["production_comparable"]:
         print(
             f"  ⚠️ 本次 top_k={results['top_k']} ≠ 生产 {PRODUCTION_TOP_K}："

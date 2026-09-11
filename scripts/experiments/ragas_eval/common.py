@@ -127,3 +127,41 @@ def reference_contexts_for(expected_ids: list[str]) -> list[str]:
     for eid in expected_ids:
         refs.extend(chunks.get(eid, []))
     return refs
+
+
+# ---------------------------------------------------------------------------
+# doc_id → 该文档的 chunk id 集合（chunk 级覆盖率用）
+# ---------------------------------------------------------------------------
+
+_CHUNK_IDS: dict[str, list[str]] | None = None
+
+
+def doc_chunk_ids() -> dict[str, list[str]]:
+    """doc_id → 该文档全部 chunk 的 id 列表（``"c<pos>"``）。
+
+    ``pos`` 是 ``chunking.all_chunks()`` 中的**全局下标**，与检索器入库的
+    chunk id 同源同序：``build_vector_store`` 正是按 ``all_chunks()`` 的顺序写
+    chroma（id = ``f"c{pos}"``），并把 doc_id 列表按同一顺序落盘到
+    ``bm25_index.json``。因此这里按同一顺序枚举即可复现每篇文档的块 id 集合。
+
+    自检：展平后应与 ``bm25_index.json`` 的 ``doc_ids`` 逐位一致
+    （见 ``test_doc_chunk_ids_与bm25索引逐位对拍``）。
+    """
+    global _CHUNK_IDS
+    if _CHUNK_IDS is None:
+        from app.rag.chunking import all_chunks  # 延迟导入，避免循环
+
+        mapping: dict[str, list[str]] = {}
+        for pos, c in enumerate(all_chunks()):
+            mapping.setdefault(c.doc_id, []).append(f"c{pos}")
+        _CHUNK_IDS = mapping
+    return _CHUNK_IDS
+
+
+def expected_chunk_ids(expected_ids: list[str]) -> list[str]:
+    """期望文档列表 → 期望 chunk id 列表（chunk 级覆盖率的分母）。"""
+    mapping = doc_chunk_ids()
+    out: list[str] = []
+    for eid in expected_ids:
+        out.extend(mapping.get(eid, []))
+    return out

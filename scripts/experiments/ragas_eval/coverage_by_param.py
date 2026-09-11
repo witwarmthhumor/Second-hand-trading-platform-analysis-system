@@ -6,6 +6,12 @@
 
 - ``coverage@5``：top-5 命中的期望文档数 / 期望文档总数（多文档的真实召回）
 - ``distinct_docs@5``：top-5 里不同 doc_id 的个数（衡量「同文档多 chunk 占位」）
+- ``chunk recall@5``：top-5 命中的期望**块**数 / 期望块总数——把分母从「文档」
+  细化到「块」。doc 级只要某篇文档的任意一块进 top-5 就算整篇覆盖，而一篇平均
+  切 9.46 块（FAQ 达 25 块），会系统性高估「内容覆盖」
+- ``chunk 名额内``（recall_norm）：命中块数 / min(k, 期望块数)，≤1，消除
+  「文档越大天花板越低」的规模干扰，可跨文档规模比较
+- ``chunk hit1``：top-1 是否属于期望文档的块（直出路径「第一个片段对不对」）
 
 用途：判断「多文档召回」短板到底出在候选池、融合权重，还是排序阶段的文档聚簇。
 注意本脚本按**生产 top_k=5** 跑，而 rerank 是在 RRF top-5 内部重排，因此
@@ -24,8 +30,15 @@ import sys
 import time
 from pathlib import Path
 
-from common import load_golden
-from metrics import PRODUCTION_TOP_K, aggregate, coverage_at_k, unique_ordered
+from common import expected_chunk_ids, load_golden
+from metrics import (
+    PRODUCTION_TOP_K,
+    aggregate,
+    aggregate_chunks,
+    chunk_coverage_at_k,
+    coverage_at_k,
+    unique_ordered,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "backend"))
@@ -48,12 +61,16 @@ _unique = unique_ordered
 
 
 def measure(questions: list[dict], retriever, top_k: int) -> dict:
-    """逐问检索，统计多/单文档的覆盖率与 top-5 文档多样性。
+    """逐问检索，统计 doc 级 + chunk 级覆盖率与 top-5 文档多样性。
 
-    覆盖率口径由 ``metrics.coverage_at_k`` / ``metrics.aggregate`` 提供，
-    与 ``run_eval.py`` 的默认输出**完全同源**。
+    - doc 级口径由 ``metrics.coverage_at_k`` / ``aggregate`` 提供；
+    - chunk 级口径由 ``metrics.chunk_coverage_at_k`` / ``aggregate_chunks`` 提供，
+      期望块集合 = 期望文档下的全部 chunk（``common.expected_chunk_ids``）。
+
+    两处口径与 ``run_eval.py`` 的默认输出**完全同源**。
     """
     rows: list[dict] = []
+    chunk_rows: list[dict] = []
     per_q: list[dict] = []
 
     for q in questions:
@@ -63,6 +80,13 @@ def measure(questions: list[dict], retriever, top_k: int) -> dict:
         row = coverage_at_k(ids, expected, top_k)
         rows.append(row)
 
+        # chunk 级：分母细化到「块」，暴露「进对了文档、却只带了一小块上下文」。
+        # chunk_id 可能缺失（旧缓存 / 桩对象）→ 用 "" 兜底，视作未命中。
+        ranked_chunks = [r.get("chunk_id") or "" for r in results]
+        crow = chunk_coverage_at_k(ranked_chunks, expected_chunk_ids(expected), top_k)
+        crow["is_multi"] = row["is_multi"]
+        chunk_rows.append(crow)
+
         per_q.append(
             {
                 "id": q.get("id"),
@@ -70,10 +94,18 @@ def measure(questions: list[dict], retriever, top_k: int) -> dict:
                 "expected_ids": expected,
                 "ranked_ids": ids[:top_k],
                 "coverage": row["coverage"],
+                "chunk_recall": crow["recall"],
+                "chunk_recall_norm": crow["recall_norm"],
+                "chunk_hit1": crow["hit1"],
             }
         )
 
-    return {"n": len(questions), **aggregate(rows), "per_q": per_q}
+    return {
+        "n": len(questions),
+        **aggregate(rows),
+        "chunks": aggregate_chunks(chunk_rows),
+        "per_q": per_q,
+    }
 
 
 def main() -> int:
@@ -111,23 +143,33 @@ def main() -> int:
         m = measure(questions, rtv, args.top_k)
         elapsed = time.time() - t0
         rows.append((name, m, elapsed))
+        ck = m["chunks"]["overall"]
         print(
             f"  [{name}] 多文档 coverage@{args.top_k}={m['multi_coverage']:.4f} "
             f"(distinct={m['multi_distinct_docs']:.2f}) "
             f"单文档 coverage={m['single_coverage']:.4f} "
-            f"Hit(任意)={m['hit_any']:.4f} | {elapsed:.1f}s"
+            f"Hit(任意)={m['hit_any']:.4f}"
+        )
+        print(
+            f"          └ chunk 级 recall={ck['recall']:.4f} "
+            f"recall_norm={ck['recall_norm']:.4f} "
+            f"precision={ck['precision']:.4f} hit1={ck['hit1']:.4f} | {elapsed:.1f}s"
         )
 
     print(f"\n## 多文档召回诊断（{len(questions)} 问，top_k={args.top_k}）\n")
     print(
         f"| 参数组 | 多文档 coverage@{args.top_k} | 多文档 distinct_docs@{args.top_k} "
-        "| 单文档 coverage | Hit(任意一篇) | 耗时(s) |"
+        "| 单文档 coverage | Hit(任意一篇) | chunk recall | chunk 名额内 | chunk hit1 "
+        "| 耗时(s) |"
     )
-    print("|---|---|---|---|---|---|")
+    print("|---|---|---|---|---|---|---|---|---|")
     for name, m, elapsed in rows:
+        ck = m["chunks"]["overall"]
         print(
             f"| {name} | {m['multi_coverage']:.4f} | {m['multi_distinct_docs']:.2f} "
-            f"| {m['single_coverage']:.4f} | {m['hit_any']:.4f} | {elapsed:.1f} |"
+            f"| {m['single_coverage']:.4f} | {m['hit_any']:.4f} "
+            f"| {ck['recall']:.4f} | {ck['recall_norm']:.4f} | {ck['hit1']:.4f} "
+            f"| {elapsed:.1f} |"
         )
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -140,6 +182,8 @@ def main() -> int:
                 "multi_distinct_docs": m["multi_distinct_docs"],
                 "single_coverage": m["single_coverage"],
                 "hit_any": m["hit_any"],
+                # chunk 级：overall / multi / single / by_size（见 metrics.aggregate_chunks）
+                "chunks": m["chunks"],
                 "elapsed": round(elapsed, 1),
             }
             for name, m, elapsed in rows

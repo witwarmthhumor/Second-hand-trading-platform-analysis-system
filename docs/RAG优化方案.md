@@ -184,6 +184,31 @@ cd backend && .venv/Scripts/python -m pytest -q
 
 **回滚**：`DOC_DEDUP_ENABLED = False` 即恢复原行为（分支短路，rerank 继续生效）。
 
+### 4.7 已知代价：doc 级指标看不到的「深度损失」（P2 第二项发现，待修正）
+
+P2 把覆盖率口径从「文档」细化到「块」之后，发现 4.4 上线的保底 + 补位**并非全无代价**：
+
+| 指标（285 问，top_k=5） | baseline（无去重） | diverse_refill20（生产） |
+|---|---|---|
+| doc 级 多文档 coverage@5 | 0.3755 | **0.5031** |
+| doc 级 单文档 coverage | 0.9755 | **1.0000** |
+| chunk 级 名额内占比（= precision@5） | **0.7032** | 0.2779 |
+| └ 其中单文档问题 | **0.7104** | **0.2000** |
+| chunk 级 hit1（top-1 是否为目标块） | 0.8702 | **0.9158** |
+| RAGAS `context_recall`（独立实现，字符串相似度） | 0.3931 | **0.1227** |
+
+读法：保底阶段为了「覆盖更多文档」，会把**相关度并不高的其它文档**也塞进 top-5。
+单文档问题因此从「5 块同文档上下文」变成「1 块 + 4 块无关文档」
+（precision 0.7104→**0.2000**）。`results[0]` 未变（hit1 反而升到 0.9158），
+所以**直出路径不受影响**；受损的是**合成路径与来源列表**——这正好解释了生成侧
+消融里「合成 v1 的 faithfulness 比直出低 2.6pp」。
+
+**修正方案（P0-2，待实施）**：给保底阶段加相关性闸门——按 vsim 降序扫描时，
+只有当该文档**首个 chunk** 的 `vsim >= DOC_MIN_SIM`（如 0.5）时才占名额；
+不达标就跳过，交给补位阶段回填同文档次优块。预期：单文档 precision 回升、
+多文档广度基本保住、chunk hit1 不退化。验收口径必须同时看
+doc 级 coverage 与 chunk 级 precision，**只看前者会重犯 4.4 的判断偏差**。
+
 ---
 
 ## 五、P1：兜底路径注入检索上下文
@@ -308,7 +333,7 @@ cd backend && .venv/Scripts/python -m pytest -q
 | 项 | 状态 | 说明 |
 |---|---|---|
 | **coverage@5 固化为一等指标** | **已完成（2026-09-11）** | 口径抽到 `metrics.py`（`coverage_at_k` / `aggregate`，`PRODUCTION_TOP_K=5`），`run_eval.py` 每次输出都打印「多文档 coverage@5 / 单文档 coverage@5 / Hit(任意@5)」，JSON 里新增 `coverage.at5` 与 `coverage.at_k`（逐问也有 `coverage_at5` / `distinct_docs_at5`）；`coverage_by_param.py` 改为复用同一实现（**消灭两处口径漂移**，那正是曾导致反向结论的根因）；`compare.py` 对比表新增覆盖率段（旧 JSON 无字段时自动跳过） |
-| **chunk 级 golden** | 待做 | 现 golden 的 `expected_ids` 是 **doc 级**，coverage 分母偏粗（一篇文档任意 chunk 命中即算命中）。补 chunk 级标注后，coverage 口径才真正可信 |
+| **chunk 级 golden** | **已完成（2026-09-11）** | 不引入人工标注，而是把**期望块集合**定义为「期望文档下的全部 chunk」——由 `common.doc_chunk_ids()` 从 `all_chunks()` 枚举 `c<pos>` 复现，与 `bm25_index.json` 的 `doc_ids` **逐位一致**（7619 块 / 1000 篇；测试守卫 `test_doc_chunk_ids_与bm25索引逐位对拍`）。新增 `metrics.chunk_coverage_at_k`（`recall` / `recall_norm` / `precision` / `hit1`）与 `aggregate_chunks`（多/单文档 + 期望块数分箱），`run_eval.py` 与 `coverage_by_param.py` 同步输出，并新增 `chunk_id` 字段（`retriever.search`）。**据此发现 P0 的隐藏代价，见 4.7** |
 | **指标选择纪律** | 已固化 | 评价检索策略**必须同时**看 Hit@5 与 coverage@5——只看 Hit@5 曾把 `diverse` 误判为「无效」，得出反向结论（见 `RAGAS 评估实验.md` 第九节）。现已写进 `run_eval.py` 模块文档与单测守卫（`test_run_eval_输出覆盖率一等指标` 断言 coverage 不得从输出里消失） |
 
 ---
@@ -331,7 +356,12 @@ cd backend && .venv/Scripts/python -m pytest -q
    含 `build_fallback_context` + `retrieved_context` 注入 + 流式端点同步；单测全绿。
    实时探针待向量库稳定后补跑（见 5.4）。
 3. **下一步（P1）**：合成 v1 按问题类型分流灰度。
-4. **随后（P2/P3）**：coverage 并入 `run_eval.py`、补 chunk 级 golden、FAQ 分块观察。
+4. **P2（✅ 第一、二项已完成 2026-09-11）**：coverage@5 固化为 `run_eval.py` 一等指标
+   （`cfef9e0`）；chunk 级 golden / 覆盖率落地（期望块集合由 `common.doc_chunk_ids()`
+   从 `all_chunks()` 复现，与 bm25 索引逐位对拍）→ **据此暴露 P0 的深度损失，见 4.7**。
+5. **下一步（P0-2，优先级已提升）**：保底阶段加相关性闸门 `DOC_MIN_SIM`
+   （见 4.7），修正单文档上下文损失；验收必须同看 doc 级 coverage 与 chunk 级 precision。
+6. **随后（P1-② / P2 剩余 / P3）**：合成答案按问题类型分流灰度、FAQ 分块观察。
 
 ---
 

@@ -343,6 +343,80 @@ rerank 把 doc 级检索推到满分后，下一步验证**生成环节**：生�
 
 原始数据 `results/fallback_gate_probe.json`；完整方案见 `docs/RAG优化方案.md` 第五节。
 
+## 十一、chunk 级覆盖率：doc 级口径掩盖的代价（P2 第二项）
+
+背景：doc 级 `coverage@5` 的分母是「期望文档数」——某篇文档只要有**任意一块**
+进 top-5 就算整篇覆盖。但语料里一篇文档平均切成 **9.46 块**（MD 6~8 块、
+FAQ 20~25 块），「命中 1 块」远不等于「拿到该文档的内容」。于是新增 chunk 级口径
+（`metrics.chunk_coverage_at_k`）：
+
+| 指标 | 含义 |
+|---|---|
+| `recall` | 命中块数 / 期望块总数 —— 内容覆盖率（天花板受名额限制） |
+| `recall_norm` | 命中块数 / min(k, 期望块数) —— 名额内召回效率（≤1，消除文档规模干扰） |
+| `precision` | 命中块数 / k —— top-k 里多少块属于目标文档（有效上下文占比） |
+| `hit1` | top-1 是否属于期望文档的块（直出路径的段落命中） |
+
+**前提校验**：期望块 id 必须与检索返回的 `chunk_id` 同源同序。`common.doc_chunk_ids()`
+用 `all_chunks()` 枚举 `c<pos>`，与 `bm25_index.json` 的 `doc_ids` **逐位完全一致**
+（7619 块 / 1000 篇；回归守卫 `test_doc_chunk_ids_与bm25索引逐位对拍`）。
+在两处独立实现下，本口径与 RAGAS 的 `context_recall`（字符串相似度）量级吻合
+（0.1161 vs 0.1227），互为印证。
+
+### 11.1 结果（285 问，top_k=5）
+
+| 参数组 | 多文档 doc coverage@5 | 单文档 doc coverage | chunk recall | chunk 名额内(=precision) | chunk hit1 |
+|---|---|---|---|---|---|
+| baseline | 0.3755 | 0.9755 | 0.3814 | **0.7032** | 0.8702 |
+| rerank | 0.3755 | 0.9755 | 0.3814 | **0.7032** | 0.9158 |
+| **diverse_refill20（生产已上线）** | **0.5031** | **1.0000** | **0.1161** | **0.2779** | 0.9158 |
+
+拆到多/单文档组：
+
+| 参数组 | 多文档 recall | 多文档 precision | 单文档 recall | 单文档 precision | 单文档 hit1 |
+|---|---|---|---|---|---|
+| baseline | 0.1358 | 0.6934 | 0.5652 | **0.7104** | 0.8405 |
+| diverse_refill20 | 0.0621 | 0.3820 | 0.1565 | **0.2000** | 0.9141 |
+
+**与 RAGAS 指标互为印证（同为 top_k=5 的干净对照）**：
+
+| 指标 | baseline（无去重） | diverse_refill20（生产） | 变化 |
+|---|---|---|---|
+| RAGAS `context_recall`（rapidfuzz 字符串相似度） | 0.3931 | **0.1227** | **-27.0pp** |
+| RAGAS `context_precision` | 0.8812 | 0.9127 | +3.2pp |
+| chunk `recall`（精确块 id 集合） | 0.3814 | 0.1161 | -26.5pp |
+| chunk `precision` | 0.7032 | 0.2779 | -42.5pp |
+
+两套**完全独立**的实现（一套是 rapidfuzz 字符串相似度、一套是精确块 id 集合）
+给出了同向且同量级的结论：生产形态牺牲了内容召回、换来了排序精度。这排除了
+「指标实现本身骗人」的可能（本项目已两次踩过指标反噬，见 §9.1 与 §11 前言）。
+
+### 11.2 三条读法（本次最重要的发现）
+
+1. **生产形态的 doc 级提升是「广度换深度」**：多文档 coverage 0.3755→0.5031、
+   单文档 0.9755→1.0000，但 chunk 名额内占比 0.7032→0.2779。它把 top-5 从
+   「少数文档的多块」换成了「5 篇不同文档各 1 块」——**doc 级指标看不到这个代价**。
+2. **代价集中在单文档问题**：单文档 precision 0.7104→**0.2000**，即 5 个名额里
+   只有 1 个落在目标文档上，另 4 个给了无关文档；多文档 0.6934→0.3820 则属合理的
+   广度换深度（多文档问题本就需要覆盖更多文档）。**单文档是纯损失。**
+3. **直出路径不受损**：`hit1` 0.8702→**0.9158**（top-1 未变，仍是全局最相似）。
+   受损的是**需要多块上下文的合成路径与来源列表**——这为第七节「合成 v1 的
+   faithfulness 比直出低 2.6pp」提供了直接解释：合成拿到的 5 块里，单文档问题
+   有 4 块是无关文档。
+
+分箱看（`diverse_refill20`）：小文档(≤6块) recall 0.1667 / 名额内 0.2000，
+中文档 0.1382 / 0.2230，大文档(>12块) 0.0535 / 0.3857 —— 文档越大，recall 天花板
+越低（名额限制），而名额内效率反而更高（去重更倾向于把不同大文档塞进来）。
+
+### 11.3 下一步（P0-2）：保底阶段阈值化
+
+按 11.2，`diversify_with_refill` 的「保底」阶段应当**只在跨文档 chunk 确有相关性
+时才占名额**（例如 `vsim >= DOC_MIN_SIM`），否则把名额回填给同文档次优块。
+预期：单文档 precision 回升、多文档广度基本保住。方案与实测待补。
+
+原始数据 `results/coverage_by_param_chunk.json`（三参数组横向）与
+`results/chunk_prod.json`（run_eval 生产口径）。
+
 ## 复现
 
 ```bash
@@ -383,10 +457,24 @@ backend/.venv/Scripts/python scripts/experiments/ragas_eval/coverage_by_param.py
 # ---------- 兜底三档分流（第十节） ----------
 # 8. 领域内误伤面 + 领域外落档分布（纯检索，无 LLM 成本）
 backend/.venv/Scripts/python scripts/experiments/ragas_eval/fallback_gate_probe.py
+
+# ---------- chunk 级覆盖率（第十一节） ----------
+# 9. 期望块集合与 bm25 索引逐位对拍 + chunk 级指标单测
+backend/.venv/Scripts/python -m pytest backend/tests/test_rag_coverage_diag.py -q
+
+# 10. doc 级 + chunk 级横向对比（top_k=5 = 生产口径）
+backend/.venv/Scripts/python scripts/experiments/ragas_eval/coverage_by_param.py \
+    --params baseline,rerank,diverse_refill20 --top-k 5 \
+    --out coverage_by_param_chunk.json
+
+# 11. run_eval 生产口径（同时打印 doc 级与 chunk 级覆盖率）
+backend/.venv/Scripts/python scripts/experiments/ragas_eval/run_eval.py \
+    --strategy prod --top-k 5 --out chunk_prod.json
 ```
 
 > 依赖：`ragas==0.3.5` + `rapidfuzz`（非 LLM 指标需 rapidfuzz 做字符串相似度）。
 > 生成侧另需可用的 OpenAI 兼容 LLM 通道（本项目实测 `deepseek-chat` 可用，
 > 非思考型、不需大 `max_tokens`；若换思考型模型如 `gemini-3.x-flash`，
 > `max_tokens` 需 ≥3000，否则正文被思考 token 挤掉）。
-> 结果文件：`results/{baseline,optimized_prod,gen_direct,gen_synth_v1,gen_synth_v2,coverage_by_param}.json`。
+> 结果文件：`results/{baseline,optimized_prod,gen_direct,gen_synth_v1,gen_synth_v2,coverage_by_param}.json`；
+> chunk 级另有 `coverage_by_param_chunk.json`（横向）与 `chunk_prod.json` / `chunk_baseline5.json`（run_eval）。
