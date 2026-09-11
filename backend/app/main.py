@@ -24,7 +24,7 @@ from app.diagnostics import collect_startup_warnings
 from app.init_db import init_db
 from app.logging_config import setup_logging
 from app.metrics import get_metrics
-from app.middleware import RequestContextMiddleware
+from app.middleware import RateLimitMiddleware, RequestContextMiddleware
 from app.models import (  # noqa: F401  # 确保模型被注册到 Base
     AppSetting,
     ChatSession,
@@ -32,6 +32,7 @@ from app.models import (  # noqa: F401  # 确保模型被注册到 Base
     CompetitorChange,
     User,
 )
+from app.rate_limit import get_rate_limiter
 
 # 尽早初始化日志：保证应用模块 import 阶段的日志也走统一格式
 setup_logging()
@@ -102,7 +103,10 @@ async def _monitor_job() -> None:
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
-# 请求中间件：request_id 注入 + 访问日志 + 指标采集（纯 ASGI，不破坏 SSE 流式）
+# 请求中间件（注册顺序 = 由内到外）：限流在内层，先于业务短路返回 429；
+# 上下文中间件在外层，保证被限流的请求也同样有 request_id、访问日志与指标。
+# 两者都是纯 ASGI 实现，不破坏 SSE 流式。
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(RequestContextMiddleware)
 
 app.include_router(auth_router)
@@ -150,8 +154,8 @@ async def health() -> dict:
 
 @app.get("/metrics")
 async def metrics() -> dict:
-    """运行时可观测指标（请求计数/状态码分布/延迟统计）。
+    """运行时可观测指标（请求计数/状态码分布/延迟统计 + 限流状态）。
 
     注：当前无鉴权，仅用于本机/内网运维观测；若对外暴露需在其前置一层访问控制。
     """
-    return get_metrics().snapshot()
+    return {**get_metrics().snapshot(), "rate_limit": get_rate_limiter().snapshot()}

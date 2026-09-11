@@ -24,6 +24,9 @@ os.environ["DATABASE_URL"] = TEST_URL
 # 测试环境关闭检索缓存：避免每次问答都尝试连真实 Redis（拖慢用例），
 # 缓存自身的行为由 test_rag_cache.py 用 fake 客户端单独覆盖
 os.environ["RAG_CACHE_ENABLED"] = "false"
+# 测试环境默认关闭限流：否则同一 IP 的大量用例会互相把额度打满；
+# 限流自身的行为由 test_rate_limit.py 显式打开开关单独覆盖。
+os.environ["RATE_LIMIT_ENABLED"] = "false"
 
 from app.db import Base, engine  # noqa: E402
 from app.models import (  # noqa: E402, F401  # 注册模型到 Base

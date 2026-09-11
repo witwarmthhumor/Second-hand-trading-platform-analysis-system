@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
@@ -17,6 +18,7 @@ from starlette.datastructures import MutableHeaders
 from app.config import settings
 from app.logging_config import set_request_id
 from app.metrics import get_metrics
+from app.rate_limit import POLICY_LABELS, check_request
 
 logger = logging.getLogger("app.access")
 
@@ -107,3 +109,73 @@ class RequestContextMiddleware:
                     logger.warning("请求完成", extra={"extra_fields": fields})
                 else:
                     logger.info("请求完成", extra={"extra_fields": fields})
+
+
+class RateLimitMiddleware:
+    """接口限流中间件（R3）：超限直接短路返回 429，**不进入业务处理**。
+
+    这是限流的价值所在——被挡下的请求不会触达 LLM，因此不会产生费用；若放在
+    业务层内部判断，成本已经花掉了。
+
+    同样实现为纯 ASGI 中间件：只需在判定通过时原样透传 ``send``，不影响 SSE 流式。
+    注册在 ``RequestContextMiddleware`` 内层，这样 429 也会带上 request_id、计入
+    访问日志与 4xx 状态分布（否则「谁被限流了」这条线索会丢）。
+    """
+
+    def __init__(self, app) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        decision = check_request(scope)
+        if decision is None or decision.allowed:
+            await self.app(scope, receive, send)
+            return
+
+        await self._reject(scope, send, decision)
+
+    async def _reject(self, scope, send, decision) -> None:
+        """返回 429：带 Retry-After 与额度头，便于客户端退避而非盲目重试。"""
+        get_metrics().observe_rate_limited(decision.policy)
+        if decision.scope == "global":
+            detail = "服务当前请求量过高，请稍后重试"
+        else:
+            label = POLICY_LABELS.get(decision.policy, decision.policy)
+            detail = (
+                f"请求过于频繁（{label}每分钟限 {decision.limit} 次），请稍后重试"
+            )
+        logger.warning(
+            "请求被限流",
+            extra={
+                "extra_fields": {
+                    "policy": decision.policy,
+                    "scope": decision.scope,
+                    "method": scope.get("method", "-"),
+                    "path": scope.get("path", "/"),
+                    "retry_after": decision.retry_after,
+                }
+            },
+        )
+
+        body = json.dumps(
+            {
+                "detail": detail,
+                "code": "rate_limited",
+                "policy": decision.policy,
+                "scope": decision.scope,
+                "retry_after": decision.retry_after,
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+        headers = [
+            (b"content-type", b"application/json; charset=utf-8"),
+            (b"content-length", str(len(body)).encode("latin-1")),
+            (b"retry-after", str(decision.retry_after).encode("latin-1")),
+            (b"x-ratelimit-limit", str(decision.limit).encode("latin-1")),
+            (b"x-ratelimit-remaining", b"0"),
+        ]
+        await send({"type": "http.response.start", "status": 429, "headers": headers})
+        await send({"type": "http.response.body", "body": body})

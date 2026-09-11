@@ -37,4 +37,10 @@ def collect_startup_warnings() -> list[str]:
     if settings.admin_password and len(settings.admin_password) < 8:
         warnings.append("内置管理员口令长度不足 8 位，建议同步提升")
 
+    if not settings.rate_limit_enabled:
+        warnings.append(
+            "接口限流已关闭（RATE_LIMIT_ENABLED=false）：LLM 接口无频率保护，"
+            "异常/恶意调用可直接打穿成本"
+        )
+
     return warnings

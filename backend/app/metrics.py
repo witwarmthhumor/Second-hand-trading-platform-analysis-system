@@ -32,6 +32,8 @@ class Metrics:
         # 各延迟桶累计次数（len = len(_LATENCY_BUCKETS_MS) + 1，最后一桶为 +inf）
         self._latency_buckets = [0] * (len(_LATENCY_BUCKETS_MS) + 1)
         self._errors = 0  # 未捕获异常（500）计数
+        # 被限流（429）次数，按策略分组：{policy: count}
+        self._rate_limited: dict[str, int] = {}
 
     def observe_request(
         self, method: str, path: str, status: int, duration_ms: float
@@ -56,6 +58,11 @@ class Metrics:
         """记录一次未捕获异常（中间件兜底 500）。"""
         with self._lock:
             self._errors += 1
+
+    def observe_rate_limited(self, policy: str) -> None:
+        """记录一次被限流拦截（429），按策略分组，便于判断是哪类接口在被刷。"""
+        with self._lock:
+            self._rate_limited[policy] = self._rate_limited.get(policy, 0) + 1
 
     def snapshot(self) -> dict:
         """导出当前指标快照（JSON 可序列化）。"""
@@ -82,6 +89,8 @@ class Metrics:
                 "uptime_seconds": round(time.time() - self._started_at, 1),
                 "requests_total": self._total,
                 "unhandled_errors": self._errors,
+                "rate_limited_total": sum(self._rate_limited.values()),
+                "rate_limited_by_policy": dict(sorted(self._rate_limited.items())),
                 "status_classes": dict(sorted(self._by_class.items())),
                 "latency_avg_ms": round(self._latency_sum_ms / self._total, 2)
                 if self._total
@@ -101,6 +110,7 @@ class Metrics:
             self._latency_max_ms = 0.0
             self._latency_buckets = [0] * (len(_LATENCY_BUCKETS_MS) + 1)
             self._errors = 0
+            self._rate_limited.clear()
             self._started_at = time.time()
 
 

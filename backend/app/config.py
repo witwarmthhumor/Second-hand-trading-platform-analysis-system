@@ -53,6 +53,22 @@ class Settings(BaseSettings):
     # 锁定时长（分钟），到期自动解锁；期间即使密码正确也拒绝
     login_lockout_minutes: int = 15
 
+    # ---- 接口限流（R3）----
+    # 总开关：默认开启。置 false 后所有接口都不限流（此时启动告警会提示）。
+    rate_limit_enabled: bool = True
+    # 昂贵接口（会触发 LLM 调用或重计算：问答/抓取/监控轮次/报告导出/重建索引）
+    # 单用户每分钟上限
+    rate_limit_llm_per_minute: int = 20
+    # 昂贵接口的全局每分钟上限（跨用户总量兜底，防多账号绕开单用户额度打穿 LLM 成本）
+    rate_limit_llm_global_per_minute: int = 60
+    # 登录/注册按来源 IP 每分钟上限（与登录失败锁定互补：后者挡单账号爆破，这里挡多账号喷洒）
+    rate_limit_auth_per_minute: int = 10
+    # 其余普通接口单用户每分钟上限（较宽松，只挡脚本刷接口）
+    rate_limit_default_per_minute: int = 120
+    # 是否信任 X-Forwarded-For 首跳作为客户端 IP。仅当部署在**可信反向代理**之后
+    # 才置 true；直连暴露时信任该头等于把限流维度交给客户端伪造。
+    rate_limit_trust_proxy: bool = False
+
     # ---- 定时监控 ----
     # 监控任务总开关。默认关闭：无人值守抓取会产生真实外网请求与 LLM 费用，
     # 必须显式打开（.env 中设 MONITOR_ENABLED=true）后才运行。
