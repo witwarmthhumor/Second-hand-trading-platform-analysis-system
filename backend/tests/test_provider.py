@@ -30,7 +30,7 @@ async def test_fallback_provider_falls_back_on_remote_error(monkeypatch):
     """远程提炼失败时自动回退规则提取，链路不中断（R1 降级策略）。"""
 
     class _BoomRemote(prov.RemoteLLMProvider):
-        async def extract(self, url, html, title=""):
+        async def extract(self, url, html, title="", hints=None):
             raise RuntimeError("402 余额不足")
 
     provider = prov.FallbackProvider(_BoomRemote(), prov.RuleExtractor())
@@ -47,7 +47,7 @@ async def test_fallback_provider_uses_remote_when_ok():
     """远程正常时不回退，并透传 token 用量。"""
 
     class _OkRemote(prov.RemoteLLMProvider):
-        async def extract(self, url, html, title=""):
+        async def extract(self, url, html, title="", hints=None):
             self.last_input_tokens = 100
             self.last_output_tokens = 20
             return prov.Extraction(name="闲鱼", type="C2C 闲置交易")

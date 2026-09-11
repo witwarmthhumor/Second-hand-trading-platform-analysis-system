@@ -102,7 +102,7 @@ class _CostProvider(RemoteLLMProvider):
         self.last_input_tokens = 2_000_000
         self.last_output_tokens = 0
 
-    async def extract(self, url, html, title=""):
+    async def extract(self, url, html, title="", hints=None):
         return Extraction(name="熔断测试", type="C2C 闲置交易", positioning="p")
 
 

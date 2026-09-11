@@ -39,8 +39,17 @@ class Extraction(BaseModel):
 class LLMProvider(Protocol):
     """提炼能力统一接口。"""
 
-    async def extract(self, url: str, html: str, title: str = "") -> Extraction:
-        """从网页内容提炼竞品结构化字段。"""
+    async def extract(
+        self,
+        url: str,
+        html: str,
+        title: str = "",
+        hints: dict[str, str] | None = None,
+    ) -> Extraction:
+        """从网页内容提炼竞品结构化字段。
+
+        hints：站点解析器给出的结构化线索（平台名/定位/关键词等），可为空。
+        """
         ...
 
 
@@ -87,11 +96,23 @@ class RemoteLLMProvider:
         self.last_input_tokens: int = 0
         self.last_output_tokens: int = 0
 
-    async def extract(self, url: str, html: str, title: str = "") -> Extraction:
+    async def extract(
+        self,
+        url: str,
+        html: str,
+        title: str = "",
+        hints: dict[str, str] | None = None,
+    ) -> Extraction:
         # 先用 BS4 抽取纯文本（去标签、压缩空白），比直接发 HTML 更省 token
         text = self._html_to_text(html, title)
         snippet = text[:4000]
-        user_prompt = f"网页 URL: {url}\n标题: {title}\n正文内容:\n{snippet}"
+        user_prompt = f"网页 URL: {url}\n标题: {title}\n"
+        # 站点解析器给出的结构化线索，优先级高于正文（正文常含大量导航噪声）
+        if hints:
+            hint_lines = "\n".join(f"- {k}: {v}" for k, v in hints.items() if v)
+            if hint_lines:
+                user_prompt += f"页面解析线索（可信度较高，优先参考）:\n{hint_lines}\n"
+        user_prompt += f"正文内容:\n{snippet}"
 
         async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(
@@ -192,27 +213,42 @@ class RuleExtractor:
     # 纯本地规则，不产生费用
     billable = False
 
-    async def extract(self, url: str, html: str, title: str = "") -> Extraction:
+    async def extract(
+        self,
+        url: str,
+        html: str,
+        title: str = "",
+        hints: dict[str, str] | None = None,
+    ) -> Extraction:
         from bs4 import BeautifulSoup
 
         soup = BeautifulSoup(html, "html.parser")
-        if not title and soup.title and soup.title.string:
-            title = soup.title.string.strip()
-        if not title:
-            title = url
+        hints = hints or {}
+        # 线索优先：解析器拿到的平台名/定位比通用 title 标签更准
+        name = hints.get("平台名") or title
+        if not name and soup.title and soup.title.string:
+            name = soup.title.string.strip()
+        if not name:
+            name = url
 
-        desc = ""
-        meta = soup.find("meta", attrs={"name": "description"})
-        if meta and meta.get("content"):
-            desc = meta["content"].strip()
+        desc = hints.get("定位/简介") or ""
+        if not desc:
+            meta = soup.find("meta", attrs={"name": "description"})
+            if meta and meta.get("content"):
+                desc = meta["content"].strip()
 
         # 正文：取 h2/段落文本，截取前几段
         parts = [p.get_text(" ", strip=True) for p in soup.find_all("p")]
         body = " ".join(parts)[:2000]
 
+        # 平台类型可由解析器直接给定（如爱回收=回收置换），否则用默认值
+        platform_type = hints.get("平台类型") or "C2C 闲置交易"
+        if platform_type not in _TYPE_WHITELIST:
+            platform_type = "C2C 闲置交易"
+
         return Extraction(
-            name=title,
-            type="C2C 闲置交易",
+            name=name,
+            type=platform_type,
             positioning=desc or None,
             features=body or None,
         )
@@ -236,10 +272,18 @@ class FallbackProvider:
         # 本次是否实际发生了回退（供调用方/测试观察）
         self.fell_back = False
 
-    async def extract(self, url: str, html: str, title: str = "") -> Extraction:
+    async def extract(
+        self,
+        url: str,
+        html: str,
+        title: str = "",
+        hints: dict[str, str] | None = None,
+    ) -> Extraction:
         self.fell_back = False
         try:
-            result = await self.primary.extract(url=url, html=html, title=title)
+            result = await self.primary.extract(
+                url=url, html=html, title=title, hints=hints
+            )
         except Exception as exc:
             self.fell_back = True
             self.last_input_tokens = 0
@@ -247,7 +291,9 @@ class FallbackProvider:
             logger.warning(
                 "远程 LLM 提炼失败，回退规则提取: %s: %s", type(exc).__name__, exc
             )
-            return await self.secondary.extract(url=url, html=html, title=title)
+            return await self.secondary.extract(
+                url=url, html=html, title=title, hints=hints
+            )
 
         self.last_input_tokens = getattr(self.primary, "last_input_tokens", 0)
         self.last_output_tokens = getattr(self.primary, "last_output_tokens", 0)

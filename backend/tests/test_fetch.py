@@ -14,7 +14,7 @@ from app.main import app
 class _FakeProvider:
     """返回固定提炼结果的 mock provider。"""
 
-    async def extract(self, url, html, title=""):
+    async def extract(self, url, html, title="", hints=None):
         return Extraction(
             name="闲鱼",
             type="C2C 闲置交易",

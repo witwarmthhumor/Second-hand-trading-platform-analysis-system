@@ -48,19 +48,25 @@ async def lifespan(app: FastAPI):
     await init_db()
     _started_at = datetime.now(UTC)
 
-    # 启动 APScheduler：定时监控（每小时触发一次快照检查；骨架，实际抓取策略按需启用）
+    # 启动 APScheduler：定时监控（F2，默认关闭；开启后执行真实的抓取-对比-落库）
     _scheduler = AsyncIOScheduler(timezone="Asia/Shanghai")
     _scheduler.add_job(
         _monitor_job,
         "interval",
-        hours=1,
+        hours=settings.monitor_interval_hours,
         id="competitor_monitor",
         replace_existing=True,
     )
     _scheduler.start()
     logger.info(
         "应用启动完成",
-        extra={"extra_fields": {"app": settings.app_name}},
+        extra={
+            "extra_fields": {
+                "app": settings.app_name,
+                "monitor_enabled": settings.monitor_enabled,
+                "monitor_interval_hours": settings.monitor_interval_hours,
+            }
+        },
     )
 
     yield
@@ -71,13 +77,27 @@ async def lifespan(app: FastAPI):
 
 
 async def _monitor_job() -> None:
-    """定时监控任务：对已入库竞品做一次快照检查（占位，避免无人值守抓取副作用）。"""
-    # 记录到日志即可；实际抓取对比策略待配置后启用
-    from app.db import async_session_factory
-    from app.services.change_service import list_stored_competitors
+    """定时监控任务（F2）：真实执行一轮「重抓 → 提炼 → 差异比对 → 落库变化」。
 
-    async with async_session_factory() as session:
-        _ = await list_stored_competitors(session)  # 触发一次查询，确认 DB 连通
+    默认关闭（``MONITOR_ENABLED=false``）：无人值守抓取会产生真实外网请求与 LLM 费用，
+    必须显式开启。关闭时仅记一条 debug 日志，不做任何外部调用。
+    """
+    if not settings.monitor_enabled:
+        logger.debug("监控未启用（MONITOR_ENABLED=false），跳过本轮")
+        return
+
+    from app.db import async_session_factory
+    from app.services.monitor_service import run_monitor_cycle
+
+    try:
+        async with async_session_factory() as session:
+            outcome = await run_monitor_cycle(session)
+    except Exception:
+        # 调度器里的异常若不吞掉会打印整段堆栈并可能影响后续调度，这里显式兜住
+        logger.exception("监控轮次执行异常")
+        return
+
+    logger.info("监控轮次完成", extra={"extra_fields": outcome.as_dict()})
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)

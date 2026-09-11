@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai.cost import get_cost_tracker
 from app.ai.provider import Extraction, get_provider
 from app.crawler.fetcher import fetch_url
+from app.crawler.parsers import parse_page
 from app.models.competitor import Competitor, DataStatus
 
 
@@ -29,10 +30,12 @@ class CostLimitExceeded(Exception):
 async def fetch_and_extract(url: str) -> tuple[Extraction, str, str]:
     """抓取网页并用 LLM/规则提炼。返回 (提炼结果, 标题, 原始HTML)。
 
-    提炼前先按输入规模预检成本，超阈值或已熔断则抛 CostLimitExceeded。
-    仅计费 provider（远程 LLM）参与预检与记账；规则兜底不计费。
+    流程：抓取 → 站点解析（F1，产出结构化线索）→ 成本预检 → 提炼 → 记账。
+    线索作为提炼输入的一部分，能显著提升 JS 重度渲染站点的字段质量。
     """
     page = await fetch_url(url)
+    # 站点解析：闲鱼/转转/爱回收走专属解析器，其余回落通用解析
+    parsed = parse_page(url, page.html, title=page.title)
     provider = get_provider()
     billable = bool(getattr(provider, "billable", False))
 
@@ -45,7 +48,9 @@ async def fetch_and_extract(url: str) -> tuple[Extraction, str, str]:
         if not verdict["allowed"]:
             raise CostLimitExceeded(verdict["reason"], verdict)
 
-    extraction = await provider.extract(url=url, html=page.html, title=page.title)
+    extraction = await provider.extract(
+        url=url, html=page.html, title=page.title, hints=parsed.hints
+    )
 
     # 真实用量记账（仅计费 provider；远程失败回退规则时用量为 0，记账天然为 0）
     if billable:
