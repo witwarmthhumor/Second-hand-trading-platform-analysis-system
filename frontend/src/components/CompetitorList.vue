@@ -234,8 +234,6 @@ onMounted(fetchList)
 
 // 数据变更广播 → 重拉列表（替代原先「切 tab 重新挂载才刷新」的隐式行为）
 watch(listVersion, fetchList)
-
-defineExpose({ fetchList })
 </script>
 
 <template>
