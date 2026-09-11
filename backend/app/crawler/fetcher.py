@@ -79,9 +79,14 @@ def _assert_public(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> None:
         raise UnsafeUrlError(f"目标地址指向内网/保留地址: {addr}")
 
 
-def _redirect_is_safe(request: httpx.Request) -> None:
-    """httpx 重定向钩子：跟随重定向前再次校验目标，防止重定向绕过 SSRF 防护。"""
-    validate_public_url(str(request.url))
+async def _redirect_is_safe(response: httpx.Response) -> None:
+    """httpx 重定向钩子：跟随重定向前再次校验目标，防止重定向绕过 SSRF 防护。
+
+    注意：AsyncClient 的 event hook 会被 httpx 直接 ``await``，必须是协程函数；
+    同步函数挂上来会在每次响应时抛 ``TypeError: object NoneType can't be used
+    in 'await' expression``（真实线上事故，勿改回 sync def）。
+    """
+    validate_public_url(str(response.url))
 
 
 @dataclass
@@ -93,11 +98,14 @@ class FetchedPage:
     html: str
 
 
-async def fetch_url(url: str) -> FetchedPage:
+async def fetch_url(
+    url: str, transport: httpx.AsyncBaseTransport | None = None
+) -> FetchedPage:
     """抓取指定 URL，返回标题与原始 HTML。
 
     抓取前先做 SSRF 校验（仅 http/https 且非内网地址）；重定向时通过钩子再次
-    校验，防止攻击者用 302 跳转到内网绕过防护。
+    校验，防止攻击者用 302 跳转到内网绕过防护。``transport`` 仅供测试注入
+    MockTransport 使用，生产调用方不传。
     """
     validate_public_url(url)
 
@@ -106,6 +114,7 @@ async def fetch_url(url: str) -> FetchedPage:
         headers=_HEADERS,
         follow_redirects=True,
         event_hooks={"response": [_redirect_is_safe]},
+        transport=transport,
     ) as client:
         resp = await client.get(url)
         resp.raise_for_status()
