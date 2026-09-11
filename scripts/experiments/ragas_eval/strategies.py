@@ -32,6 +32,15 @@ class SearchParams:
     # 用同文档次优 chunk 补满名额，避免单文档问题因去重白白损失上下文。
     # 见 diversify_with_refill 的 docstring（这是生产接入的正确形态）。
     refill: bool = False
+    # 保底阶段相关性闸门（P0-2）：文档代表 chunk 的 vsim 低于此值则整篇不占名额，
+    # 名额交给补位（补位不设闸门）。0=关闭（= 未加闸门的旧形态）。
+    # 动机见 docs/RAG优化方案.md 4.7：无闸门时低相关文档也占格子，
+    # 单文档问题 chunk 级 precision 从 0.7104 掉到 0.2000。
+    doc_min_sim: float = 0.0
+    # 锚定文档名额（P0-2 修正）：允许 top1 所在文档在保底阶段多占名额，
+    # 1=原行为（每文档 1 个）；越大越偏「深度」（单文档问题受益），
+    # 越小越偏「广度」（多文档覆盖受益）。动机见 docs/RAG优化方案.md 4.7。
+    anchor_quota: int = 1
     # rerank 精排：RRF 融合后，用向量相似度二次排序（而非纯 RRF 分数）。
     # 动机：BM25 独有命中的 chunk 向量相似度为 0（纯关键词、语义无关），
     # 却通过 RRF 排到靠前位置，挤掉真正相关的 chunk。vsim 能压掉这类噪声。
@@ -113,7 +122,14 @@ class ConfigurableRetriever:
                 ranked_all = sorted(
                     rrf.items(), key=lambda x: -v_scores.get(x[0], 0.0)
                 )
-                ranked = diversify_with_refill(ranked_all, v_scores, doc_ids, top_k)
+                ranked = diversify_with_refill(
+                    ranked_all,
+                    v_scores,
+                    doc_ids,
+                    top_k,
+                    min_sim=p.doc_min_sim,
+                    anchor_quota=p.anchor_quota,
+                )
             else:
                 # 硬去重：每文档只留 RRF 最高分 chunk，直接截断 top_k。
                 best_per_doc: dict[str, float] = {}
@@ -170,6 +186,66 @@ PARAM_SETS: dict[str, SearchParams] = {
         rrf_k=60.0,
         max_chunks_per_doc=1,
         refill=True,
+    ),
+    # 保底 + 补位 + 相关性闸门（P0-2 阈值扫描）：doc_min_sim 取值影响
+    # 「保底广度」与「上下文精度」的权衡，故扫 0.3/0.4/0.5/0.6 四档。
+    "gate30": SearchParams(
+        query_n_results=20,
+        bm25_weight=1.0,
+        rrf_k=60.0,
+        max_chunks_per_doc=1,
+        refill=True,
+        doc_min_sim=0.3,
+    ),
+    "gate40": SearchParams(
+        query_n_results=20,
+        bm25_weight=1.0,
+        rrf_k=60.0,
+        max_chunks_per_doc=1,
+        refill=True,
+        doc_min_sim=0.4,
+    ),
+    "gate50": SearchParams(
+        query_n_results=20,
+        bm25_weight=1.0,
+        rrf_k=60.0,
+        max_chunks_per_doc=1,
+        refill=True,
+        doc_min_sim=0.5,
+    ),
+    "gate60": SearchParams(
+        query_n_results=20,
+        bm25_weight=1.0,
+        rrf_k=60.0,
+        max_chunks_per_doc=1,
+        refill=True,
+        doc_min_sim=0.6,
+    ),
+    # 锚定 top1 文档的深度/广度权衡（P0-2 修正方案）：anchor_quota=2/3/4。
+    # 阈值判据已被实测证伪（噪声/期望 vsim 分布重叠），故改用显式名额旋钮。
+    "aq2": SearchParams(
+        query_n_results=20,
+        bm25_weight=1.0,
+        rrf_k=60.0,
+        max_chunks_per_doc=1,
+        refill=True,
+        anchor_quota=2,
+    ),
+    "aq3": SearchParams(
+        query_n_results=20,
+        bm25_weight=1.0,
+        rrf_k=60.0,
+        max_chunks_per_doc=1,
+        refill=True,
+        anchor_quota=3,
+    ),
+    "aq4": SearchParams(
+        query_n_results=20,
+        bm25_weight=1.0,
+        rrf_k=60.0,
+        max_chunks_per_doc=1,
+        refill=True,
+        anchor_quota=4,
     ),
     # rerank 精排：RRF 候选 + vsim 二次排序（压掉 BM25 噪声）
     "rerank": SearchParams(

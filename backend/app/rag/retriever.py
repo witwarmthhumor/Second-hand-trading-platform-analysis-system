@@ -21,9 +21,11 @@ from rank_bm25 import BM25Okapi
 
 from app.rag.cache import corpus_fingerprint
 from app.rag.config import (
+    ANCHOR_QUOTA,
     CHROMA_ADD_BATCH,
     CHROMA_COLLECTION,
     DOC_DEDUP_ENABLED,
+    DOC_MIN_SIM,
     FACTS_DIR,
     QUERY_N_RESULTS,
     RERANK_BY_VSIM,
@@ -51,6 +53,8 @@ def diversify_with_refill(
     v_scores: dict[int, float],
     doc_ids: list[str],
     top_k: int,
+    min_sim: float = 0.0,
+    anchor_quota: int = 1,
 ) -> list[tuple[int, float]]:
     """文档级去重 + 保底补位（多文档召回的核心算法）。
 
@@ -61,7 +65,7 @@ def diversify_with_refill(
 
     算法（与「硬去重」的区别在第 ② 步）：
     ① 保底：按 vsim 降序扫描，每篇文档只留第一个（= 该文档 vsim 最高）的 chunk，
-       保证 top_k 尽量覆盖不同文档；
+       保证 top_k 尽量覆盖不同文档；其中锚定文档（见 ``anchor_quota``）可多占；
     ② 补位：不同文档数不足 top_k 时（单文档/双文档问题常见），把剩余名额回填
        给同文档的次优 chunk —— 硬去重会白扔名额、损失上下文，这里不扔。
 
@@ -69,10 +73,27 @@ def diversify_with_refill(
     就是该文档 vsim 最高的 chunk，输出排序后 ``[0]`` 仍是全局最相似 chunk，
     **命中判定口径（``vector_sim >= SIMILARITY_THRESHOLD``）不变**。
 
+    ``anchor_quota``（锚定 top1 文档，默认 1 = 原行为）：保底阶段允许
+    **top1 所在文档**（ranked_all 首位，即全局 vsim 最高 chunk 的文档）多占几个
+    名额，其余文档仍各 1 个。动机见 docs/RAG优化方案.md 4.7：P0 上线后单文档
+    问题的 top-5 里「期望文档」占位均值从 3.56 掉到 **1.00**，深度全丢；而在
+    bge-m3 的相似度标尺上，「相关但非期望」与「期望」文档的 vsim 比值分布严重
+    重叠（中位 0.898 vs 0.934），**用阈值区分问题类型行不通**；唯有「top1 文档
+    是主文档」这个假设可靠（hit1 0.9158）。故把名额分配改成显式旋钮：
+    anchor_quota 越大越偏深度（单文档问题受益），越小越偏广度（多文档受益）。
+
+    ``min_sim``（相关性闸门，默认 0=关闭）：保底扫描到某文档首个（代表）chunk
+    时，若其 vsim 低于该阈值则整篇跳过、不占名额。**实测在 bge-m3 上几乎无效**
+    （候选池内各文档代表块的 vsim 普遍 ≥0.55），仅在 0.6 以上才微微起效且伴随
+    多文档 coverage 下降，故生产默认关闭；保留实现以备换 embedding 模型后复用。
+    **补位阶段刻意不设闸门**：若所有文档都不达标（难查询），保底会空手，此时
+    补位必须能把全局 vsim 最高的若干 chunk 原样填回，否则会返回空结果。
+
     实测（285 问，生产 top_k=5，见 docs/RAG优化方案.md）：
     baseline 多文档 coverage 0.3755 / 单文档 0.9755 / Hit(任意) 0.9825
-    → 本算法 0.5052 / **1.0000** / **1.0000**，三项同时变好（帕累托改进）。
-    对比硬去重（diverse50）：多文档仅 -1.35pp，但单文档 +3.07pp、Hit +2.46pp。
+    → 本算法（anchor_quota=1）0.5052 / **1.0000** / **1.0000**，三项同时变好
+    （帕累托改进）。对比硬去重（diverse50）：多文档仅 -1.35pp，但单文档
+    +3.07pp、Hit +2.46pp。anchor_quota 的深度/广度权衡实测见 4.7。
 
     纯函数，便于单测。
     """
@@ -80,15 +101,26 @@ def diversify_with_refill(
     def _did(pos: int) -> str:
         return doc_ids[pos] if pos < len(doc_ids) else f"c{pos}"
 
-    # ① 保底：每文档取排序中最靠前（vsim 最高）的一个 chunk
+    # 锚定文档 = 全局 vsim 最高 chunk（ranked_all 首位）所属文档，可多占名额。
+    anchor = _did(ranked_all[0][0]) if ranked_all else None
+
+    # ① 保底：按 vsim 降序扫描，锚定文档最多 anchor_quota 个 chunk，
+    #    其余文档各 1 个（= 该文档 vsim 最高的代表 chunk）。
     picked: list[tuple[int, float]] = []
     picked_pos: set[int] = set()
-    seen_docs: set[str] = set()
+    counts: dict[str, int] = {}
     for pos, score in ranked_all:
         did = _did(pos)
-        if did in seen_docs:
+        quota = anchor_quota if did == anchor else 1
+        n = counts.get(did, 0)
+        if n >= quota:
             continue
-        seen_docs.add(did)
+        # 相关性闸门：只在文档「首次出现」（代表 chunk）时判断；不达标就把
+        # counts 直接置为 quota，等价于整篇跳过（同文档后续 chunk vsim 更低）。
+        if n == 0 and min_sim > 0.0 and v_scores.get(pos, 0.0) < min_sim:
+            counts[did] = quota
+            continue
+        counts[did] = n + 1
         picked.append((pos, score))
         picked_pos.add(pos)
         if len(picked) >= top_k:
@@ -309,7 +341,14 @@ class HybridRetriever:
         # 被同文档 chunk 挤掉的其它文档。见 diversify_with_refill 与 docs/RAG优化方案.md。
         if DOC_DEDUP_ENABLED:
             ranked_all = sorted(rrf.items(), key=lambda x: -v_scores.get(x[0], 0.0))
-            ranked = diversify_with_refill(ranked_all, v_scores, self._doc_ids, top_k)
+            ranked = diversify_with_refill(
+                ranked_all,
+                v_scores,
+                self._doc_ids,
+                top_k,
+                min_sim=DOC_MIN_SIM,
+                anchor_quota=ANCHOR_QUOTA,
+            )
         # rerank 精排（可选，默认开）：用向量相似度对 RRF 候选二次排序。
         # 见 rerank_by_vsim 函数文档与 scripts/experiments/ragas_eval/README.md。
         elif RERANK_BY_VSIM:

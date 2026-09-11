@@ -408,14 +408,88 @@ FAQ 20~25 块），「命中 1 块」远不等于「拿到该文档的内容」�
 中文档 0.1382 / 0.2230，大文档(>12块) 0.0535 / 0.3857 —— 文档越大，recall 天花板
 越低（名额限制），而名额内效率反而更高（去重更倾向于把不同大文档塞进来）。
 
-### 11.3 下一步（P0-2）：保底阶段阈值化
+### 11.3 下一步（P0-2）：保底阶段阈值化 → 见第十二节
 
-按 11.2，`diversify_with_refill` 的「保底」阶段应当**只在跨文档 chunk 确有相关性
+按 11.2，`diversify_with_refill` 的「保底」阶段本应**只在跨文档 chunk 确有相关性
 时才占名额**（例如 `vsim >= DOC_MIN_SIM`），否则把名额回填给同文档次优块。
-预期：单文档 precision 回升、多文档广度基本保住。方案与实测待补。
+**该判据已在第十二节被实测证伪**，修正方案改为「锚定文档名额」。
 
 原始数据 `results/coverage_by_param_chunk.json`（三参数组横向）与
 `results/chunk_prod.json`（run_eval 生产口径）。
+
+## 十二、P0-2：阈值判据证伪 → 锚定文档名额（深度/广度旋钮）
+
+第十一节把「保底阶段加相关性阈值」定为下一步。本节记录**执行结果：判据不成立**，
+以及替换机制与实测曲线。
+
+### 12.1 阈值扫描：0.3/0.4/0.5 完全不触发
+
+`coverage_by_param.py --params baseline,diverse_refill20,gate30,gate40,gate50,gate60
+--top-k 5`（285 问）：
+
+| 参数组 | 多文档 cov@5 | 单文档 cov | chunk 名额内 | chunk hit1 |
+|---|---|---|---|---|
+| baseline | 0.3755 | 0.9755 | 0.7053 | 0.8702 |
+| diverse_refill20（无闸门） | 0.5031 | 1.0000 | 0.2779 | 0.9158 |
+| gate30 / gate40 / gate50 | 0.5031 | 1.0000 | 0.2779 | 0.9158 |
+| gate60 | 0.4954 | 1.0000 | 0.3200 | 0.9158 |
+
+**三档闸门与「无闸门」四项指标逐位相同** —— 闸门根本没触发；0.6 才开始轻微生效，
+但多文档 coverage 反而降 0.77pp，**不是帕累托改进**。
+
+### 12.2 判据诊断：噪声与期望在 vsim 标尺上不可分
+
+逐问复现 `ranked_all`，统计各文档**代表块**（vsim 最高的 chunk）的相似度：
+
+| 代表块 vsim / best 比值 | 中位 | p10 | 说明 |
+|---|---|---|---|
+| 单文档问题的**非期望**文档（638 个） | **0.898** | 0.804 | 「相关但非目标」 |
+| 多文档问题的**期望**文档（389 个） | **0.934** | 0.000 | 「目标」 |
+
+- 单文档问题里，非期望文档代表块 vsim 均值 0.6718、中位 0.6747 —— 与期望文档
+  的 best（中位 0.7557）**相距不到 0.1**。bge-m3 把余弦相似度压在窄区间，
+  候选池内各文档代表块普遍 ≥0.55，故 0.5 以下阈值毫无作用。
+- 阈值 0.65：**噪声保留率 0.690 / 期望保留率 0.735** —— 几乎无法区分；抬到 0.70
+  才开始分开（0.312 vs 0.576），但期望文档已被砍掉 42%。
+- 相对带宽同样不行：0.9 时噪声保留 0.486 / 期望保留 0.632，区分度极低。
+
+**结论：不要用 vsim 单点去猜「这个文档该不该占名额」。** 这类信息不在相似度标尺上。
+
+### 12.3 修正机制：锚定文档名额（`ANCHOR_QUOTA`）
+
+根因重新定位：不在「进了低相关文档」，而在 **top1 所在文档只保了 1 个块**——
+单文档问题 top-5 里「期望文档」占位均值 **恰好 1.00**（baseline 是 3.56）。
+而「top1 文档是主文档」这个假设**可靠**（hit1 0.9158）。
+
+故改为显式旋钮：`diversify_with_refill(..., anchor_quota=k)` —— 保底阶段允许
+**top1 所在文档**（`ranked_all` 首位）多占 k 个名额，其余文档仍各 1 个，补位不变。
+`k=1` 即原行为（向后兼容）。
+
+| 参数组 | 多文档 cov@5 | distinct | 单文档 cov | Hit | chunk 名额内 | └ 单文档 | chunk hit1 |
+|---|---|---|---|---|---|---|---|
+| baseline | 0.3755 | 2.84 | 0.9755 | 0.9825 | 0.7053 | 0.7129 | 0.8702 |
+| aq1〔现线上〕 | **0.5031** | 4.97 | **1.0000** | **1.0000** | 0.2779 | 0.2000 | 0.9158 |
+| aq2 | 0.4622 | 4.20 | 0.9939 | 0.9965 | 0.4246 | 0.3742 | 0.9158 |
+| aq3 | 0.4372 | 3.63 | 0.9939 | 0.9965 | 0.5551 | 0.5325 | 0.9158 |
+| aq4 | 0.4046 | 3.20 | 0.9939 | 0.9930 | 0.6505 | 0.6528 | 0.9158 |
+
+三条读法：
+
+1. **曲线单调、机制成立**：配额 ↑ → 深度 ↑（名额内 0.2779→0.6505）、广度 ↓
+   （多文档 cov 0.5031→0.4046），把 11.2 的「隐藏代价」变成可调旋钮。
+2. **配额 2/3/4 在全部 doc 级指标 + hit1 上优于 baseline**：多文档 cov +2.91~+8.67pp、
+   单文档 cov +1.84pp、Hit +1.05~+1.40pp、**单文档 hit1 +7.36pp**（0.8405→0.9141）；
+   仅 chunk 名额内略低于 baseline（配额 4 达 0.6505，恢复 91%）。
+3. **无支配点**：top_k=5 固定预算下「广度换深度」是硬约束，不是实现缺陷。
+   上线取值需**生成侧答案质量**证据（precision 的代价与收益都只在下游体现），
+   当前 `ANCHOR_QUOTA=1` 不变现网行为。
+
+> 附注：chunk 级 precision 的「损失」部分是**标注口径**造成的——golden 对单文档问题
+> 只标 1 篇期望文档，语料里却有大量主题相近的姊妹文档，检索到它们未必无用。
+> 故最终取舍必须由生成侧裁定，不能只看检索指标。
+
+原始数据 `results/coverage_by_param_gate.json`（阈值扫描）与
+`results/coverage_by_param_anchor.json`（锚定配额扫描）。
 
 ## 复现
 
@@ -470,6 +544,23 @@ backend/.venv/Scripts/python scripts/experiments/ragas_eval/coverage_by_param.py
 # 11. run_eval 生产口径（同时打印 doc 级与 chunk 级覆盖率）
 backend/.venv/Scripts/python scripts/experiments/ragas_eval/run_eval.py \
     --strategy prod --top-k 5 --out chunk_prod.json
+
+# ---------- P0-2：阈值证伪 + 锚定名额（第十二节） ----------
+# 12. 相关性闸门阈值扫描（0.3/0.4/0.5 与无闸门逐位相同 → 判据证伪）
+backend/.venv/Scripts/python scripts/experiments/ragas_eval/coverage_by_param.py \
+    --params baseline,diverse_refill20,gate30,gate40,gate50,gate60 --top-k 5 \
+    --out coverage_by_param_gate.json
+
+# 13. 锚定文档名额扫描（深度/广度权衡曲线）
+backend/.venv/Scripts/python scripts/experiments/ragas_eval/coverage_by_param.py \
+    --params baseline,diverse_refill20,aq2,aq3,aq4 --top-k 5 \
+    --out coverage_by_param_anchor.json
+
+# 14. 保底补位 + 闸门 + 锚定 单测（15 例）
+backend/.venv/Scripts/python -m pytest backend/tests/test_rag_doc_diversify.py -q
+
+# 15. 判据诊断：噪声/期望文档代表块的 vsim 分布（为什么阈值行不通）
+backend/.venv/Scripts/python scripts/experiments/ragas_eval/gate_band_probe.py
 ```
 
 > 依赖：`ragas==0.3.5` + `rapidfuzz`（非 LLM 指标需 rapidfuzz 做字符串相似度）。
@@ -477,4 +568,5 @@ backend/.venv/Scripts/python scripts/experiments/ragas_eval/run_eval.py \
 > 非思考型、不需大 `max_tokens`；若换思考型模型如 `gemini-3.x-flash`，
 > `max_tokens` 需 ≥3000，否则正文被思考 token 挤掉）。
 > 结果文件：`results/{baseline,optimized_prod,gen_direct,gen_synth_v1,gen_synth_v2,coverage_by_param}.json`；
-> chunk 级另有 `coverage_by_param_chunk.json`（横向）与 `chunk_prod.json` / `chunk_baseline5.json`（run_eval）。
+> chunk 级另有 `coverage_by_param_chunk.json`（横向）与 `chunk_prod.json` / `chunk_baseline5.json`（run_eval）；
+> P0-2 另有 `coverage_by_param_gate.json`（阈值扫描）与 `coverage_by_param_anchor.json`（锚定配额扫描）。
