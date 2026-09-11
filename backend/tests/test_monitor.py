@@ -16,13 +16,25 @@ from app.services import monitor_service
 
 @pytest.fixture(autouse=True)
 async def _clean_competitor_tables():
-    """每个用例前清空竞品相关表：监控是「全量遍历已入库竞品」的批处理，
-    若不复位，其它用例残留的竞品会混进本轮统计导致断言失真。"""
-    async with async_session_factory() as session:
-        await session.execute(delete(CompetitorChange))
-        await session.execute(delete(Competitor))
-        await session.commit()
+    """每个用例前 + 用例后清空竞品相关表：监控是「全量遍历已入库竞品」的批处理，
+    若不复位，其它用例残留的竞品会混进本轮统计导致断言失真。
+
+    用例后清理由同样关键（2026-09-11 flaky 加固）：本文件的用例会写入
+    Competitor/CompetitorChange（如 run_monitor_cycle 的更新与变化记录），
+    在共享 session 事件循环下这些行会泄漏到后续测试文件 —— 若后续文件
+    恰好对竞品表做统计断言且未先清表，就会「单文件跑过、全量跑挂」。
+    双向清理把本文件的数据隔离做完整，对用例顺序不敏感。
+    """
+
+    async def _wipe() -> None:
+        async with async_session_factory() as session:
+            await session.execute(delete(CompetitorChange))
+            await session.execute(delete(Competitor))
+            await session.commit()
+
+    await _wipe()  # 用例前：隔离前置残留
     yield
+    await _wipe()  # 用例后：不让本用例的数据泄漏到后续文件
 
 
 async def _make_stored_competitor(**overrides) -> int:

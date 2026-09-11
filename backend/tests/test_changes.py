@@ -119,3 +119,48 @@ async def test_update_no_change_no_record(client):
         assert changes.json() == []
     finally:
         await client.delete(f"/api/competitors/{cid}")
+
+
+async def test_delete_competitor_cascades_changes(client):
+    """删除竞品时变化记录一并清除（应用层级联，2026-09-11 加固）。
+
+    CompetitorChange.competitor_id 无外键约束，若删除竞品不清理从属记录，
+    会留下 competitor_id 悬空的孤儿行 —— 既让 /api/changes 统计口径失真，
+    也是测试库「单跑过、全量挂」类顺序敏感 flaky 的数据泄漏源之一。
+    """
+    from sqlalchemy import select
+
+    from app.db import async_session_factory
+    from app.models.competitor_change import CompetitorChange
+
+    created = (
+        await client.post(
+            "/api/competitors",
+            json={"name": "级联删除竞品", "type": "C2C 闲置交易", "pricing": "旧价"},
+        )
+    ).json()
+    cid = created["id"]
+
+    # 产生一条变化记录
+    resp = await client.put(f"/api/competitors/{cid}", json={"pricing": "新价"})
+    assert resp.status_code == 200
+
+    async with async_session_factory() as session:
+        before = (
+            await session.execute(
+                select(CompetitorChange).where(CompetitorChange.competitor_id == cid)
+            )
+        ).scalars().all()
+        assert len(before) >= 1
+
+    # 删除竞品 → 从属变化记录必须一并消失
+    resp = await client.delete(f"/api/competitors/{cid}")
+    assert resp.status_code == 204
+
+    async with async_session_factory() as session:
+        after = (
+            await session.execute(
+                select(CompetitorChange).where(CompetitorChange.competitor_id == cid)
+            )
+        ).scalars().all()
+        assert after == []

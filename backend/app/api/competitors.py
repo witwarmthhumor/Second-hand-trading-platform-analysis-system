@@ -1,7 +1,7 @@
 """竞品 CRUD API。"""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
@@ -84,9 +84,17 @@ async def update_competitor(
 async def delete_competitor(
     competitor_id: int, session: AsyncSession = Depends(get_session)
 ) -> None:
-    """删除。"""
+    """删除。
+
+    变化记录（competitor_change）通过应用层级联一并删除：模型层无外键约束
+    （见 CompetitorChange.competitor_id 仅为普通索引列），若只删竞品，
+    变化记录会变成 competitor_id 悬空的孤儿行，既污染测试库也让统计口径失真。
+    """
     competitor = await session.get(Competitor, competitor_id)
     if competitor is None:
         raise HTTPException(status_code=404, detail="竞品不存在")
+    await session.execute(
+        delete(CompetitorChange).where(CompetitorChange.competitor_id == competitor_id)
+    )
     await session.delete(competitor)
     await session.commit()
