@@ -144,7 +144,7 @@ def test_collect_startup_warnings_flags_weak_default_and_missing_llm(monkeypatch
 
 
 def test_collect_startup_warnings_clean_when_configured(monkeypatch):
-    """强口令 + 已配置 LLM + 正常阈值 + 限流开启 → 无告警。"""
+    """强口令 + 已配置 LLM + 正常阈值 + 限流开启 + CORS 白名单 → 无告警。"""
     from app import diagnostics
 
     monkeypatch.setattr(diagnostics.settings, "admin_password", "Str0ngPassw0rd")
@@ -152,4 +152,8 @@ def test_collect_startup_warnings_clean_when_configured(monkeypatch):
     monkeypatch.setattr(diagnostics.settings, "llm_cost_limit_cny", 1.0)
     # 测试环境默认关限流（conftest），这里显式打开，否则会多出「限流已关闭」告警
     monkeypatch.setattr(diagnostics.settings, "rate_limit_enabled", True)
+    # CORS 默认空白名单会触发「未配置」告警（R6），配置后视为已处理
+    monkeypatch.setattr(
+        diagnostics.settings, "cors_origins", ["http://localhost:5173"]
+    )
     assert diagnostics.collect_startup_warnings() == []

@@ -1,6 +1,10 @@
 """应用配置：从环境变量 / .env 读取。"""
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import json
+from typing import Annotated
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -89,6 +93,33 @@ class Settings(BaseSettings):
     llm_output_price_usd_per_mtok: float = 12.0
     # 汇率（美元→人民币），仅用于费用预估展示
     usd_cny_rate: float = 7.1
+
+    # ---- CORS 跨域白名单（R6）----
+    # 前后端分离部署时，浏览器同源策略会拦截跨域 API 调用。此处配置允许的
+    # 前端来源（origin = scheme://host:port，不带路径），如 http://localhost:5173。
+    # 环境变量支持逗号分隔或 JSON 数组两种写法（见 _parse_cors_origins）。
+    # 默认为空 = 不放行任何跨域（与未引入 CORS 前的行为一致），此时启动告警提示。
+    # 安全原则：只放行确需跨域的前端地址，禁止配置通配符 "*"（等同向任意网站开放）。
+    # NoDecode：禁止 EnvSettingsSource 对值做 JSON 预解码（否则逗号分隔写法在
+    # 到达下方 validator 之前就被 json.loads 炸掉），原始字符串交给 validator 解析。
+    cors_origins: Annotated[list[str], NoDecode] = []
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _parse_cors_origins(cls, v):
+        """兼容两种环境变量写法：JSON 数组 '["http://a","http://b"]' 与逗号分隔 'http://a,http://b'。"""
+        if v is None or isinstance(v, list):
+            return list(v or [])
+        s = str(v).strip()
+        if not s:
+            return []
+        if s.startswith(("[", "{")):
+            # JSON 写法（以 [ 或 { 开头）：必须是数组，其他结构说明使用者误解了格式
+            parsed = json.loads(s)
+            if not isinstance(parsed, list):
+                raise ValueError("CORS_ORIGINS 的 JSON 写法必须是数组，如 [\"http://localhost:5173\"]")
+            return [str(item).strip() for item in parsed if str(item).strip()]
+        return [item.strip() for item in s.split(",") if item.strip()]
 
 
 settings = Settings()

@@ -43,4 +43,10 @@ def collect_startup_warnings() -> list[str]:
             "异常/恶意调用可直接打穿成本"
         )
 
+    if not settings.cors_origins:
+        warnings.append(
+            "CORS 未配置（CORS_ORIGINS 为空）：浏览器将无法跨域调用 API，"
+            "前后端分离部署时请在 .env 配置前端来源白名单"
+        )
+
     return warnings

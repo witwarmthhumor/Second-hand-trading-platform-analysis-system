@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.api.auth import router as auth_router
@@ -108,6 +109,20 @@ app = FastAPI(title=settings.app_name, lifespan=lifespan)
 # 两者都是纯 ASGI 实现，不破坏 SSE 流式。
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(RequestContextMiddleware)
+
+# CORS（R6）：注册在最外层 —— 浏览器预检 OPTIONS 在此直接短路，
+# 且 429 等错误响应也会被补上跨域头（否则前端拿不到错误详情）。
+# 白名单为空时（默认）不放行任何跨域，行为与未引入 CORS 前一致；
+# 前后端分离部署时经 .env 的 CORS_ORIGINS 配置前端来源白名单。
+# 认证走 Authorization 请求头而非 Cookie，故 allow_credentials=False（更安全）。
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
+    max_age=600,
+)
 
 app.include_router(auth_router)
 app.include_router(competitors_router)
