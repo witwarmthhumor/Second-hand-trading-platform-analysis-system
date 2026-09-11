@@ -21,6 +21,7 @@ from app.schemas.auth import (
     UserOut,
 )
 from app.security import create_access_token, hash_password, verify_password
+from app.services import login_guard
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -59,12 +60,28 @@ async def register(
 async def login(
     payload: LoginRequest, session: AsyncSession = Depends(get_session)
 ) -> TokenOut:
-    """登录：校验用户名密码，签发 token。"""
+    """登录：校验用户名密码，签发 token。
+
+    防爆破：同一用户名连续失败达到阈值即锁定一段时间；锁定期内直接 429，
+    即使密码正确也拒绝，避免在线暴力破解。
+    """
+    # 先看是否处于锁定窗口（在查库前拦截，减少无效 DB 查询）
+    retry_after = login_guard.check_locked(payload.username)
+    if retry_after is not None:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"登录失败次数过多，请 {retry_after} 秒后重试",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     stmt = select(User).where(User.username == payload.username)
     result = await session.execute(stmt)
     user = result.scalar_one_or_none()
     if user is None or not verify_password(payload.password, user.password_hash):
+        login_guard.register_failure(payload.username)
         raise HTTPException(status_code=401, detail="用户名或密码错误")
+
+    login_guard.register_success(payload.username)
     return _token_out(user)
 
 

@@ -2,6 +2,9 @@
 
 成本熔断：每次发起 LLM 提炼前先经 CostTracker 预检，估算超阈值或已熔断则抛
 CostLimitExceeded，由 API 层转成"需征询"响应；真实调用后按 token 用量记账。
+
+降级（R1）：provider 是否计费由 ``billable`` 能力位决定（而非具体类型），
+远程实现失败时由 FallbackProvider 自动回退规则提取，链路不中断。
 """
 
 from __future__ import annotations
@@ -9,7 +12,7 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.cost import get_cost_tracker
-from app.ai.provider import Extraction, RemoteLLMProvider, get_provider
+from app.ai.provider import Extraction, get_provider
 from app.crawler.fetcher import fetch_url
 from app.models.competitor import Competitor, DataStatus
 
@@ -27,12 +30,13 @@ async def fetch_and_extract(url: str) -> tuple[Extraction, str, str]:
     """抓取网页并用 LLM/规则提炼。返回 (提炼结果, 标题, 原始HTML)。
 
     提炼前先按输入规模预检成本，超阈值或已熔断则抛 CostLimitExceeded。
+    仅计费 provider（远程 LLM）参与预检与记账；规则兜底不计费。
     """
     page = await fetch_url(url)
     provider = get_provider()
+    billable = bool(getattr(provider, "billable", False))
 
-    # 仅远程 LLM 提炼涉及费用；规则兜底（无 key）不预检、不记账
-    if isinstance(provider, RemoteLLMProvider):
+    if billable:
         input_text = f"{url}\n{page.title}\n{page.html[:4000]}"
         estimated_tokens = len(input_text) // 2
         tracker = get_cost_tracker()
@@ -43,11 +47,11 @@ async def fetch_and_extract(url: str) -> tuple[Extraction, str, str]:
 
     extraction = await provider.extract(url=url, html=page.html, title=page.title)
 
-    # 真实用量记账（仅远程 provider 有 token 用量）
-    if isinstance(provider, RemoteLLMProvider):
+    # 真实用量记账（仅计费 provider；远程失败回退规则时用量为 0，记账天然为 0）
+    if billable:
         get_cost_tracker().record(
-            provider.last_input_tokens,
-            provider.last_output_tokens,
+            getattr(provider, "last_input_tokens", 0),
+            getattr(provider, "last_output_tokens", 0),
         )
     return extraction, page.title, page.html
 

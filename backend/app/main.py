@@ -1,6 +1,8 @@
 """FastAPI 应用入口。"""
 
+import logging
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
@@ -18,7 +20,11 @@ from app.api.report import router as report_router
 from app.api.settings import router as settings_router
 from app.config import settings
 from app.db import engine
+from app.diagnostics import collect_startup_warnings
 from app.init_db import init_db
+from app.logging_config import setup_logging
+from app.metrics import get_metrics
+from app.middleware import RequestContextMiddleware
 from app.models import (  # noqa: F401  # 确保模型被注册到 Base
     AppSetting,
     ChatSession,
@@ -27,16 +33,22 @@ from app.models import (  # noqa: F401  # 确保模型被注册到 Base
     User,
 )
 
+# 尽早初始化日志：保证应用模块 import 阶段的日志也走统一格式
+setup_logging()
+logger = logging.getLogger(__name__)
+
 _scheduler: AsyncIOScheduler | None = None
+_started_at: datetime | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """启动时建表 + seed 管理员 + 启动定时调度器。"""
+    global _scheduler, _started_at
     await init_db()
+    _started_at = datetime.now(UTC)
 
     # 启动 APScheduler：定时监控（每小时触发一次快照检查；骨架，实际抓取策略按需启用）
-    global _scheduler
     _scheduler = AsyncIOScheduler(timezone="Asia/Shanghai")
     _scheduler.add_job(
         _monitor_job,
@@ -46,11 +58,16 @@ async def lifespan(app: FastAPI):
         replace_existing=True,
     )
     _scheduler.start()
+    logger.info(
+        "应用启动完成",
+        extra={"extra_fields": {"app": settings.app_name}},
+    )
 
     yield
 
     if _scheduler is not None:
         _scheduler.shutdown(wait=False)
+    logger.info("应用已停止")
 
 
 async def _monitor_job() -> None:
@@ -64,6 +81,9 @@ async def _monitor_job() -> None:
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
+
+# 请求中间件：request_id 注入 + 访问日志 + 指标采集（纯 ASGI，不破坏 SSE 流式）
+app.add_middleware(RequestContextMiddleware)
 
 app.include_router(auth_router)
 app.include_router(competitors_router)
@@ -79,7 +99,7 @@ app.include_router(kb_router)
 
 @app.get("/health")
 async def health() -> dict:
-    """健康检查：返回服务状态与数据库连通性。"""
+    """健康检查：返回服务状态、数据库连通性与调度器状态。"""
     db_ok = False
     try:
         async with engine.connect() as conn:
@@ -88,7 +108,30 @@ async def health() -> dict:
     except Exception:
         db_ok = False
 
+    scheduler_info: dict = {"running": False, "next_run": None}
+    if _scheduler is not None:
+        scheduler_info["running"] = _scheduler.running
+        job = _scheduler.get_job("competitor_monitor")
+        if job is not None and job.next_run_time is not None:
+            scheduler_info["next_run"] = job.next_run_time.isoformat()
+
     return {
         "status": "ok",
         "database": "connected" if db_ok else "unavailable",
+        "scheduler": scheduler_info,
+        "uptime_seconds": (
+            round((datetime.now(UTC) - _started_at).total_seconds(), 1)
+            if _started_at
+            else None
+        ),
+        "security_warnings": collect_startup_warnings(),
     }
+
+
+@app.get("/metrics")
+async def metrics() -> dict:
+    """运行时可观测指标（请求计数/状态码分布/延迟统计）。
+
+    注：当前无鉴权，仅用于本机/内网运维观测；若对外暴露需在其前置一层访问控制。
+    """
+    return get_metrics().snapshot()

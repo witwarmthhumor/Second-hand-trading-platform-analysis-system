@@ -5,6 +5,7 @@
 - access token 有效期由 settings.jwt_expire_minutes 控制（默认 24h）
 """
 
+import re
 from datetime import UTC, datetime, timedelta
 
 import bcrypt
@@ -14,6 +15,51 @@ from app.config import settings
 
 # JWT 签发算法
 JWT_ALGORITHM = "HS256"
+
+# 密码策略：最短长度
+PASSWORD_MIN_LENGTH = 8
+# 弱口令黑名单（小写比较）：命中即拒绝，覆盖最常见默认口令
+WEAK_PASSWORDS = frozenset(
+    {
+        "123456",
+        "12345678",
+        "123456789",
+        "password",
+        "passw0rd",
+        "admin123",
+        "admin888",
+        "qwerty123",
+        "abc12345",
+        "11111111",
+        "00000000",
+        "iloveyou",
+    }
+)
+
+_HAS_LETTER = re.compile(r"[A-Za-z]")
+_HAS_DIGIT = re.compile(r"\d")
+
+
+def validate_password_strength(password: str) -> str:
+    """校验密码强度，不通过则抛 ValueError（由调用方转成 422/400）。
+
+    规则（对普通用户足够，避免过度复杂导致体验下降）：
+    - 长度 >= PASSWORD_MIN_LENGTH（8）
+    - 必须同时包含字母与数字（挡住纯数字、纯字母等弱口令）
+    - 不在常见弱口令黑名单内
+    """
+    if len(password) < PASSWORD_MIN_LENGTH:
+        raise ValueError(f"密码长度至少 {PASSWORD_MIN_LENGTH} 位")
+    if not _HAS_LETTER.search(password) or not _HAS_DIGIT.search(password):
+        raise ValueError("密码需同时包含字母与数字")
+    if password.lower() in WEAK_PASSWORDS:
+        raise ValueError("密码过于简单，请更换更复杂的密码")
+    return password
+
+
+def is_weak_default_password(password: str) -> bool:
+    """判断是否仍在使用内置默认口令（启动时据此告警）。"""
+    return password.lower() in WEAK_PASSWORDS
 
 
 def hash_password(plain: str) -> str:

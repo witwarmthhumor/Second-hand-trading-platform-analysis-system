@@ -12,15 +12,52 @@ from app.ai import provider as prov
 
 
 def test_get_provider_with_key(monkeypatch):
-    """有 key → 远程提炼。"""
+    """有 key → 远程提炼（外层包 FallbackProvider，远程失败可回退规则）。"""
     monkeypatch.setattr(prov.settings, "llm_api_key", "sk-test-123")
-    assert isinstance(prov.get_provider(), prov.RemoteLLMProvider)
+    provider = prov.get_provider()
+    assert isinstance(provider, prov.FallbackProvider)
+    assert isinstance(provider.primary, prov.RemoteLLMProvider)
+    assert provider.billable is True
 
 
 def test_get_provider_without_key(monkeypatch):
     """无 key → 规则兜底。"""
     monkeypatch.setattr(prov.settings, "llm_api_key", "")
     assert isinstance(prov.get_provider(), prov.RuleExtractor)
+
+
+async def test_fallback_provider_falls_back_on_remote_error(monkeypatch):
+    """远程提炼失败时自动回退规则提取，链路不中断（R1 降级策略）。"""
+
+    class _BoomRemote(prov.RemoteLLMProvider):
+        async def extract(self, url, html, title=""):
+            raise RuntimeError("402 余额不足")
+
+    provider = prov.FallbackProvider(_BoomRemote(), prov.RuleExtractor())
+    html = "<html><title>闲鱼</title><body><p>正文</p></body></html>"
+    result = await provider.extract("https://x.com", html)
+    assert provider.fell_back is True
+    assert result.name == "闲鱼"
+    # 回退时不计费：用量归零
+    assert provider.last_input_tokens == 0
+    assert provider.last_output_tokens == 0
+
+
+async def test_fallback_provider_uses_remote_when_ok():
+    """远程正常时不回退，并透传 token 用量。"""
+
+    class _OkRemote(prov.RemoteLLMProvider):
+        async def extract(self, url, html, title=""):
+            self.last_input_tokens = 100
+            self.last_output_tokens = 20
+            return prov.Extraction(name="闲鱼", type="C2C 闲置交易")
+
+    provider = prov.FallbackProvider(_OkRemote(), prov.RuleExtractor())
+    result = await provider.extract("https://x.com", "<html></html>")
+    assert provider.fell_back is False
+    assert result.name == "闲鱼"
+    assert provider.last_input_tokens == 100
+    assert provider.last_output_tokens == 20
 
 
 @pytest.mark.parametrize(

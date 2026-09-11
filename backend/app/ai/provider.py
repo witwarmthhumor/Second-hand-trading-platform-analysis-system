@@ -4,17 +4,21 @@
 - 统一提炼接口，调用方不关心底层是远程 API 还是本地规则。
 - RemoteLLMProvider：OpenAI 兼容接口（本项目接 gpt-5.6-luna）。
 - RuleExtractor：纯规则兜底，无密钥也能跑通链路。
+- FallbackProvider：远程优先、失败自动回退规则，保证 LLM 不可用时抓取链路不中断。
 """
 
 from __future__ import annotations
 
 import json
+import logging
 from typing import Protocol
 
 import httpx
 from pydantic import BaseModel
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class Extraction(BaseModel):
@@ -40,6 +44,11 @@ class LLMProvider(Protocol):
         ...
 
 
+def is_llm_configured() -> bool:
+    """是否配置了 LLM 密钥（决定走远程提炼还是规则兜底）。"""
+    return bool(settings.llm_api_key)
+
+
 # 允许的 type 值（与 PlatformType 对齐，避免 LLM 乱写）
 _TYPE_WHITELIST = {"C2C 闲置交易", "回收置换", "质检转卖"}
 
@@ -61,6 +70,9 @@ def _estimate_tokens(text: str) -> int:
 
 class RemoteLLMProvider:
     """OpenAI 兼容接口的 LLM 提炼实现。"""
+
+    # 标记为计费 provider：调用方据此决定是否做成本预检与 token 记账
+    billable = True
 
     def __init__(
         self,
@@ -177,6 +189,9 @@ class RemoteLLMProvider:
 class RuleExtractor:
     """纯规则提炼兜底：从 HTML 中抽取 title / meta description / 正文。"""
 
+    # 纯本地规则，不产生费用
+    billable = False
+
     async def extract(self, url: str, html: str, title: str = "") -> Extraction:
         from bs4 import BeautifulSoup
 
@@ -203,8 +218,44 @@ class RuleExtractor:
         )
 
 
+class FallbackProvider:
+    """远程优先、失败回退规则。
+
+    背景（R1 LLM 降级策略）：远程网关可能因欠费（402/403）、凭证失效（401）、
+    限流（429）、超时或 5xx 而不可用。若不兜底，竞品抓取链路会直接失败，用户
+    拿不到任何草稿。此包装保证「远程能用就用远程，用不了就退回规则提取」，链路不中断。
+    """
+
+    def __init__(self, primary: LLMProvider, secondary: LLMProvider) -> None:
+        self.primary = primary
+        self.secondary = secondary
+        # 与 primary 保持一致：是否计费由远程侧决定
+        self.billable = getattr(primary, "billable", False)
+        self.last_input_tokens = 0
+        self.last_output_tokens = 0
+        # 本次是否实际发生了回退（供调用方/测试观察）
+        self.fell_back = False
+
+    async def extract(self, url: str, html: str, title: str = "") -> Extraction:
+        self.fell_back = False
+        try:
+            result = await self.primary.extract(url=url, html=html, title=title)
+        except Exception as exc:
+            self.fell_back = True
+            self.last_input_tokens = 0
+            self.last_output_tokens = 0
+            logger.warning(
+                "远程 LLM 提炼失败，回退规则提取: %s: %s", type(exc).__name__, exc
+            )
+            return await self.secondary.extract(url=url, html=html, title=title)
+
+        self.last_input_tokens = getattr(self.primary, "last_input_tokens", 0)
+        self.last_output_tokens = getattr(self.primary, "last_output_tokens", 0)
+        return result
+
+
 def get_provider() -> LLMProvider:
-    """工厂：配置了 LLM key 则用远程提炼，否则规则兜底。"""
-    if settings.llm_api_key:
-        return RemoteLLMProvider()
+    """工厂：配置了 LLM key 则用远程提炼（失败自动回退规则），否则纯规则兜底。"""
+    if is_llm_configured():
+        return FallbackProvider(RemoteLLMProvider(), RuleExtractor())
     return RuleExtractor()

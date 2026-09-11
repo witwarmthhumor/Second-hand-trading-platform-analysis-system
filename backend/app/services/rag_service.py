@@ -12,6 +12,7 @@ import asyncio
 import httpx
 
 from app.ai.cost import get_cost_tracker
+from app.ai.provider import is_llm_configured
 from app.config import settings
 from app.rag.cache import SingleFlight, get_search_cache
 from app.rag.config import SIMILARITY_THRESHOLD
@@ -31,6 +32,37 @@ _FALLBACK_SYSTEM_PROMPT = (
 def _estimate_tokens(text: str) -> int:
     """极简 token 估算（中英文混合按字符数/2 粗估）。"""
     return max(1, len(text) // 2)
+
+
+def _llm_error_hint(exc: Exception) -> str:
+    """把 LLM 调用异常翻译成可读原因。
+
+    区分「欠费/凭证失效/限流/超时/网络」几类，用户与运维据此能立刻判断该充值、
+    改配置还是等待，而不是只看到一串异常类名（R1 LLM 降级策略）。
+    """
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    if status is not None:
+        if status == 401:
+            return "大模型凭证无效（401），请检查 LLM_API_KEY"
+        if status in (402, 403):
+            return f"大模型账户余额不足或无权访问（{status}）"
+        if status == 429:
+            return "大模型触发限流（429），请稍后重试"
+        if status >= 500:
+            return f"大模型服务异常（{status}）"
+        return f"大模型调用被拒绝（{status}）"
+    if isinstance(exc, httpx.TimeoutException):
+        return "大模型响应超时"
+    if isinstance(exc, httpx.HTTPError):
+        return f"大模型网络异常（{type(exc).__name__}）"
+    return f"未知错误（{type(exc).__name__}）"
+
+
+# 未配置 LLM 时兜底路径的统一提示（避免每次走到 HTTP 调用才失败）
+_LLM_NOT_CONFIGURED_MSG = (
+    "知识库中未找到直接相关的内容，且当前未配置兜底大模型（LLM_API_KEY 为空）。"
+    "请联系管理员配置后重试，或换个更贴近知识库的问题。"
+)
 
 
 def _build_fallback_messages(
@@ -66,6 +98,11 @@ async def _llm_fallback_stream(
     await tracker.restore_from_db()
 
     messages = _build_fallback_messages(question, history, competitors_context)
+
+    # 未配置 LLM：直接给出明确提示，不白跑一次 HTTP 调用
+    if not is_llm_configured():
+        yield _LLM_NOT_CONFIGURED_MSG
+        return
 
     est_input = _estimate_tokens(
         _FALLBACK_SYSTEM_PROMPT + "".join(m.get("content", "") for m in messages[1:])
@@ -122,7 +159,7 @@ async def _llm_fallback_stream(
             if output_tokens > 0 or not usage:
                 tracker.record(input_tokens, output_tokens)
     except (httpx.TimeoutException, httpx.HTTPError) as exc:
-        yield f"\n\n（兜底大模型暂时不可用：{type(exc).__name__}，请稍后重试。）"
+        yield f"\n\n（兜底大模型暂时不可用：{_llm_error_hint(exc)}，请稍后重试。）"
 
 
 def build_competitors_context(competitors: list) -> str:
@@ -162,6 +199,10 @@ async def _llm_fallback(
     # 组装带历史的 messages：system（含竞品上下文）+ 最近若干轮历史 + 当前问题
     messages = _build_fallback_messages(question, history, competitors_context)
 
+    # 未配置 LLM：直接返回明确提示，不白跑一次 HTTP 调用
+    if not is_llm_configured():
+        return _LLM_NOT_CONFIGURED_MSG
+
     # 成本预检：预估输入 token（system + 历史 + 问题），超限且未审批则中断
     est_input = _estimate_tokens(
         _FALLBACK_SYSTEM_PROMPT + "".join(m.get("content", "") for m in messages[1:])
@@ -200,7 +241,7 @@ async def _llm_fallback(
         # LLM 兜底失败时优雅降级，不让接口抛 500
         return (
             "抱歉，知识库中未找到与您问题直接相关的内容，且兜底大模型暂时不可用"
-            f"（{type(exc).__name__}）。请稍后重试，或换个更具体的问题。"
+            f"（{_llm_error_hint(exc)}）。请稍后重试，或换个更具体的问题。"
         )
 
 

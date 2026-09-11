@@ -11,6 +11,14 @@ class Settings(BaseSettings):
     app_name: str = "二手交易平台分析系统"
     debug: bool = False
 
+    # ---- 日志与观测 ----
+    # 日志级别（DEBUG/INFO/WARNING/ERROR），控制根 logger
+    log_level: str = "INFO"
+    # 是否输出 JSON 行日志（便于采集/检索）；false 时输出人类可读单行文本
+    log_json: bool = False
+    # 访问日志慢请求阈值（毫秒）：超过则提升为 WARNING，便于快速定位性能问题
+    slow_request_ms: int = 1000
+
     # 数据库连接（本地 Docker PostgreSQL，端口 5433 避开宿主机 5432）。
     # 无默认账号密码：必须经 .env 的 DATABASE_URL 注入，避免无 .env 部署时
     # 误用弱凭证（见 .env.example）。缺失时启动报错，强制显式配置。
@@ -38,6 +46,21 @@ class Settings(BaseSettings):
     # 首次启动自动 seed 的管理员账号（仅当 users 表为空时创建）
     admin_username: str = "admin"
     admin_password: str = "123456"
+
+    # ---- 登录防爆破 ----
+    # 同一用户名连续失败达到该次数即锁定（默认 5 次）
+    login_max_failures: int = 5
+    # 锁定时长（分钟），到期自动解锁；期间即使密码正确也拒绝
+    login_lockout_minutes: int = 15
+
+    # ---- 定时监控 ----
+    # 监控任务总开关。默认关闭：无人值守抓取会产生真实外网请求与 LLM 费用，
+    # 必须显式打开（.env 中设 MONITOR_ENABLED=true）后才运行。
+    monitor_enabled: bool = False
+    # 监控轮询间隔（小时）
+    monitor_interval_hours: int = 6
+    # 单轮监控最多处理的竞品数（防止一次抓取过多，控制外网压力与成本）
+    monitor_max_per_cycle: int = 20
 
     # ---- LLM 成本熔断 ----
     # 会话累计消费超过该阈值（元）即中断并征询。默认 1 元；按公开单价单次抓取约 0.01 元，
