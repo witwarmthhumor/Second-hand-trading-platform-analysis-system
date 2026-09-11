@@ -12,9 +12,10 @@ import { competitorApi } from '../api'
 import { useCompetitorStore } from '../stores/competitor'
 import { typeTag, dataStatusTag } from '../utils/tags'
 
-const emit = defineEmits(['navigate', 'changed'])
+const emit = defineEmits(['navigate'])
 
-const { pendingRows, pendingLoading, loadPending, openEdit } = useCompetitorStore()
+const { pendingRows, pendingLoading, loadPending, openEdit, notifyChanged } =
+  useCompetitorStore()
 
 function goEdit(row) {
   openEdit(row)
@@ -25,7 +26,8 @@ async function approve(row) {
   try {
     await competitorApi.approve(row.id)
     ElMessage.success('已确认入库')
-    emit('changed')
+    // 只广播：待校对数据在 store 内共享，广播会重拉并顺带同步侧栏徽标
+    notifyChanged()
   } catch (e) {
     ElMessage.error(e.message)
   }
@@ -40,7 +42,7 @@ async function remove(row) {
   try {
     await competitorApi.remove(row.id)
     ElMessage.success('已删除')
-    emit('changed')
+    notifyChanged()
   } catch (e) {
     ElMessage.error(e.message)
   }

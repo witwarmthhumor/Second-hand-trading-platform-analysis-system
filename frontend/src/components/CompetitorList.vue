@@ -3,19 +3,22 @@
  * 竞品列表页：统计卡片 + 搜索筛选 + 列表 + 前端分页 + 抓取入口。
  *
  * 列表数据与分页/筛选状态自持（列表带搜索/筛选，无法与其他页共享）；
+ * 刷新由 store.listVersion 驱动，**不再依赖「切 tab 重新挂载」这一副作用** ——
+ * 因此本页的任何增删都只调 store.notifyChanged()，自己不重拉（否则一次操作拉两遍）。
  * 跨页动作的数据状态写入 store，页面切换通过 navigate 事件交给壳层。
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { competitorApi } from '../api'
 import { useCompetitorStore } from '../stores/competitor'
 import { typeTag, statusTag, TYPE_OPTIONS } from '../utils/tags'
 
 // 待校对数量来自 store（与侧栏徽标同源），此处仅用于统计卡片展示
-const { pendingCount, openCreate, openEdit, startCompare } = useCompetitorStore()
+const { pendingCount, listVersion, openCreate, openEdit, startCompare, notifyChanged } =
+  useCompetitorStore()
 
 // navigate 只表达「要去哪一页」，数据状态一律走 store
-const emit = defineEmits(['navigate', 'changed'])
+const emit = defineEmits(['navigate'])
 
 const competitors = ref([])
 const loading = ref(false)
@@ -129,8 +132,8 @@ async function remove(row) {
   try {
     await competitorApi.remove(row.id)
     ElMessage.success('已删除')
-    fetchList()
-    emit('changed')
+    // 只广播，不自己重拉：listVersion 变化会触发下面的 watch
+    notifyChanged()
   } catch (e) {
     ElMessage.error(e.message)
   }
@@ -186,7 +189,8 @@ async function doFetchUrl(url) {
     await competitorApi.fetch(url)
     ElMessage.success('抓取成功，已进入待校对')
     fetchDialogVisible.value = false
-    emit('changed')
+    // 新草稿入库待校对：广播后列表与徽标自动同步
+    notifyChanged()
     loadCostStatus()
   } catch (e) {
     if (e.status === 402 && e.costDetail) {
@@ -227,6 +231,9 @@ async function doFetch() {
 }
 
 onMounted(fetchList)
+
+// 数据变更广播 → 重拉列表（替代原先「切 tab 重新挂载才刷新」的隐式行为）
+watch(listVersion, fetchList)
 
 defineExpose({ fetchList })
 </script>

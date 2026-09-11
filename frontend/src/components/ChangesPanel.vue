@@ -7,6 +7,10 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { competitorApi } from '../api'
+import { useCompetitorStore } from '../stores/competitor'
+
+// 监控轮次可能改动竞品字段，完成后同样广播数据变更（列表/徽标随之同步）
+const { notifyChanged } = useCompetitorStore()
 
 const changes = ref([])
 const changesLoading = ref(false)
@@ -34,6 +38,7 @@ async function doMonitor() {
       ElMessage.success(r.message || `监控完成：检查 ${r.checked} 个竞品`)
     }
     await loadChanges()
+    notifyChanged()
   } catch (e) {
     ElMessage.error(e.message)
   } finally {

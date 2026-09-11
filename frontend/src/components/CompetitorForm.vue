@@ -14,7 +14,7 @@ import { TYPE_OPTIONS, STATUS_OPTIONS } from '../utils/tags'
 const emit = defineEmits(['saved', 'cancel'])
 
 // 待编辑对象与评分维度均由 store 统一维护
-const { formTarget, ratingDims } = useCompetitorStore()
+const { formTarget, ratingDims, notifyChanged } = useCompetitorStore()
 
 const typeOptions = TYPE_OPTIONS
 const statusOptions = STATUS_OPTIONS
@@ -97,6 +97,8 @@ async function save() {
       await competitorApi.create(payload)
       ElMessage.success('已录入')
     }
+    // 数据变更统一交给 store 广播：列表、待校对与侧栏徽标自动同步
+    notifyChanged()
     emit('saved')
   } catch (e) {
     ElMessage.error(e.message)

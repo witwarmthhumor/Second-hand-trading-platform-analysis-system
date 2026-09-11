@@ -187,18 +187,12 @@ function onNavigate(tab) {
 }
 
 function onFormSaved() {
-  // 列表页在重新挂载时会自取最新数据，这里只需回到列表
+  // 数据广播由表单自己调 store.notifyChanged()，这里只负责回到列表
   activeTab.value = 'list'
-  loadPending()
 }
 
 function onFormCancel() {
   activeTab.value = 'list'
-}
-
-// 列表/待校对页发生增删后：刷新待校对数据（侧栏徽标计数由它派生）
-function onDataChanged() {
-  loadPending()
 }
 
 // —— RAG 知识库就绪状态（顶栏显示用；问答组件 RagChat 自持其余状态）——
@@ -342,19 +336,11 @@ onMounted(() => {
       </header>
 
       <main class="main">
-        <!-- 竞品列表 -->
-        <CompetitorList
-          v-if="activeTab === 'list'"
-          @navigate="onNavigate"
-          @changed="onDataChanged"
-        />
+        <!-- 竞品列表：数据变更由 store 广播，本组件不再向上抛事件 -->
+        <CompetitorList v-if="activeTab === 'list'" @navigate="onNavigate" />
 
         <!-- 待校对 -->
-        <PendingReview
-          v-else-if="activeTab === 'pending'"
-          @navigate="onNavigate"
-          @changed="onDataChanged"
-        />
+        <PendingReview v-else-if="activeTab === 'pending'" @navigate="onNavigate" />
 
         <!-- 录入 / 编辑：待编辑对象与评分维度均来自 store，key 变化即强制重建表单 -->
         <CompetitorForm
