@@ -188,6 +188,8 @@ cd backend && .venv/Scripts/python -m pytest -q
 
 ## 五、P1：兜底路径注入检索上下文
 
+> **状态：✅ 已实现（2026-09-11）**。三档分流已落地，实现清单见 5.3、验收见 5.4。
+
 ### 5.1 现状与风险
 
 `rag_service._llm_fallback()` 目前**完全不携带检索结果**——只用 system 提示词
@@ -206,19 +208,55 @@ cd backend && .venv/Scripts/python -m pytest -q
 2. **明确拒答**：若连 0.4 都不到，直接回「知识库暂无相关内容」，**不调用 LLM**
    （省成本，也杜绝编造）。
 
-### 5.3 改动点
+### 5.3 实现清单
 
-- `build_hit_gate()` → 未命中时返回临界片段（而非 `None` 丢弃），或新增
-  `build_fallback_context(results)`；
-- `_build_fallback_messages()` → 增加 `retrieved_context` 参数拼进 system prompt
-  （与现有 `competitors_context` 同构）；
-- `ask()` / 流式端点 → 把临界片段透传给兜底函数。
+三档分流（原为「未命中 → 一律调 LLM」两档）：
+
+| 档位 | 条件（`results[0].vector_sim`） | 行为 |
+|---|---|---|
+| **命中直出** | `≥ SIMILARITY_THRESHOLD`（0.65） | 直出原文 + 来源（原行为，未变） |
+| **注入兜底** | `[FALLBACK_CONTEXT_MIN_SIM, 0.65)` | 注入临界片段 → 调 LLM → 返回答案 + 片段来源 |
+| **直接拒答** | `< FALLBACK_CONTEXT_MIN_SIM`（0.4）或结果为空 | 回「知识库暂无相关内容」，**不调 LLM** |
+
+改动点：
+
+- `backend/app/rag/config.py`：新增 `FALLBACK_CONTEXT_MIN_SIM = 0.4`、
+  `FALLBACK_CONTEXT_MAX_CHUNKS = 3`（含取值依据注释）；
+- `backend/app/services/rag_service.py`：
+  - 新增 `build_fallback_context(results)` → 提取灰区 `[0.4, 0.65)` 片段（按 `doc_id` 去重、
+    上限 3 条），低于下限返回 `None`；
+  - 新增 `format_fallback_context(docs)` → 序列化为带「来源 + 相似度」标注的注入文本；
+  - `_build_fallback_messages()` 新增 `retrieved_context` 参数（与 `competitors_context` 同构）；
+  - `_llm_fallback()` / `_llm_fallback_stream()` 新增 `retrieved_context` 透传；
+  - `ask()` 接入三档分流，兜底时把临界片段作为 `sources` 返回（**前端 sources 渲染与 mode 无关，
+    无需改前端**）；
+  - 顺带修正：成本预估原用 `_FALLBACK_SYSTEM_PROMPT` 常量而非实际 system 内容，
+    注入片段后会低估 token → 改为按完整 `messages` 估算。
+- `backend/app/api/rag.py`：流式端点 `ask_stream()` 接入同样三档（拒答 / 注入 / 命中）。
 
 ### 5.4 验收
 
-- 构造 20 条**领域外**问题（如「你觉得转转这个平台怎么样」）+ 20 条**临界**问题，
-  人工/LLM 双评：**编造条款数 = 0**；
-- 兜底调用率（`mode=fallback`）与 LLM 成本不得显著上升（拒答档应**降低成本**）。
+**单测（已全绿）**：`backend/tests/test_rag.py` 新增/更新 7 个用例、`test_rag_sessions.py` 2 个：
+
+- `test_ask_gray_zone_injects_context_and_returns_sources`：灰区 → 注入片段 + 返回来源；
+- `test_ask_rejects_without_llm_when_all_chunks_too_weak`：`top1 < 0.4` → 拒答且**断言不调用 LLM**；
+- `test_ask_empty_results_rejects_without_llm`：无结果 → 拒答且不调用 LLM；
+- `test_ask_stream_rejects_without_llm_when_too_weak`：流式路径同样的拒答断言；
+- `test_build_fallback_context_*`：灰区筛选 / 命中区排除 / `doc_id` 去重 / 条数上限；
+- `test_format_fallback_context_annotates_doc_and_score`：注入文本带来源与相似度标注。
+
+**误伤面（逻辑论证，依据既有实测）**：下限 0.4 远低于 285 问实测的最低 top1——
+正确样本（261 条）最低 **0.6660**、错误样本（24 条）最低 **0.6483**，且领域外闲聊 top1
+也有 **0.6235**。即**领域内问题无一落入拒答档**，拒答档只截「连沾边都算不上」的输入。
+（该分布见 `backend/app/rag/config.py` 阈值注释与 `RAGAS 评估实验.md`。）
+
+> **实时探针待补**：新增 `scripts/experiments/ragas_eval/fallback_gate_probe.py` 用于实测
+> 三档分布（领域内误伤数 + 领域外落档分布）。执行当日并行会话正在重建生产向量库，
+> 重建后的库 `chromadb` 查询即 segfault（纯 chromadb 直连、真实 1024 维向量亦复现），
+> 实时验证受阻，待向量库稳定后补跑。
+
+**上线后建议监控**：`mode=fallback` 占比与「拒答」占比。若拒答率过高（如 > 5%），
+说明下限 0.4 仍偏高，应下调或改为「注入但不拒答」。
 
 ---
 
@@ -281,8 +319,10 @@ cd backend && .venv/Scripts/python -m pytest -q
 
 1. **P0（✅ 已完成 2026-09-11）**：开 `DOC_DEDUP_ENABLED=True` + 缓存 key 版本升 `v3`
    → 检索侧复测达标（多文档 0.5052 / 单文档 1.0000 / Hit 1.0000）→ 生成侧端到端复跑验证。
-2. **下周（P1）**：兜底路径注入临界片段 + 拒答档 → 领域外问题回归。
-3. **再下周（P1）**：合成 v1 按问题类型分流灰度。
+2. **P1（✅ 已完成 2026-09-11）**：兜底路径三档分流（拒答 / 注入临界片段 / 命中直出），
+   含 `build_fallback_context` + `retrieved_context` 注入 + 流式端点同步；单测全绿。
+   实时探针待向量库稳定后补跑（见 5.4）。
+3. **下一步（P1）**：合成 v1 按问题类型分流灰度。
 4. **随后（P2/P3）**：coverage 并入 `run_eval.py`、补 chunk 级 golden、FAQ 分块观察。
 
 ---

@@ -159,37 +159,65 @@ async def test_ask_hit_returns_direct_answer(monkeypatch):
     assert resp.question == "卖家入驻需要什么资质"
 
 
-async def test_ask_hit_below_threshold_falls_back(monkeypatch):
-    """未命中（最高相似度 < 阈值）时走 LLM 兜底，sources 为空。"""
+async def test_ask_gray_zone_injects_context_and_returns_sources(monkeypatch):
+    """灰区（0.4 ≤ top1 < 阈值）走兜底：临界片段注入 prompt，并作为来源返回供核验。"""
+    from app.services import rag_service
+
+    gray = [
+        {"doc_id": "A-006", "text": "入驻需营业执照", "vector_sim": 0.52},
+        {"doc_id": "C-001", "text": "个人卖家实名", "vector_sim": 0.45},
+    ]
+    monkeypatch.setattr(rag_service, "get_retriever", lambda: _ReadyRetriever(gray))
+    captured = {}
+
+    async def _fake_fallback(
+        question, history=None, competitors_context=None, retrieved_context=None
+    ):
+        captured["ctx"] = retrieved_context
+        return "（mock 兜底回答）"
+
+    monkeypatch.setattr(rag_service, "_llm_fallback", _fake_fallback)
+    resp = await rag_service.ask("卖家入驻要什么资质")
+
+    assert resp.mode == "fallback"
+    assert resp.answer == "（mock 兜底回答）"
+    # 临界片段确实注入 prompt（带来源与相似度标注），并作为来源返回
+    assert "A-006" in captured["ctx"] and "0.52" in captured["ctx"]
+    assert [s.doc_id for s in resp.sources] == ["A-006", "C-001"]
+
+
+async def test_ask_rejects_without_llm_when_all_chunks_too_weak(monkeypatch):
+    """检索相似度连 0.4 都不到 → 直接拒答，不调用 LLM（杜绝无据编造）。"""
     from app.services import rag_service
 
     low = [{"doc_id": "A-006", "text": "无关", "vector_sim": 0.3}]
     monkeypatch.setattr(rag_service, "get_retriever", lambda: _ReadyRetriever(low))
 
-    async def _fake_fallback(question, history=None, competitors_context=None):
-        return "（mock 兜底回答）"
+    async def _should_not_call(*a, **k):
+        raise AssertionError("相似度过低时不应调用 LLM")
 
-    monkeypatch.setattr(rag_service, "_llm_fallback", _fake_fallback)
+    monkeypatch.setattr(rag_service, "_llm_fallback", _should_not_call)
     resp = await rag_service.ask("今天天气怎么样")
 
     assert resp.mode == "fallback"
-    assert resp.answer == "（mock 兜底回答）"
+    assert "暂无" in resp.answer
     assert resp.sources == []
 
 
-async def test_ask_empty_results_falls_back(monkeypatch):
-    """检索无结果时走 LLM 兜底。"""
+async def test_ask_empty_results_rejects_without_llm(monkeypatch):
+    """检索无结果 → 拒答（知识库确无内容），不调用 LLM。"""
     from app.services import rag_service
 
     monkeypatch.setattr(rag_service, "get_retriever", lambda: _ReadyRetriever([]))
 
-    async def _fake(q, history=None, competitors_context=None):
-        return "兜底"
+    async def _should_not_call(*a, **k):
+        raise AssertionError("无检索结果时不应调用 LLM")
 
-    monkeypatch.setattr(rag_service, "_llm_fallback", _fake)
+    monkeypatch.setattr(rag_service, "_llm_fallback", _should_not_call)
 
     resp = await rag_service.ask("完全无关的问题")
     assert resp.mode == "fallback"
+    assert "暂无" in resp.answer
 
 
 async def test_llm_fallback_graceful_on_timeout(monkeypatch):
@@ -256,10 +284,11 @@ async def test_ask_injects_history_to_fallback(monkeypatch):
     """未命中走兜底时，把历史上下文传给 _llm_fallback。"""
     from app.services import rag_service
 
-    monkeypatch.setattr(rag_service, "get_retriever", lambda: _ReadyRetriever([]))
+    gray = [{"doc_id": "A-001", "text": "参考片段", "vector_sim": 0.5}]
+    monkeypatch.setattr(rag_service, "get_retriever", lambda: _ReadyRetriever(gray))
     captured = {}
 
-    async def _fake(q, history=None, competitors_context=None):
+    async def _fake(q, history=None, competitors_context=None, retrieved_context=None):
         captured["history"] = history
         return "兜底"
 
@@ -389,10 +418,11 @@ async def test_ask_injects_competitors_context(monkeypatch):
     """未命中兜底时，竞品上下文透传给 _llm_fallback。"""
     from app.services import rag_service
 
-    monkeypatch.setattr(rag_service, "get_retriever", lambda: _ReadyRetriever([]))
+    gray = [{"doc_id": "A-001", "text": "参考片段", "vector_sim": 0.5}]
+    monkeypatch.setattr(rag_service, "get_retriever", lambda: _ReadyRetriever(gray))
     captured = {}
 
-    async def _fake(q, history=None, competitors_context=None):
+    async def _fake(q, history=None, competitors_context=None, retrieved_context=None):
         captured["ctx"] = competitors_context
         return "兜底"
 
@@ -401,6 +431,56 @@ async def test_ask_injects_competitors_context(monkeypatch):
         "闲鱼和转转哪个抽成高", competitors_context="【闲鱼】抽佣0.6%"
     )
     assert captured["ctx"] == "【闲鱼】抽佣0.6%"
+
+
+# ---------------- 兜底路径：临界片段提取（P1） ----------------
+
+
+def test_build_fallback_context_picks_gray_zone_and_dedups_doc():
+    """临界片段只取 [0.4, 0.65)：命中区(≥0.65)由 hit gate 负责，同 doc 只留最相似一个。"""
+    from app.services.rag_service import build_fallback_context
+
+    results = [
+        {"doc_id": "A-001", "text": "命中区（应由 hit gate 处理）", "vector_sim": 0.72},
+        {"doc_id": "B-002", "text": "灰区", "vector_sim": 0.55},
+        {"doc_id": "B-002", "text": "同文档次优", "vector_sim": 0.50},
+        {"doc_id": "C-003", "text": "灰区二", "vector_sim": 0.42},
+        {"doc_id": "D-004", "text": "噪声", "vector_sim": 0.10},
+    ]
+    docs = build_fallback_context(results)
+    assert [d.doc_id for d in docs] == ["B-002", "C-003"]
+
+
+def test_build_fallback_context_none_when_below_min_sim():
+    """最高相似度 < 0.4（或空结果）→ 返回 None，调用方据此拒答。"""
+    from app.services.rag_service import build_fallback_context
+
+    assert build_fallback_context([]) is None
+    assert (
+        build_fallback_context([{"doc_id": "X", "text": "t", "vector_sim": 0.39}])
+        is None
+    )
+
+
+def test_build_fallback_context_caps_chunks():
+    """注入片段数受 FALLBACK_CONTEXT_MAX_CHUNKS 限制，避免 token 膨胀。"""
+    from app.rag.config import FALLBACK_CONTEXT_MAX_CHUNKS
+    from app.services.rag_service import build_fallback_context
+
+    results = [{"doc_id": f"D-{i}", "text": "t", "vector_sim": 0.5} for i in range(10)]
+    docs = build_fallback_context(results)
+    assert len(docs) == FALLBACK_CONTEXT_MAX_CHUNKS
+
+
+def test_format_fallback_context_annotates_doc_and_score():
+    """注入文本需带来源与相似度标注，模型与用户可据此判断可信度。"""
+    from app.schemas.rag import SourceDoc
+    from app.services.rag_service import format_fallback_context
+
+    text = format_fallback_context(
+        [SourceDoc(doc_id="A-001", title="t", text="正文", score=0.52)]
+    )
+    assert "A-001" in text and "0.52" in text and "正文" in text
 
 
 # ---------------- rerank 精排 ----------------

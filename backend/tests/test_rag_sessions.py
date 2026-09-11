@@ -241,22 +241,24 @@ async def test_batch_delete_sessions(client):
 # ---------------- 流式问答（SSE） ----------------
 
 async def test_ask_stream_fallback(client, monkeypatch):
-    """未命中时流式接口逐 token 推送 delta，并以 done 结束，会话落库。"""
+    """未命中（灰区）时流式接口逐 token 推送 delta，并以 done 结束，会话落库。"""
     from app.api import rag as rag_api
     from app.services import rag_service
 
-    async def _fake_stream(question, history=None, competitors_context=None):
+    async def _fake_stream(
+        question, history=None, competitors_context=None, retrieved_context=None
+    ):
         for piece in ["流式", "回答", "内容"]:
             yield piece
 
     monkeypatch.setattr(rag_service, "_llm_fallback_stream", _fake_stream)
 
-    # mock retriever：未命中（vector_sim 低于阈值）
+    # mock retriever：灰区（0.4 ≤ top1 < 阈值）→ 注入临界片段后走流式兜底
     class _Retriever:
         is_ready = True
 
         def search(self, question, top_k=5):
-            return [{"doc_id": "A-001", "text": "x", "vector_sim": 0.3}]
+            return [{"doc_id": "A-001", "text": "x", "vector_sim": 0.5}]
 
     monkeypatch.setattr(rag_api, "get_retriever", lambda: _Retriever())
 
@@ -284,6 +286,42 @@ async def test_ask_stream_fallback(client, monkeypatch):
     msgs = r.json()["messages"]
     assert len(msgs) == 2
     assert msgs[1]["content"] == "流式回答内容"
+
+
+async def test_ask_stream_rejects_without_llm_when_too_weak(client, monkeypatch):
+    """流式：检索相似度连 0.4 都不到时直接拒答，不调用 LLM。"""
+    from app.api import rag as rag_api
+    from app.services import rag_service
+
+    async def _should_not_call(*a, **k):
+        raise AssertionError("相似度过低时不应调用 LLM")
+        yield  # pragma: no cover  —— 使其成为异步生成器
+
+    monkeypatch.setattr(rag_service, "_llm_fallback_stream", _should_not_call)
+
+    class _Retriever:
+        is_ready = True
+
+        def search(self, question, top_k=5):
+            return [{"doc_id": "A-001", "text": "x", "vector_sim": 0.2}]
+
+    monkeypatch.setattr(rag_api, "get_retriever", lambda: _Retriever())
+
+    _, token = await _register(client)
+    sid = secrets.token_hex(16)
+    async with client.stream(
+        "POST",
+        "/api/rag/ask/stream",
+        json={"question": "今天天气", "session_id": sid},
+        headers=_auth(token),
+    ) as resp:
+        assert resp.status_code == 200
+        body = ""
+        async for chunk in resp.aiter_text():
+            body += chunk
+
+    assert '"mode": "fallback"' in body
+    assert "暂无" in body
 
 
 async def test_ask_stream_requires_auth(client):

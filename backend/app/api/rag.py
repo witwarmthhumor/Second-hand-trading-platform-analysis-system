@@ -153,10 +153,42 @@ async def ask_stream(
             )
             return
 
-        # 未命中：流式兜底，逐 token 推送
+        # 未命中：先取「临界片段」。连临界标准都达不到 → 直接拒答，不调 LLM
+        #（没有知识库依据时调用 LLM 只会得到凭参数知识编造的答案）。
+        fallback_docs = rag_service.build_fallback_context(results)
+        if fallback_docs is None:
+            yield (
+                "data: "
+                + _json.dumps(
+                    {
+                        "type": "done",
+                        "answer": rag_service.NO_KB_CONTENT_MSG,
+                        "mode": "fallback",
+                        "sources": [],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n\n"
+            )
+            await sessions.save_round(
+                session,
+                session_id=payload.session_id,
+                user_id=user.id,
+                question=payload.question,
+                answer=rag_service.NO_KB_CONTENT_MSG,
+                mode="fallback",
+                sources=[],
+                existing=existing,
+            )
+            return
+
+        # 未命中但存在临界片段：流式兜底（注入片段作参考），逐 token 推送
         full_answer_parts: list[str] = []
         async for delta in rag_service._llm_fallback_stream(
-            payload.question, history=history, competitors_context=competitors_context
+            payload.question,
+            history=history,
+            competitors_context=competitors_context,
+            retrieved_context=rag_service.format_fallback_context(fallback_docs),
         ):
             full_answer_parts.append(delta)
             yield (
@@ -166,7 +198,14 @@ async def ask_stream(
             )
         yield (
             "data: "
-            + _json.dumps({"type": "done", "mode": "fallback"}, ensure_ascii=False)
+            + _json.dumps(
+                {
+                    "type": "done",
+                    "mode": "fallback",
+                    "sources": [s.model_dump() for s in fallback_docs],
+                },
+                ensure_ascii=False,
+            )
             + "\n\n"
         )
         await sessions.save_round(
@@ -176,7 +215,7 @@ async def ask_stream(
             question=payload.question,
             answer="".join(full_answer_parts),
             mode="fallback",
-            sources=[],
+            sources=fallback_docs,
             existing=existing,
         )
 

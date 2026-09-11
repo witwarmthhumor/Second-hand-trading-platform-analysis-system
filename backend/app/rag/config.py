@@ -61,6 +61,18 @@ RERANK_BY_VSIM = True
 # 否则旧策略下写入的缓存在 TTL 内仍会命中，导致「改了配置但线上没变」。
 DOC_DEDUP_ENABLED = True
 
+# 兜底路径（未命中时）：把相似度落在 [FALLBACK_CONTEXT_MIN_SIM, SIMILARITY_THRESHOLD)
+# 的 top-k 片段作为「临界片段」注入 prompt，让模型有据可依，而不是凭参数知识作答。
+# 依据：`_llm_fallback` 原先完全不携带检索结果，是全局最容易编造费率/时限/制度条款的
+# 地方；且阈值上调到 0.65 后，更多问题会走到这条路径，风险被放大。
+# 最高相似度连 FALLBACK_CONTEXT_MIN_SIM 都达不到 → 直接回「知识库暂无相关内容」，
+# 不调用 LLM（既省成本，也杜绝无据编造）。
+# 取值 0.4：远低于领域外闲聊实测 top1（0.6235）与正确样本最低 top1（0.6483），
+# 只用来圈出「连沾边都算不上」的检索噪声，不做相关性判断（相关性由阈值 0.65 负责）。
+FALLBACK_CONTEXT_MIN_SIM = 0.4
+# 注入片段数上限：控制 token 膨胀（每片段约 200~900 字，3 个已足够提供线索）。
+FALLBACK_CONTEXT_MAX_CHUNKS = 3
+
 # ---- Chroma 配置 ----
 CHROMA_COLLECTION = "second_hand_kb"
 CHROMA_ADD_BATCH = 4096  # Chroma 单次 add 上限余量

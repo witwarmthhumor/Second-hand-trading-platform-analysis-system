@@ -15,7 +15,11 @@ from app.ai.cost import get_cost_tracker
 from app.ai.provider import is_llm_configured
 from app.config import settings
 from app.rag.cache import SingleFlight, get_search_cache
-from app.rag.config import SIMILARITY_THRESHOLD
+from app.rag.config import (
+    FALLBACK_CONTEXT_MAX_CHUNKS,
+    FALLBACK_CONTEXT_MIN_SIM,
+    SIMILARITY_THRESHOLD,
+)
 from app.rag.retriever import HybridRetriever, get_retriever
 from app.schemas.rag import AskResponse, SourceDoc
 
@@ -64,16 +68,81 @@ _LLM_NOT_CONFIGURED_MSG = (
     "请联系管理员配置后重试，或换个更贴近知识库的问题。"
 )
 
+# 拒答档：检索相似度连 FALLBACK_CONTEXT_MIN_SIM 都达不到时，直接回这句、不调 LLM。
+# 此时模型没有可用的知识库依据，调 LLM 只会得到「凭参数知识编造」的答案。
+NO_KB_CONTENT_MSG = (
+    "知识库中暂无与该问题相关的内容。为避免给出不准确的信息，本次不作推测性回答；"
+    "建议换一个更贴近产品规则/流程的问法，或补充具体场景（如「卖家入驻」「退款」「验货」）。"
+)
+
+
+def build_fallback_context(
+    results: list[dict],
+    min_sim: float = FALLBACK_CONTEXT_MIN_SIM,
+    max_chunks: int = FALLBACK_CONTEXT_MAX_CHUNKS,
+) -> list[SourceDoc] | None:
+    """从检索结果中挑出「临界片段」，供兜底路径注入 prompt（P1）。
+
+    临界片段 = 相似度落在 `[min_sim, SIMILARITY_THRESHOLD)` 的片段：达不到「命中直出」
+    的标准，但又不是全无关系，可作为 LLM 的参考线索（注入时会标注相似度）。
+
+    返回 `None` 表示**连临界标准都达不到**（结果为空，或最高相似度 < `min_sim`）——
+    调用方应直接拒答、不调用 LLM：这种输入下模型只能凭参数知识作答。
+
+    来源按 `doc_id` 去重（同文档多 chunk 只留最相似的一个），最多 `max_chunks` 个。
+    纯函数，便于单测。
+    """
+    if not results or results[0]["vector_sim"] < min_sim:
+        return None
+
+    seen: set[str] = set()
+    picked: list[SourceDoc] = []
+    for r in results:
+        # 只取灰区 [min_sim, SIMILARITY_THRESHOLD)：≥阈值属「命中直出」，由 build_hit_gate 负责
+        if r["vector_sim"] < min_sim or r["vector_sim"] >= SIMILARITY_THRESHOLD:
+            continue
+        if r["doc_id"] in seen:
+            continue
+        seen.add(r["doc_id"])
+        picked.append(
+            SourceDoc(
+                doc_id=r["doc_id"],
+                title=_title_from_doc_id(r["doc_id"]),
+                text=r["text"],
+                score=r["vector_sim"],
+            )
+        )
+        if len(picked) >= max_chunks:
+            break
+    return picked or None
+
+
+def format_fallback_context(docs: list[SourceDoc]) -> str:
+    """把临界片段序列化为注入 system prompt 的文本（带来源与相似度标注）。"""
+    return "\n\n".join(
+        f"【片段 {i}｜来源 {d.doc_id}｜相似度 {d.score:.2f}】{d.text}"
+        for i, d in enumerate(docs, 1)
+    )
+
 
 def _build_fallback_messages(
     question: str,
     history: list[dict] | None = None,
     competitors_context: str | None = None,
+    retrieved_context: str | None = None,
 ) -> list[dict]:
     """组装 LLM 兜底的 messages（system + 历史 + 当前问题），供流式/非流式复用。"""
     system_prompt = _FALLBACK_SYSTEM_PROMPT
     if competitors_context:
         system_prompt += f"\n\n以下是系统中已录入的竞品数据（供对比类问题参考）：\n{competitors_context}"
+    if retrieved_context:
+        # P1：兜底路径注入临界片段，让模型「有据可依」，而不是凭参数知识作答。
+        system_prompt += (
+            "\n\n以下是从知识库检索到的、与问题**可能相关**的片段（相似度不高，仅供参考）：\n"
+            f"{retrieved_context}\n\n"
+            "请**优先基于上述片段**作答；片段未覆盖的信息，请直接说明知识库暂无相关内容，"
+            "不要编造费率、时限或制度条款。片段之间若信息冲突，以相似度更高的为准。"
+        )
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
     for msg in history or []:
         role = msg.get("role")
@@ -88,24 +157,30 @@ async def _llm_fallback_stream(
     question: str,
     history: list[dict] | None = None,
     competitors_context: str | None = None,
+    retrieved_context: str | None = None,
 ):
     """未命中时 LLM 兜底流式生成（SSE 数据源）。
 
     逐 chunk yield 增量文本；结束时 yield usage（成本记账用）。
     成本熔断 blocked 时 yield 提示文本后结束。LLM 异常时 yield 降级提示后结束。
+
+    `retrieved_context`：P1 注入的临界片段文本（见 `build_fallback_context`）。
     """
     tracker = get_cost_tracker()
     await tracker.restore_from_db()
 
-    messages = _build_fallback_messages(question, history, competitors_context)
+    messages = _build_fallback_messages(
+        question, history, competitors_context, retrieved_context
+    )
 
     # 未配置 LLM：直接给出明确提示，不白跑一次 HTTP 调用
     if not is_llm_configured():
         yield _LLM_NOT_CONFIGURED_MSG
         return
 
+    # 成本预检：估算全部 messages（含注入的临界片段），避免低估触发超支
     est_input = _estimate_tokens(
-        _FALLBACK_SYSTEM_PROMPT + "".join(m.get("content", "") for m in messages[1:])
+        "".join(str(m.get("content", "")) for m in messages)
     )
     pre = tracker.precheck(est_input)
     if pre.get("blocked"):
@@ -191,21 +266,27 @@ async def _llm_fallback(
     question: str,
     history: list[dict] | None = None,
     competitors_context: str | None = None,
+    retrieved_context: str | None = None,
 ) -> str:
-    """未命中时调用 LLM 兜底生成，接入成本熔断；可注入多轮历史与竞品数据上下文。"""
+    """未命中时调用 LLM 兜底生成，接入成本熔断；可注入多轮历史、竞品与检索片段。
+
+    `retrieved_context`：P1 注入的临界片段文本（见 `build_fallback_context`）。
+    """
     tracker = get_cost_tracker()
     await tracker.restore_from_db()
 
-    # 组装带历史的 messages：system（含竞品上下文）+ 最近若干轮历史 + 当前问题
-    messages = _build_fallback_messages(question, history, competitors_context)
+    # 组装带历史的 messages：system（含竞品/检索片段上下文）+ 历史 + 当前问题
+    messages = _build_fallback_messages(
+        question, history, competitors_context, retrieved_context
+    )
 
     # 未配置 LLM：直接返回明确提示，不白跑一次 HTTP 调用
     if not is_llm_configured():
         return _LLM_NOT_CONFIGURED_MSG
 
-    # 成本预检：预估输入 token（system + 历史 + 问题），超限且未审批则中断
+    # 成本预检：估算全部 messages（含注入的临界片段），避免低估触发超支
     est_input = _estimate_tokens(
-        _FALLBACK_SYSTEM_PROMPT + "".join(m.get("content", "") for m in messages[1:])
+        "".join(str(m.get("content", "")) for m in messages)
     )
     pre = tracker.precheck(est_input)
     if pre.get("blocked"):
@@ -341,14 +422,29 @@ async def ask(
             session_id=session_id,
         )
 
-    # 未命中：LLM 兜底（注入历史上下文与竞品数据，支持追问与对比类问题）
+    # 未命中：先取「临界片段」。连临界标准都达不到 → 直接拒答，不调 LLM
+    #（没有知识库依据时调用 LLM 只会得到凭参数知识编造的答案，见 docs/RAG优化方案.md 五）。
+    fallback_docs = build_fallback_context(results)
+    if fallback_docs is None:
+        return AskResponse(
+            answer=NO_KB_CONTENT_MSG,
+            mode="fallback",
+            sources=[],
+            question=question,
+            session_id=session_id,
+        )
+
+    # 未命中但存在临界片段：注入 prompt 让模型有据可依，并把片段作为来源返回供核验
     answer = await _llm_fallback(
-        question, history=history, competitors_context=competitors_context
+        question,
+        history=history,
+        competitors_context=competitors_context,
+        retrieved_context=format_fallback_context(fallback_docs),
     )
     return AskResponse(
         answer=answer,
         mode="fallback",
-        sources=[],
+        sources=fallback_docs,
         question=question,
         session_id=session_id,
     )
