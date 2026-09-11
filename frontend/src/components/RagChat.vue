@@ -9,7 +9,6 @@ const props = defineProps({
 })
 
 const ragQuestion = ref('')
-const ragAnswer = ref(null) // { answer, mode, sources }
 const ragLoading = ref(false)
 const ragSessionId = ref(null) // 当前会话 ID（多轮记忆）
 const ragHistory = ref([]) // 本轮会话的问答历史 [{ role, content, mode, sources, feedback }]
@@ -30,7 +29,6 @@ function newRagSession() {
   // 后端 ask 懒创建会话，避免侧栏堆积「空会话」。
   ragSessionId.value = null
   ragHistory.value = []
-  ragAnswer.value = null
   ragQuestion.value = '' // 清掉输入框里可能残留的上一条问题
   batchMode.value = false
   checkedSessions.value = []
@@ -46,22 +44,52 @@ async function doAsk() {
     ElMessage.warning('请输入问题')
     return
   }
-  ragLoading.value = true
-  try {
-    // 新对话的首问：本地生成 session_id，后端 ask 懒创建并归属当前用户
-    if (!ragSessionId.value) {
-      ragSessionId.value = crypto.randomUUID().replace(/-/g, '')
-    }
-    // 记录用户消息到本地历史
-    ragHistory.value.push({ role: 'user', content: q })
-    ragQuestion.value = ''
-    scrollChatToBottom()
+  // 上一轮仍在生成时不并发发起，避免同一会话上下文错乱
+  if (ragLoading.value) {
+    ElMessage.warning('上一条回答仍在生成中，请稍候')
+    return
+  }
+  // 新对话的首问：本地生成 session_id，后端 ask 懒创建并归属当前用户
+  if (!ragSessionId.value) {
+    ragSessionId.value = crypto.randomUUID().replace(/-/g, '')
+  }
+  ragQuestion.value = ''
+  // 记录用户消息到本地历史
+  ragHistory.value.push({ role: 'user', content: q })
+  scrollChatToBottom()
 
-    // 流式问答：AI 消息边收边渲染
-    const aiMsg = { role: 'assistant', content: '', sources: [], mode: 'fallback', feedback: null }
-    ragHistory.value.push(aiMsg)
+  // 流式问答：AI 消息边收边渲染。
+  // status 驱动「生成中 / 成功 / 断流 / 失败」四种呈现，失败与断流都可在原地重试。
+  const aiMsg = {
+    role: 'assistant',
+    content: '',
+    sources: [],
+    mode: 'fallback',
+    feedback: null,
+    question: q, // 供反馈回路与重试使用
+    status: 'streaming',
+    error: '',
+  }
+  ragHistory.value.push(aiMsg)
+  scrollChatToBottom()
+  await runAsk(aiMsg, q)
+}
+
+/**
+ * 执行一次问答，把流式结果写进给定的 AI 消息对象。
+ *
+ * 抽成独立函数，是为了让「失败重试」能复用同一条气泡原地重跑，
+ * 而不是在对话区堆出多条重复消息。
+ */
+async function runAsk(aiMsg, question) {
+  ragLoading.value = true
+  aiMsg.status = 'streaming'
+  aiMsg.error = ''
+  aiMsg.content = ''
+  aiMsg.sources = []
+  try {
     let doneInfo = null
-    for await (const evt of competitorApi.ragAskStream(q, 5, ragSessionId.value)) {
+    for await (const evt of competitorApi.ragAskStream(question, 5, ragSessionId.value)) {
       if (evt.type === 'delta') {
         aiMsg.content += evt.content
         scrollChatToBottom()
@@ -72,24 +100,36 @@ async function doAsk() {
         if (evt.sources) aiMsg.sources = evt.sources
       }
     }
-    // 记录该 AI 回答对应的用户问题，供反馈回路使用
-    aiMsg.question = q
     // 若流式异常结束且无内容，给出兜底
     if (!aiMsg.content && doneInfo?.answer) {
       aiMsg.content = doneInfo.answer
     }
-    loadRagSessions()
-    scrollChatToBottom()
-  } catch (e) {
-    ElMessage.error(e.message)
-    // 移除空 AI 气泡（若尚未渲染出内容）
-    const last = ragHistory.value[ragHistory.value.length - 1]
-    if (last && last.role === 'assistant' && !last.content) {
-      ragHistory.value.pop()
+    if (doneInfo) {
+      aiMsg.status = 'ok'
+    } else {
+      // 流正常关闭却没收到的 done 事件 → 断流（网络中断/后端提前收尾）
+      aiMsg.status = 'aborted'
+      aiMsg.error = '回答未完整结束（连接提前中断），以上内容可能不完整'
     }
+    loadRagSessions()
+  } catch (e) {
+    // 已有部分内容说明是中途断流；完全没有内容则是直接失败。两者都允许重试。
+    aiMsg.status = aiMsg.content ? 'aborted' : 'failed'
+    aiMsg.error = e.message || '请求失败，请检查网络或稍后重试'
   } finally {
     ragLoading.value = false
+    scrollChatToBottom()
   }
+}
+
+// 重试：沿用原问题在同一个气泡里重新生成
+function retryAsk(msg) {
+  if (ragLoading.value) {
+    ElMessage.warning('正在生成中，请稍候')
+    return
+  }
+  if (!msg.question) return
+  runAsk(msg, msg.question)
 }
 
 // 聊天区自动滚动到底部
@@ -149,7 +189,6 @@ function fmtSessionTime(iso) {
 async function switchSession(sessionId) {
   ragSessionId.value = sessionId
   ragHistory.value = []
-  ragAnswer.value = null
   try {
     // 从后端拉取该会话的完整消息历史并回显到对话区
     const detail = await competitorApi.ragGetSession(sessionId)
@@ -223,7 +262,6 @@ async function doBatchDelete() {
     if (checkedSessions.value.includes(ragSessionId.value)) {
       ragSessionId.value = null
       ragHistory.value = []
-      ragAnswer.value = null
     }
     checkedSessions.value = []
     batchMode.value = false
@@ -333,13 +371,34 @@ onMounted(() => {
           >
             <div class="chat-avatar">{{ m.role === 'user' ? '我' : 'AI' }}</div>
             <div class="chat-body">
-              <!-- AI 消息内容为空且加载中时显示打字点 -->
-              <div v-if="m.role === 'assistant' && !m.content && ragLoading" class="chat-bubble chat-typing">
+              <!-- AI 消息内容为空且正在生成：打字点 + 状态文案 -->
+              <div
+                v-if="m.role === 'assistant' && m.status === 'streaming' && !m.content"
+                class="chat-bubble chat-typing"
+              >
                 <span class="typing-dot" /><span class="typing-dot" /><span class="typing-dot" />
+                <span class="typing-text">正在检索知识库并生成回答…</span>
               </div>
-              <div v-else class="chat-bubble">{{ m.content }}</div>
-              <!-- 反馈按钮：仅 AI 消息且有内容时显示 -->
-              <div v-if="m.role === 'assistant' && m.content" class="chat-feedback">
+              <!-- 正文：生成中在末尾追加闪烁光标，让「还在写」有明确反馈 -->
+              <div v-else class="chat-bubble">
+                {{ m.content }}<span
+                  v-if="m.role === 'assistant' && m.status === 'streaming'"
+                  class="stream-caret"
+                />
+              </div>
+              <!-- 断流/失败提示 + 原地重试 -->
+              <div
+                v-if="m.role === 'assistant' && (m.status === 'aborted' || m.status === 'failed')"
+                class="chat-error"
+              >
+                <span class="chat-error-text">⚠ {{ m.error || '回答生成失败' }}</span>
+                <el-button size="small" type="primary" text @click="retryAsk(m)">重试</el-button>
+              </div>
+              <!-- 反馈按钮：仅 AI 消息、有内容且已结束后显示 -->
+              <div
+                v-if="m.role === 'assistant' && m.content && m.status !== 'streaming'"
+                class="chat-feedback"
+              >
                 <span
                   class="fb-btn"
                   :class="{ active: m.feedback === 'like' }"
@@ -658,6 +717,41 @@ onMounted(() => {
 @keyframes typing-blink {
   0%, 80%, 100% { opacity: 0.3; }
   40% { opacity: 1; }
+}
+.typing-text {
+  margin-left: 8px;
+  font-size: 13px;
+  color: #909399;
+}
+/* 生成中的行末光标，提示「仍在输出」 */
+.stream-caret {
+  display: inline-block;
+  width: 7px;
+  height: 15px;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: #409eff;
+  animation: caret-blink 1s steps(1) infinite;
+}
+@keyframes caret-blink {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
+}
+/* 断流 / 失败提示条 */
+.chat-error {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fef0f0;
+  border: 1px solid #fde2e2;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.chat-error-text {
+  color: #f56c6c;
+  font-size: 12px;
+  line-height: 1.5;
 }
 .chat-input-bar {
   border-top: 1px solid #e4e7ed;

@@ -48,6 +48,24 @@ const showEmptyGuide = computed(
   () => !loading.value && competitors.value.length === 0 && !isFiltered.value,
 )
 
+// 稀疏引导：只有 1~3 条数据时给出「下一步做什么」的清单（0 条走上面的完整空态引导）。
+// 关闭状态记在 localStorage，用户点过「不再提示」后就不再打扰。
+const ONBOARD_KEY = 'competitor_onboard_dismissed'
+const onboardDismissed = ref(localStorage.getItem(ONBOARD_KEY) === '1')
+const showOnboard = computed(
+  () =>
+    !loading.value &&
+    !isFiltered.value &&
+    competitors.value.length > 0 &&
+    competitors.value.length <= 3 &&
+    !onboardDismissed.value,
+)
+
+function dismissOnboard() {
+  onboardDismissed.value = true
+  localStorage.setItem(ONBOARD_KEY, '1')
+}
+
 async function fetchList() {
   loading.value = true
   try {
@@ -265,6 +283,23 @@ defineExpose({ fetchList })
       </el-button>
     </div>
 
+    <!-- 稀疏引导：数据量少时给出明确的下一步动作（可关闭） -->
+    <div v-if="showOnboard" class="onboard">
+      <div class="onboard-icon">💡</div>
+      <div class="onboard-body">
+        <div class="onboard-title">竞品数量还不多，补几条再做对比更有意义</div>
+        <ol class="onboard-steps">
+          <li>
+            用「<b>+ 录入竞品</b>」手动填写，或「<b>抓取竞品</b>」输入官网 URL 由 AI 自动提炼（建议 ≥3 个）
+          </li>
+          <li>到「<b>待校对</b>」页确认 AI 提炼结果，草稿入库后才参与对比与报告</li>
+          <li>回到本页勾选 <b>2 个以上</b> → 点「对比」看雷达图，或「导出报告」生成 Markdown</li>
+          <li>想在资料里直接查答案，可去「<b>知识库问答</b>」用自然语言提问</li>
+        </ol>
+      </div>
+      <el-button link type="primary" size="small" @click="dismissOnboard">不再提示</el-button>
+    </div>
+
     <!-- 空态引导：新用户/无数据时给出明确下一步 -->
     <el-empty v-if="showEmptyGuide" description="还没有任何竞品数据">
       <el-button type="primary" @click="emit('create')">手动录入竞品</el-button>
@@ -462,5 +497,41 @@ defineExpose({ fetchList })
   color: #909399;
   font-size: 13px;
   margin-top: 12px;
+}
+/* 稀疏引导横幅（仅本页使用） */
+.onboard {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #ecf5ff;
+  border: 1px solid #d9ecff;
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.onboard-icon {
+  font-size: 18px;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+.onboard-body {
+  flex: 1;
+  min-width: 0;
+}
+.onboard-title {
+  font-size: 14px;
+  color: #303133;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.onboard-steps {
+  margin: 0;
+  padding-left: 20px;
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.9;
+}
+.onboard-steps b {
+  color: #409eff;
 }
 </style>
