@@ -36,6 +36,24 @@ def main() -> int:
         sign = "+" if delta >= 0 else ""
         print(f"| {label} | {b:.4f} | {o:.4f} | {sign}{delta:.4f} |")
 
+    # 覆盖率（一等指标）：旧结果文件无此字段时整段跳过（向后兼容）
+    cov_b = (base.get("coverage") or {}).get("at5")
+    cov_o = (opt.get("coverage") or {}).get("at5")
+    if cov_b and cov_o:
+        print("\n### 覆盖率 @5（多文档 / 单文档必须分开看）\n")
+        print("| 指标 | 优化前 | 优化后 | Δ |")
+        print("|------|--------|--------|-----|")
+        for key, label in (
+            ("multi_coverage", "多文档 coverage@5"),
+            ("single_coverage", "单文档 coverage@5"),
+            ("hit_any", "Hit(任意@5)"),
+            ("multi_distinct_docs", "多文档 distinct_docs@5"),
+        ):
+            b, o = cov_b[key], cov_o[key]
+            delta = o - b
+            sign = "+" if delta >= 0 else ""
+            print(f"| {label} | {b:.4f} | {o:.4f} | {sign}{delta:.4f} |")
+
     # 归因：单文档 vs 多文档的 precision/recall 变化
     bq = {q["id"]: q for q in base["per_q"]}
     oq = {q["id"]: q for q in opt["per_q"]}

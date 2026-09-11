@@ -4,7 +4,13 @@
     backend/.venv/Scripts/python scripts/experiments/ragas_eval/run_eval.py
        [--strategy current|optimized] [--top-k 20] [--limit N] [--out results/baseline.json]
 
-输出：控制台汇总 + JSON（逐问明细 + 总指标 + 对照的 Hit@5/MRR/nDCG）。
+输出：控制台汇总 + JSON（逐问明细 + 总指标 + 对照的 Hit@5/MRR/nDCG + **覆盖率**）。
+
+**覆盖率是一等指标**（与 Hit@5 并列输出）：Hit@5 只问「期望文档里至少有一篇进
+top-5」，对多文档问题偏乐观，不惩罚「只中 1 篇、漏掉 4 篇」。覆盖率（多文档
+coverage@5 + 单文档 coverage@5）才能暴露「该召回的文档有没有都进来」。
+两者必须一起看——只看 Hit@5 曾把 `diverse` 这类有效策略误判为无效（见
+`RAGAS 评估实验.md` 第九节）。口径实现在 `metrics.py`。
 """
 
 from __future__ import annotations
@@ -20,6 +26,7 @@ import time
 from pathlib import Path
 
 from common import load_golden, reference_contexts_for
+from metrics import PRODUCTION_TOP_K, aggregate, coverage_at_k
 from ragas import SingleTurnSample
 from ragas.metrics import NonLLMContextPrecisionWithReference, NonLLMContextRecall
 
@@ -80,6 +87,8 @@ async def evaluate(questions: list[dict], top_k: int, retriever=None) -> dict:
     hit5_total = 0
     rr_sum = 0.0
     ndcg_sum = 0.0
+    cov_rows_5: list[dict] = []
+    cov_rows_k: list[dict] = []
     per_q: list[dict] = []
     failed = 0
 
@@ -117,6 +126,15 @@ async def evaluate(questions: list[dict], top_k: int, retriever=None) -> dict:
         rr_sum += m["rr"]
         ndcg_sum += m["ndcg"]
 
+        # 覆盖率（一等指标）：@生产口径 5 与 @本次 top_k 各算一份。
+        # coverage@5 始终取排名前 5 个 chunk（先截断再去重），保证口径与
+        # 「生产直接以 top_k=5 检索」一致——前提是 top_k == PRODUCTION_TOP_K，
+        # 否则候选窗口更大，数字会略优于线上（故额外输出 production_comparable 标记）。
+        cov5 = coverage_at_k(ranked_ids, expected, PRODUCTION_TOP_K)
+        covk = coverage_at_k(ranked_ids, expected, top_k)
+        cov_rows_5.append(cov5)
+        cov_rows_k.append(covk)
+
         per_q.append(
             {
                 "id": q.get("id"),
@@ -127,6 +145,10 @@ async def evaluate(questions: list[dict], top_k: int, retriever=None) -> dict:
                 "hit5": m["hit5"],
                 "rr": m["rr"],
                 "ndcg": m["ndcg"],
+                "coverage_at5": cov5["coverage"],
+                "distinct_docs_at5": cov5["distinct_docs"],
+                "coverage_at_k": covk["coverage"],
+                "distinct_docs_at_k": covk["distinct_docs"],
                 "ranked_ids": ranked_ids[:10],
             }
         )
@@ -134,6 +156,8 @@ async def evaluate(questions: list[dict], top_k: int, retriever=None) -> dict:
             print(f"  进度 {i}/{n}")
 
     elapsed = time.time() - start
+    cov5 = aggregate(cov_rows_5)
+    covk = aggregate(cov_rows_k)
     return {
         "n": n,
         "top_k": top_k,
@@ -142,6 +166,13 @@ async def evaluate(questions: list[dict], top_k: int, retriever=None) -> dict:
         "hit5": hit5_total / n,
         "mrr10": rr_sum / n,
         "ndcg10": ndcg_sum / n,
+        # 覆盖率：多/单文档分开（多文档看 coverage，单文档 coverage 退化为命中率）
+        "coverage": {
+            "production_k": PRODUCTION_TOP_K,
+            "production_comparable": top_k == PRODUCTION_TOP_K,
+            "at5": cov5,
+            "at_k": covk,
+        },
         "elapsed": round(elapsed, 1),
         "failed": failed,
         "per_q": per_q,
@@ -181,6 +212,18 @@ def main() -> int:
     print(f"context_recall    = {results['context_recall']:.4f}  （是否漏检）")
     print(f"[对照] Hit@5={results['hit5']:.4f}  MRR@10={results['mrr10']:.4f}  "
           f"nDCG@10={results['ndcg10']:.4f}")
+    c5 = results["coverage"]["at5"]
+    print(
+        f"[召回覆盖] 多文档 coverage@5={c5['multi_coverage']:.4f} "
+        f"(distinct_docs={c5['multi_distinct_docs']:.2f}, n={c5['multi_n']})  "
+        f"单文档 coverage@5={c5['single_coverage']:.4f} (n={c5['single_n']})  "
+        f"Hit(任意@5)={c5['hit_any']:.4f}"
+    )
+    if not results["coverage"]["production_comparable"]:
+        print(
+            f"  ⚠️ 本次 top_k={results['top_k']} ≠ 生产 {PRODUCTION_TOP_K}："
+            "覆盖率的候选窗口比线上更大，数字会略优于线上；要线上口径请加 --top-k 5"
+        )
     print(f"失败 {results['failed']} 问，耗时 {results['elapsed']}s")
 
     out_path = RESULTS_DIR / args.out

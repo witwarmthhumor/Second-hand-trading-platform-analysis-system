@@ -111,6 +111,15 @@ if RERANK_BY_VSIM:
 | context_precision | 0.7599 | 0.7682 | +0.0083 |
 | context_recall | 0.6179 | 0.6179 | 0（口径 artifact，见第二节） |
 
+> **覆盖率已并入默认输出（2026-09-11）**：现在 `compare.py` 会同时给出覆盖率段。
+> 以最新一次复跑为例——多文档 coverage@5 **0.3755 → 0.3822（+0.67pp）**、
+> 单文档 **0.9755 → 0.9939**、多文档 distinct_docs@5 **2.84 → 2.92**。
+> 即 rerank **几乎不改覆盖率**（它只重排不加成员），这正是第九节的结论。
+>
+> ⚠️ 这里对比的是 `baseline` vs **`rerank` 参数组**，**不含文档级去重**；生产完整形态
+> （rerank + `DOC_DEDUP_ENABLED=True`）的多文档 coverage@5 是 **0.5052**（见 9.5），
+> 不要拿 0.3822 当线上口径。
+
 ## 六、归因：提升来自哪
 
 | 维度 | 变化 | 说明 |
@@ -231,9 +240,19 @@ rerank 把 doc 级检索推到满分后，下一步验证**生成环节**：生�
 - `coverage@5`：top-5 命中的期望文档数 / 期望文档总数
 - `distinct_docs@5`：top-5 里不同 doc_id 的个数（衡量「同文档多 chunk 占位」）
 
-> 口径提醒：`run_eval.py` 默认 `top_k=20`，而本诊断按 `top_k=5`（=生产），
-> 两者**不可直接比较**。生产 rerank 的实现是「先取 RRF top-5，再在这 5 个里
-> 按 vsim 重排」，top_k 不同会改变 rerank 的输入集合。
+> 口径提醒：`run_eval.py` 默认 `top_k=20`，而本诊断按 `top_k=5`（=生产）。
+> 生产 rerank 的实现是「先取 RRF top-5，再在这 5 个里按 vsim 重排」，
+> top_k 不同会改变 rerank 的输入集合，因此**要线上口径请加 `--top-k 5`**。
+>
+> `run_eval.py` 现已把覆盖率作为一等指标输出（口径实现在 `metrics.py`，与
+> `coverage_by_param.py` 同源），并对 `top_k != 5` 的情况打印「候选窗口更大、
+> 略优于线上」的提醒，同时在 JSON 里给 `coverage.production_comparable` 标记。
+>
+> ⚠️ **实现坑（已修）**：覆盖率必须**先截断 top-k、再去重计数**。若写成
+> 「先去重、再取前 k 个文档」，输入列表越长 distinct 越大——20 条候选里「去重后
+> 取 5」必然是 5 篇不同文档，实测把 baseline 的 coverage@5 从 **0.3755 虚高到
+> 0.4701**。回归守卫见 `backend/tests/test_rag_coverage_diag.py::
+> test_metrics_coverage_at_k_先截断再去重`。
 
 ### 9.2 结果（285 问：多文档 122 / 单文档 163）
 
@@ -331,12 +350,14 @@ cd <项目根目录>
 
 # ---------- 检索侧（第一~六节） ----------
 # 1. 基线（参数组 baseline，等价 rerank 关闭）
+#    控制台会同时打印「多文档/单文档 coverage@5」——与 Hit@5 必须一起看。
+#    要线上口径请加 --top-k 5（默认 20 的候选窗口更大，覆盖率会略优于线上）。
 backend/.venv/Scripts/python scripts/experiments/ragas_eval/run_eval.py \
-    --params baseline --strategy baseline --out baseline.json
+    --params baseline --strategy baseline --top-k 5 --out baseline.json
 
 # 2. 优化后（参数组 rerank = 当前生产默认）
 backend/.venv/Scripts/python scripts/experiments/ragas_eval/run_eval.py \
-    --params rerank --strategy rerank --out optimized_prod.json
+    --params rerank --strategy rerank --top-k 5 --out optimized_prod.json
 
 # 3. 对比
 backend/.venv/Scripts/python scripts/experiments/ragas_eval/compare.py

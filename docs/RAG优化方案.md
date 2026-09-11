@@ -305,11 +305,11 @@ cd backend && .venv/Scripts/python -m pytest -q
 
 ## 七、P2：评测基建
 
-| 项 | 说明 |
-|---|---|
-| **coverage@5 固化为一等指标** | 当前是独立脚本 `coverage_by_param.py`；建议并入 `run_eval.py` 的默认输出，让「至少中一篇」与「该中的都中了没」每次都一起看 |
-| **chunk 级 golden** | 现 golden 的 `expected_ids` 是 **doc 级**，coverage 分母偏粗（一篇文档任意 chunk 命中即算命中）。补 chunk 级标注后，coverage 口径才真正可信 |
-| **指标选择纪律** | 评价检索策略**必须同时**看 Hit@5 与 coverage@5——只看 Hit@5 曾把 `diverse` 误判为「无效」，得出反向结论（见 `RAGAS 评估实验.md` 第九节） |
+| 项 | 状态 | 说明 |
+|---|---|---|
+| **coverage@5 固化为一等指标** | **已完成（2026-09-11）** | 口径抽到 `metrics.py`（`coverage_at_k` / `aggregate`，`PRODUCTION_TOP_K=5`），`run_eval.py` 每次输出都打印「多文档 coverage@5 / 单文档 coverage@5 / Hit(任意@5)」，JSON 里新增 `coverage.at5` 与 `coverage.at_k`（逐问也有 `coverage_at5` / `distinct_docs_at5`）；`coverage_by_param.py` 改为复用同一实现（**消灭两处口径漂移**，那正是曾导致反向结论的根因）；`compare.py` 对比表新增覆盖率段（旧 JSON 无字段时自动跳过） |
+| **chunk 级 golden** | 待做 | 现 golden 的 `expected_ids` 是 **doc 级**，coverage 分母偏粗（一篇文档任意 chunk 命中即算命中）。补 chunk 级标注后，coverage 口径才真正可信 |
+| **指标选择纪律** | 已固化 | 评价检索策略**必须同时**看 Hit@5 与 coverage@5——只看 Hit@5 曾把 `diverse` 误判为「无效」，得出反向结论（见 `RAGAS 评估实验.md` 第九节）。现已写进 `run_eval.py` 模块文档与单测守卫（`test_run_eval_输出覆盖率一等指标` 断言 coverage 不得从输出里消失） |
 
 ---
 

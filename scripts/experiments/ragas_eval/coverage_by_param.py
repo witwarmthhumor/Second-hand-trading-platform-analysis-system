@@ -25,6 +25,7 @@ import time
 from pathlib import Path
 
 from common import load_golden
+from metrics import PRODUCTION_TOP_K, aggregate, coverage_at_k, unique_ordered
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "backend"))
@@ -42,33 +43,25 @@ RESULTS_DIR = Path(__file__).resolve().parent / "results"
 # 重点关注：生产默认 vs 已上线的 rerank vs 文档多样性两组
 DEFAULT_PARAMS = "baseline,rerank,pool50,diverse50,diverse80"
 
-
-def _unique(ids: list[str]) -> list[str]:
-    """按出现顺序去重（保序，便于看「哪篇排前面」）。"""
-    return list(dict.fromkeys(ids))
+# 口径实现已抽到 metrics.py（与 run_eval.py 共用），此处保留别名以兼容既有引用
+_unique = unique_ordered
 
 
 def measure(questions: list[dict], retriever, top_k: int) -> dict:
-    """逐问检索，统计多/单文档的覆盖率与 top-5 文档多样性。"""
-    multi_cov: list[float] = []
-    single_cov: list[float] = []
-    multi_distinct: list[int] = []
-    hits: list[int] = []
+    """逐问检索，统计多/单文档的覆盖率与 top-5 文档多样性。
+
+    覆盖率口径由 ``metrics.coverage_at_k`` / ``metrics.aggregate`` 提供，
+    与 ``run_eval.py`` 的默认输出**完全同源**。
+    """
+    rows: list[dict] = []
     per_q: list[dict] = []
 
     for q in questions:
         expected = q["expected_ids"]
         results = retriever.search(q["question"], top_k=top_k)
-        ids = _unique([r["doc_id"] for r in results])
-        inter = len(set(ids) & set(expected))
-        cov = inter / len(expected) if expected else 0.0
-        hits.append(int(inter > 0))
-
-        if len(expected) > 1:
-            multi_cov.append(cov)
-            multi_distinct.append(len(ids))
-        else:
-            single_cov.append(cov)
+        ids = unique_ordered([r["doc_id"] for r in results])
+        row = coverage_at_k(ids, expected, top_k)
+        rows.append(row)
 
         per_q.append(
             {
@@ -76,29 +69,17 @@ def measure(questions: list[dict], retriever, top_k: int) -> dict:
                 "question": q["question"],
                 "expected_ids": expected,
                 "ranked_ids": ids[:top_k],
-                "coverage": cov,
+                "coverage": row["coverage"],
             }
         )
 
-    def _mean(xs: list[float]) -> float:
-        return sum(xs) / len(xs) if xs else 0.0
-
-    return {
-        "n": len(questions),
-        "multi_n": len(multi_cov),
-        "single_n": len(single_cov),
-        "multi_coverage": _mean(multi_cov),
-        "single_coverage": _mean(single_cov),
-        "multi_distinct_docs": _mean([float(x) for x in multi_distinct]),
-        "hit_any": _mean([float(x) for x in hits]),
-        "per_q": per_q,
-    }
+    return {"n": len(questions), **aggregate(rows), "per_q": per_q}
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--params", default=DEFAULT_PARAMS, help="逗号分隔的 PARAM_SETS 组名")
-    ap.add_argument("--top-k", type=int, default=5, help="与生产 ask() 一致")
+    ap.add_argument("--top-k", type=int, default=PRODUCTION_TOP_K, help="与生产 ask() 一致")
     ap.add_argument("--limit", type=int, default=0, help="只跑前 N 问（调试用）")
     ap.add_argument("--out", default="coverage_by_param.json", help="结果 JSON 文件名（写入 results/）")
     args = ap.parse_args()
