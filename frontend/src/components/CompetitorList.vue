@@ -2,8 +2,8 @@
 /**
  * 竞品列表页：统计卡片 + 搜索筛选 + 列表 + 前端分页 + 抓取入口。
  *
- * 自持列表数据与分页/筛选状态；跨页动作（录入、编辑、对比）通过事件交给 App 处理，
- * 因为那些动作要切换 activeTab，属于壳层职责。
+ * 列表数据与分页/筛选状态自持（列表带搜索/筛选，无法与其他页共享）；
+ * 跨页动作的数据状态写入 store，页面切换通过 navigate 事件交给壳层。
  */
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -12,9 +12,10 @@ import { useCompetitorStore } from '../stores/competitor'
 import { typeTag, statusTag, TYPE_OPTIONS } from '../utils/tags'
 
 // 待校对数量来自 store（与侧栏徽标同源），此处仅用于统计卡片展示
-const { pendingCount } = useCompetitorStore()
+const { pendingCount, openCreate, openEdit, startCompare } = useCompetitorStore()
 
-const emit = defineEmits(['create', 'edit', 'compare', 'changed'])
+// navigate 只表达「要去哪一页」，数据状态一律走 store
+const emit = defineEmits(['navigate', 'changed'])
 
 const competitors = ref([])
 const loading = ref(false)
@@ -80,6 +81,17 @@ async function fetchList() {
   }
 }
 
+// —— 跨页动作：写 store + 请求壳层切页 ——
+function goCreate() {
+  openCreate()
+  emit('navigate', 'form')
+}
+
+function goEdit(row) {
+  openEdit(row)
+  emit('navigate', 'form')
+}
+
 function onSelectionChange(rows) {
   selectedIds.value = rows.map((r) => r.id)
 }
@@ -89,7 +101,8 @@ function goCompare() {
     ElMessage.warning('请至少勾选 2 个竞品进行对比')
     return
   }
-  emit('compare', [...selectedIds.value])
+  startCompare(selectedIds.value)
+  emit('navigate', 'compare')
 }
 
 async function doExportReport() {
@@ -272,7 +285,7 @@ defineExpose({ fetchList })
       </el-select>
       <el-button type="primary" @click="fetchList">查询</el-button>
       <span class="toolbar-spacer" />
-      <el-button type="primary" plain @click="emit('create')">+ 录入竞品</el-button>
+      <el-button type="primary" plain @click="goCreate">+ 录入竞品</el-button>
       <el-button type="success" plain @click="openFetch">抓取竞品</el-button>
       <el-button type="warning" plain :disabled="selectedIds.length < 2" @click="goCompare">
         对比 ({{ selectedIds.length }})
@@ -301,7 +314,7 @@ defineExpose({ fetchList })
 
     <!-- 空态引导：新用户/无数据时给出明确下一步 -->
     <el-empty v-if="showEmptyGuide" description="还没有任何竞品数据">
-      <el-button type="primary" @click="emit('create')">手动录入竞品</el-button>
+      <el-button type="primary" @click="goCreate">手动录入竞品</el-button>
       <el-button type="success" plain @click="openFetch">从官网抓取</el-button>
       <p class="empty-guide-tip">
         提示：录入或抓取后，状态为「待校对」的数据需在「待校对」页确认入库才会参与对比与报告。
@@ -334,7 +347,7 @@ defineExpose({ fetchList })
         <el-table-column prop="website" label="官网" min-width="160" show-overflow-tooltip />
         <el-table-column label="操作" width="140" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="emit('edit', row)">编辑</el-button>
+            <el-button link type="primary" @click="goEdit(row)">编辑</el-button>
             <el-button link type="danger" @click="remove(row)">删除</el-button>
           </template>
         </el-table-column>

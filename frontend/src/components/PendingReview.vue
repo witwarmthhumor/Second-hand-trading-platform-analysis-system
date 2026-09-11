@@ -12,9 +12,14 @@ import { competitorApi } from '../api'
 import { useCompetitorStore } from '../stores/competitor'
 import { typeTag, dataStatusTag } from '../utils/tags'
 
-const emit = defineEmits(['edit', 'changed'])
+const emit = defineEmits(['navigate', 'changed'])
 
-const { pendingRows, pendingLoading, loadPending } = useCompetitorStore()
+const { pendingRows, pendingLoading, loadPending, openEdit } = useCompetitorStore()
+
+function goEdit(row) {
+  openEdit(row)
+  emit('navigate', 'form')
+}
 
 async function approve(row) {
   try {
@@ -72,7 +77,7 @@ onMounted(loadPending)
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button link type="success" @click="approve(row)">确认入库</el-button>
-          <el-button link type="primary" @click="emit('edit', row)">编辑</el-button>
+          <el-button link type="primary" @click="goEdit(row)">编辑</el-button>
           <el-button link type="danger" @click="remove(row)">删除</el-button>
         </template>
       </el-table-column>

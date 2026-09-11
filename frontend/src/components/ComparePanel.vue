@@ -2,7 +2,7 @@
 /**
  * 多竞品对比页：评分雷达图 + 详细对比表。
  *
- * 通过 ids 属性接收要对比的竞品 id 列表（由列表页勾选后传入）；
+ * 要对比的竞品 id 从 store 读取（由列表页勾选时写入）；
  * 组件自持对比数据与 echarts 实例，切换/刷新时重建图表。
  */
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
@@ -12,14 +12,15 @@ import { RadarChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { competitorApi } from '../api'
+import { useCompetitorStore } from '../stores/competitor'
 import { typeTag, statusTag } from '../utils/tags'
 
 echarts.use([RadarChart, TooltipComponent, LegendComponent, CanvasRenderer])
 
-const props = defineProps({
-  ids: { type: Array, default: () => [] },
-})
-const emit = defineEmits(['back'])
+const emit = defineEmits(['navigate'])
+
+// 待对比的竞品 id 由 store 统一维护（列表页勾选后写入）
+const { compareIds } = useCompetitorStore()
 
 const compareData = ref(null)
 const compareLoading = ref(false)
@@ -27,10 +28,10 @@ const radarEl = ref(null)
 let radarChart = null
 
 async function loadCompare() {
-  if (props.ids.length < 2) return
+  if (compareIds.value.length < 2) return
   compareLoading.value = true
   try {
-    compareData.value = await competitorApi.compare(props.ids)
+    compareData.value = await competitorApi.compare(compareIds.value)
     await nextTick()
     renderRadar()
   } catch (e) {
@@ -69,7 +70,7 @@ function onResize() {
   if (radarChart) radarChart.resize()
 }
 
-watch(() => props.ids, loadCompare, { immediate: true })
+watch(compareIds, loadCompare, { immediate: true })
 onMounted(() => window.addEventListener('resize', onResize))
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize)
@@ -83,7 +84,7 @@ onBeforeUnmount(() => {
 <template>
   <div>
     <div class="toolbar">
-      <el-button plain @click="emit('back')">← 返回选择</el-button>
+      <el-button plain @click="emit('navigate', 'list')">← 返回选择</el-button>
       <el-button @click="loadCompare">刷新对比</el-button>
     </div>
 

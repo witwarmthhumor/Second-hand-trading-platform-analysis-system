@@ -166,7 +166,13 @@ const currentSub = computed(() => pageMeta[activeTab.value]?.[1] || '')
 // —— 跨组件共享状态 ——
 // 待校对数量与评分维度已收敛到 stores/competitor.js，组件直接从 store 读写，
 // 不再经 App 中转；此处只保留壳层自用部分（侧栏徽标计数）。
-const { pendingCount, loadPending, loadRatingDims, reset: resetStore } = useCompetitorStore()
+const {
+  pendingCount,
+  formKey,
+  loadPending,
+  loadRatingDims,
+  reset: resetStore,
+} = useCompetitorStore()
 
 /** 壳层初始化数据（各功能页的数据由其组件自行加载）。 */
 function initShellData() {
@@ -175,23 +181,9 @@ function initShellData() {
   loadRatingDims().catch((e) => ElMessage.error(e.message))
 }
 
-// 录入/编辑：formTarget 为待编辑行（null = 新建）；formKey 变化强制重建表单
-const formTarget = ref(null)
-const formKey = ref(0)
-// 对比选中的竞品 id（由列表页勾选后传入）
-const compareIds = ref([])
-
-// —— 由子组件事件驱动的跳转 ——
-function onCreate() {
-  formTarget.value = null
-  formKey.value++
-  activeTab.value = 'form'
-}
-
-function onEdit(row) {
-  formTarget.value = row
-  formKey.value++
-  activeTab.value = 'form'
+// —— 导航：子组件只表达「去哪一页」，数据状态一律走 store ——
+function onNavigate(tab) {
+  activeTab.value = tab
 }
 
 function onFormSaved() {
@@ -202,11 +194,6 @@ function onFormSaved() {
 
 function onFormCancel() {
   activeTab.value = 'list'
-}
-
-function onCompare(ids) {
-  compareIds.value = ids
-  activeTab.value = 'compare'
 }
 
 // 列表/待校对页发生增删后：刷新待校对数据（侧栏徽标计数由它派生）
@@ -358,34 +345,27 @@ onMounted(() => {
         <!-- 竞品列表 -->
         <CompetitorList
           v-if="activeTab === 'list'"
-          @create="onCreate"
-          @edit="onEdit"
-          @compare="onCompare"
+          @navigate="onNavigate"
           @changed="onDataChanged"
         />
 
         <!-- 待校对 -->
         <PendingReview
           v-else-if="activeTab === 'pending'"
-          @edit="onEdit"
+          @navigate="onNavigate"
           @changed="onDataChanged"
         />
 
-        <!-- 录入 / 编辑 -->
+        <!-- 录入 / 编辑：待编辑对象与评分维度均来自 store，key 变化即强制重建表单 -->
         <CompetitorForm
           v-else-if="activeTab === 'form'"
           :key="formKey"
-          :model="formTarget"
           @saved="onFormSaved"
           @cancel="onFormCancel"
         />
 
-        <!-- 多竞品对比 -->
-        <ComparePanel
-          v-else-if="activeTab === 'compare'"
-          :ids="compareIds"
-          @back="activeTab = 'list'"
-        />
+        <!-- 多竞品对比：对比选中项来自 store -->
+        <ComparePanel v-else-if="activeTab === 'compare'" @navigate="onNavigate" />
 
         <!-- 知识库问答（懒加载组件） -->
         <RagChat v-else-if="activeTab === 'rag'" :key="ragChatKey" :ready="ragReady" />

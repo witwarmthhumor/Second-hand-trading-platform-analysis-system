@@ -2,8 +2,8 @@
 /**
  * 竞品录入 / 编辑表单。
  *
- * 通过 model 属性接收待编辑的竞品行（null 表示新建）；保存成功后 emit saved，
- * 由 App 决定后续跳转与列表刷新，表单自身不关心导航。
+ * 待编辑对象与评分维度均从 store 读取（formTarget 为 null 表示新建）。
+ * 保存成功后 emit saved，由壳层决定后续跳转，表单自身不关心导航。
  */
 import { ref, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
@@ -11,20 +11,16 @@ import { competitorApi } from '../api'
 import { useCompetitorStore } from '../stores/competitor'
 import { TYPE_OPTIONS, STATUS_OPTIONS } from '../utils/tags'
 
-const props = defineProps({
-  // 待编辑的竞品对象；null 表示新建
-  model: { type: Object, default: null },
-})
 const emit = defineEmits(['saved', 'cancel'])
 
-// 评分维度（来自设置页配置）由 store 统一维护
-const { ratingDims } = useCompetitorStore()
+// 待编辑对象与评分维度均由 store 统一维护
+const { formTarget, ratingDims } = useCompetitorStore()
 
 const typeOptions = TYPE_OPTIONS
 const statusOptions = STATUS_OPTIONS
 
 const saving = ref(false)
-const isEdit = computed(() => !!(props.model && props.model.id))
+const isEdit = computed(() => !!(formTarget.value && formTarget.value.id))
 
 function emptyRatings() {
   const r = {}
@@ -55,7 +51,7 @@ function emptyForm() {
 
 const form = ref(emptyForm())
 
-// 由 model 构建表单：编辑时回填字段与已有评分，新建时用空表单
+// 由 formTarget 构建表单：编辑时回填字段与已有评分，新建时用空表单
 function buildForm(row) {
   if (!row || !row.id) {
     form.value = emptyForm()
@@ -79,9 +75,9 @@ function buildForm(row) {
   }
 }
 
-// model 或评分维度变化时重建表单（维度变了，评分项也要跟着变）
-watch(() => props.model, buildForm, { immediate: true })
-watch(ratingDims, () => buildForm(props.model))
+// formTarget 或评分维度变化时重建表单（维度变了，评分项也要跟着变）
+watch(formTarget, buildForm, { immediate: true })
+watch(ratingDims, () => buildForm(formTarget.value))
 
 async function save() {
   if (!form.value.name.trim()) {
@@ -95,7 +91,7 @@ async function save() {
     payload.ext_fields = { ratings: form.value.ratings }
     delete payload.ratings
     if (isEdit.value) {
-      await competitorApi.update(props.model.id, payload)
+      await competitorApi.update(formTarget.value.id, payload)
       ElMessage.success('已更新')
     } else {
       await competitorApi.create(payload)
