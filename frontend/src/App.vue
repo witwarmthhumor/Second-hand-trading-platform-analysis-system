@@ -1,17 +1,28 @@
 <script setup>
-import { ref, onMounted, watch, nextTick, computed, defineAsyncComponent } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-// echarts 按需引入：只注册用到的雷达图组件，避免全量打包（chunk 从 ~2.2MB 降到 ~500KB）
-import * as echarts from 'echarts/core'
-import { RadarChart } from 'echarts/charts'
-import { TooltipComponent, LegendComponent } from 'echarts/components'
-import { CanvasRenderer } from 'echarts/renderers'
-import { competitorApi, authApi, kbApi, getToken, setAuth, clearAuth, getStoredUser } from './api'
+/**
+ * 应用壳层：登录/注册、左侧导航、顶栏，以及各功能页的装配与切换。
+ *
+ * 竞品侧 7 个 tab 已拆为独立组件（M1），本文件只保留：
+ * - 登录态与改密
+ * - 导航与页面标题
+ * - 跨组件共享状态：评分维度、待校对数量、当前编辑对象、对比选中项
+ * - 由组件事件驱动的页面跳转
+ *
+ * 各页组件均为 defineAsyncComponent 懒加载：进入对应 tab 时才拉取其代码块与数据。
+ */
+import { ref, onMounted, computed, defineAsyncComponent } from 'vue'
+import { ElMessage } from 'element-plus'
+import { competitorApi, authApi, setAuth, clearAuth, getStoredUser } from './api'
 
-echarts.use([RadarChart, TooltipComponent, LegendComponent, CanvasRenderer])
-
-// 知识库问答组件懒加载：问答页（核心功能）独立成组件 + 按需分包，
-// 首屏不再加载其模板/脚本，进入问答页时才拉取对应 chunk
+// 竞品侧功能页（懒加载）
+const CompetitorList = defineAsyncComponent(() => import('./components/CompetitorList.vue'))
+const PendingReview = defineAsyncComponent(() => import('./components/PendingReview.vue'))
+const CompetitorForm = defineAsyncComponent(() => import('./components/CompetitorForm.vue'))
+const ComparePanel = defineAsyncComponent(() => import('./components/ComparePanel.vue'))
+const ChangesPanel = defineAsyncComponent(() => import('./components/ChangesPanel.vue'))
+const KbManage = defineAsyncComponent(() => import('./components/KbManage.vue'))
+const SettingsPanel = defineAsyncComponent(() => import('./components/SettingsPanel.vue'))
+// 知识库问答（自持会话、来源、反馈等全部状态）
 const RagChat = defineAsyncComponent(() => import('./components/RagChat.vue'))
 
 // —— 登录态 ——
@@ -19,7 +30,6 @@ const currentUser = ref(getStoredUser())
 const isLoggedIn = computed(() => !!currentUser.value)
 const isAdmin = computed(() => currentUser.value?.role === 'admin')
 
-// 登录/注册表单
 const authMode = ref('login') // 'login' | 'register'
 const authUsername = ref('')
 const authPassword = ref('')
@@ -29,24 +39,21 @@ const authLoading = ref(false)
 function enterApp(token, user) {
   setAuth(token, user)
   currentUser.value = user
-  // 登录后初始化数据
-  fetchList()
-  fetchPending()
+  activeTab.value = 'list'
+  // 登录后初始化壳层级数据（各功能页数据由其组件自行加载）
+  refreshPendingCount()
   loadDims()
-  loadCostStatus()
   loadRagStatus()
-  loadChanges()
-  if (isAdmin.value) loadKbDocuments()
 }
 
 async function doLogin() {
-  if (!authUsername.value.trim() || !authPassword.value) {
+  if (!authUsername.value || !authPassword.value) {
     ElMessage.warning('请输入用户名和密码')
     return
   }
   authLoading.value = true
   try {
-    const r = await authApi.login(authUsername.value.trim(), authPassword.value)
+    const r = await authApi.login(authUsername.value, authPassword.value)
     enterApp(r.access_token, r.user)
     ElMessage.success('登录成功')
   } catch (e) {
@@ -57,8 +64,8 @@ async function doLogin() {
 }
 
 async function doRegister() {
-  if (!authUsername.value.trim() || authPassword.value.length < 6) {
-    ElMessage.warning('用户名至少 3 位，密码至少 6 位')
+  if (!authUsername.value || !authPassword.value) {
+    ElMessage.warning('请输入用户名和密码')
     return
   }
   if (authPassword.value !== authConfirm.value) {
@@ -67,7 +74,7 @@ async function doRegister() {
   }
   authLoading.value = true
   try {
-    const r = await authApi.register(authUsername.value.trim(), authPassword.value)
+    const r = await authApi.register(authUsername.value, authPassword.value)
     enterApp(r.access_token, r.user)
     ElMessage.success('注册成功，已自动登录')
   } catch (e) {
@@ -106,8 +113,8 @@ function openChangePwd() {
 }
 
 async function doChangePwd() {
-  if (pwdNew.value.length < 6) {
-    ElMessage.warning('新密码至少 6 位')
+  if (pwdNew.value.length < 8) {
+    ElMessage.warning('新密码至少 8 位，且需同时包含字母与数字')
     return
   }
   if (pwdNew.value !== pwdConfirm.value) {
@@ -126,28 +133,8 @@ async function doChangePwd() {
   }
 }
 
-// 登录态失效监听（401 触发）
-onMounted(() => {
-  window.addEventListener('auth-expired', () => {
-    currentUser.value = null
-    ElMessage.warning('登录已过期，请重新登录')
-  })
-  if (isLoggedIn.value) {
-    // 已有 token，直接初始化
-    fetchList()
-    fetchPending()
-    loadDims()
-    loadCostStatus()
-    loadRagStatus()
-    loadChanges()
-    if (isAdmin.value) loadKbDocuments()
-  }
-})
-
+// —— 导航 ——
 const activeTab = ref('list')
-
-// —— 左侧导航菜单 ——
-// icon 用 emoji 占位，落地后如需可换 element-plus icon；label 与 name 对应 activeTab
 const menuItems = [
   { name: 'list', label: '竞品列表', icon: '📊' },
   { name: 'pending', label: '待校对', icon: '📝' },
@@ -159,9 +146,7 @@ const menuItems = [
   { name: 'settings', label: '设置', icon: '⚙️' },
 ]
 // 可见菜单：普通用户过滤掉 adminOnly
-const visibleMenu = computed(() =>
-  menuItems.filter((m) => !m.adminOnly || isAdmin.value),
-)
+const visibleMenu = computed(() => menuItems.filter((m) => !m.adminOnly || isAdmin.value))
 // 当前页面的标题/副标题（顶部面包屑用）
 const pageMeta = {
   list: ['竞品列表', '竞品情报收集、整理与横向对比'],
@@ -176,433 +161,70 @@ const pageMeta = {
 const currentTitle = computed(() => pageMeta[activeTab.value]?.[0] || '')
 const currentSub = computed(() => pageMeta[activeTab.value]?.[1] || '')
 
-const competitors = ref([])
-const loading = ref(false)
-const keyword = ref('')
-const filterType = ref('')
-// 竞品列表前端分页
-const compPage = ref(1)
-const compPageSize = 10
+// —— 跨组件共享状态 ——
+// 待校对数量：侧栏徽标与列表页统计卡片共用，由待校对页 / 列表页事件触发刷新
+const pendingCount = ref(0)
+// 评分维度：录入表单与设置页共用
+const ratingDims = ref([])
+// 录入/编辑：formTarget 为待编辑行（null = 新建）；formKey 变化强制重建表单
+const formTarget = ref(null)
+const formKey = ref(0)
+// 对比选中的竞品 id（由列表页勾选后传入）
+const compareIds = ref([])
 
-// 统计卡片数据（从已加载列表 + 待校对推导）
-const compStats = computed(() => {
-  const total = competitors.value.length
-  const online = competitors.value.filter((c) => c.launch_status === '已上线').length
-  return {
-    total,
-    online,
-    offline: total - online,
-    pending: pending.value.length,
-  }
-})
-// 当前页竞品（前端分页）
-const pagedCompetitors = computed(() => {
-  const start = (compPage.value - 1) * compPageSize
-  return competitors.value.slice(start, start + compPageSize)
-})
-
-// —— 抓取 ——
-const fetchUrl = ref('')
-const fetching = ref(false)
-const fetchDialogVisible = ref(false)
-
-// —— 待校对 ——
-const pending = ref([])
-const pendingLoading = ref(false)
-
-// —— 对比 ——
-const selectedIds = ref([])
-const compareData = ref(null)
-const compareLoading = ref(false)
-const radarEl = ref(null)
-let radarChart = null
-
-const typeOptions = ['C2C 闲置交易', '回收置换', '质检转卖']
-const statusOptions = ['已上线', '内测', '已下线']
-// 评分维度：从后端设置读取（可在"设置"页配置）
-const DEFAULT_DIMS = ['功能完整度', '用户规模', '质检能力', '价格竞争力', '口碑']
-const ratingDims = ref([...DEFAULT_DIMS])
-
-// —— 列表 ——
-async function fetchList() {
-  loading.value = true
+async function refreshPendingCount() {
   try {
-    const params = {}
-    if (keyword.value) params.keyword = keyword.value
-    if (filterType.value) params.type = filterType.value
-    competitors.value = await competitorApi.list(params)
-    compPage.value = 1
-  } catch (e) {
-    ElMessage.error(e.message)
-  } finally {
-    loading.value = false
-  }
-}
-
-function onSearch() {
-  fetchList()
-}
-
-// —— 录入 ——
-const form = ref(emptyForm())
-const saving = ref(false)
-const isEdit = ref(false)
-const editId = ref(null)
-
-function emptyRatings() {
-  const r = {}
-  ratingDims.value.forEach((d) => {
-    r[d] = 0
-  })
-  return r
-}
-
-function emptyForm() {
-  return {
-    name: '',
-    type: 'C2C 闲置交易',
-    positioning: '',
-    website: '',
-    launch_status: '已上线',
-    features: '',
-    target_users: '',
-    business_model: '',
-    pricing: '',
-    strengths: '',
-    weaknesses: '',
-    tags: [],
-    remark: '',
-    ratings: emptyRatings(),
-  }
-}
-
-function openCreate() {
-  form.value = emptyForm()
-  isEdit.value = false
-  editId.value = null
-  activeTab.value = 'form'
-}
-
-function openEdit(row) {
-  form.value = {
-    name: row.name,
-    type: row.type,
-    positioning: row.positioning || '',
-    website: row.website || '',
-    launch_status: row.launch_status || '已上线',
-    features: row.features || '',
-    target_users: row.target_users || '',
-    business_model: row.business_model || '',
-    pricing: row.pricing || '',
-    strengths: row.strengths || '',
-    weaknesses: row.weaknesses || '',
-    tags: row.tags || [],
-    remark: row.remark || '',
-    ratings: { ...emptyRatings(), ...(row.ext_fields?.ratings || {}) },
-  }
-  isEdit.value = true
-  editId.value = row.id
-  activeTab.value = 'form'
-}
-
-async function save() {
-  if (!form.value.name.trim()) {
-    ElMessage.warning('名称不能为空')
-    return
-  }
-  saving.value = true
-  try {
-    // 评分写入 ext_fields.ratings，其余字段平铺
-    const payload = { ...form.value }
-    payload.ext_fields = { ratings: form.value.ratings }
-    delete payload.ratings
-    if (isEdit.value) {
-      await competitorApi.update(editId.value, payload)
-      ElMessage.success('已更新')
-    } else {
-      await competitorApi.create(payload)
-      ElMessage.success('已录入')
-    }
-    activeTab.value = 'list'
-    fetchList()
-  } catch (e) {
-    ElMessage.error(e.message)
-  } finally {
-    saving.value = false
-  }
-}
-
-function cancel() {
-  activeTab.value = 'list'
-}
-
-async function remove(row) {
-  try {
-    await ElMessageBox.confirm(`确认删除「${row.name}」？`, '删除确认', {
-      type: 'warning',
-    })
+    const rows = await competitorApi.list({ data_status: '待校对' })
+    pendingCount.value = rows.length
   } catch {
-    return
-  }
-  try {
-    await competitorApi.remove(row.id)
-    ElMessage.success('已删除')
-    fetchList()
-    fetchPending()
-  } catch (e) {
-    ElMessage.error(e.message)
-  }
-}
-
-// —— 抓取 ——
-function openFetch() {
-  fetchUrl.value = ''
-  fetchDialogVisible.value = true
-}
-
-// —— 成本熔断征询 ——
-const costDialog = ref(false)
-const costInfo = ref(null) // 待审批信息 { approval_token, estimate_cost_cny, total_cost_cny, cost_limit_cny }
-const costStatus = ref(null) // 累计状态
-const costConfirming = ref(false)
-let pendingFetchUrl = '' // 用户同意后要重试的 URL
-
-async function loadCostStatus() {
-  try {
-    costStatus.value = await competitorApi.costStatus()
-  } catch (e) {
     /* 非关键，静默 */
   }
 }
-
-function openCostApprove(info, url) {
-  costInfo.value = info
-  pendingFetchUrl = url
-  costDialog.value = true
-}
-
-async function confirmFetch() {
-  costConfirming.value = true
-  try {
-    await competitorApi.costApprove(costInfo.value.approval_token)
-    costDialog.value = false
-    // 放行后重试本次抓取
-    await doFetchUrl(pendingFetchUrl)
-  } catch (e) {
-    ElMessage.error(e.message)
-  } finally {
-    costConfirming.value = false
-  }
-}
-
-function cancelFetch() {
-  costDialog.value = false
-  pendingFetchUrl = ''
-}
-
-async function resetCost() {
-  try {
-    await competitorApi.costReset()
-    await loadCostStatus()
-    ElMessage.success('已重置成本累计')
-  } catch (e) {
-    ElMessage.error(e.message)
-  }
-}
-
-async function doFetchUrl(url) {
-  try {
-    await competitorApi.fetch(url)
-    ElMessage.success('抓取成功，已进入待校对')
-    fetchDialogVisible.value = false
-    fetchPending()
-    loadCostStatus()
-  } catch (e) {
-    if (e.status === 402 && e.costDetail) {
-      // 成本熔断：弹框征询是否同意继续
-      openCostApprove(e.costDetail, url)
-      loadCostStatus()
-    } else {
-      ElMessage.error(e.message)
-    }
-  }
-}
-
-async function doFetch() {
-  const url = fetchUrl.value.trim()
-  if (!url) {
-    ElMessage.warning('请输入目标 URL')
-    return
-  }
-  fetching.value = true
-  try {
-    await doFetchUrl(url)
-  } finally {
-    fetching.value = false
-  }
-}
-
-// —— 待校对 ——
-async function fetchPending() {
-  pendingLoading.value = true
-  try {
-    pending.value = await competitorApi.list({ data_status: '待校对' })
-  } catch (e) {
-    ElMessage.error(e.message)
-  } finally {
-    pendingLoading.value = false
-  }
-}
-
-async function approve(row) {
-  try {
-    await competitorApi.approve(row.id)
-    ElMessage.success('已确认入库')
-    fetchPending()
-    fetchList()
-  } catch (e) {
-    ElMessage.error(e.message)
-  }
-}
-
-function dataStatusTag(s) {
-  const map = { draft: 'info', 待校对: 'warning', 已入库: 'success' }
-  return map[s] || 'info'
-}
-
-function typeTag(type) {
-  const map = { 'C2C 闲置交易': 'primary', '回收置换': 'warning', '质检转卖': 'success' }
-  return map[type] || 'info'
-}
-
-function statusTag(s) {
-  const map = { 已上线: 'success', 内测: 'warning', 已下线: 'info' }
-  return map[s] || 'info'
-}
-
-// —— 对比 ——
-function onSelectionChange(rows) {
-  selectedIds.value = rows.map((r) => r.id)
-}
-
-function goCompare() {
-  if (selectedIds.value.length < 2) {
-    ElMessage.warning('请至少勾选 2 个竞品进行对比')
-    return
-  }
-  activeTab.value = 'compare'
-  loadCompare()
-}
-
-async function loadCompare() {
-  if (selectedIds.value.length < 2) return
-  compareLoading.value = true
-  try {
-    compareData.value = await competitorApi.compare(selectedIds.value)
-    await nextTick()
-    renderRadar()
-  } catch (e) {
-    ElMessage.error(e.message)
-  } finally {
-    compareLoading.value = false
-  }
-}
-
-function renderRadar() {
-  if (!compareData.value || !radarEl.value) return
-  if (radarChart) radarChart.dispose()
-  radarChart = echarts.init(radarEl.value)
-  const dims = compareData.value.dimensions
-  const palette = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272']
-  const series = compareData.value.items.map((item, i) => ({
-    value: dims.map((d) => item.ratings[d] ?? 0),
-    name: item.name,
-    lineStyle: { color: palette[i % palette.length] },
-    itemStyle: { color: palette[i % palette.length] },
-    areaStyle: { opacity: 0.08 },
-  }))
-  radarChart.setOption({
-    tooltip: {},
-    legend: { data: compareData.value.items.map((i) => i.name), bottom: 0 },
-    radar: {
-      indicator: dims.map((d) => ({ name: d, max: 5 })),
-      radius: '65%',
-    },
-    series: [{ type: 'radar', data: series }],
-  })
-}
-
-// —— 报告导出 ——
-const exporting = ref(false)
-
-async function doExportReport() {
-  exporting.value = true
-  try {
-    // 勾选了竞品则只导出勾选项，否则导出全部已入库竞品
-    const ids = selectedIds.value.length >= 1 ? selectedIds.value : null
-    const r = await competitorApi.exportReport(ids)
-    window.open(competitorApi.reportDownloadUrl(r.filename), '_blank')
-    ElMessage.success(`报告已生成（${r.competitor_count} 个竞品）`)
-  } catch (e) {
-    ElMessage.error(e.message)
-  } finally {
-    exporting.value = false
-  }
-}
-
-// —— 设置：评分维度 ——
-const dimsDraft = ref([])
-const newDim = ref('')
-const dimsSaving = ref(false)
 
 async function loadDims() {
   try {
     const r = await competitorApi.getRatingDimensions()
     ratingDims.value = r.dimensions
-    dimsDraft.value = [...r.dimensions]
   } catch (e) {
     ElMessage.error(e.message)
   }
 }
 
-function addDim() {
-  const d = newDim.value.trim()
-  if (!d) return
-  if (dimsDraft.value.includes(d)) {
-    ElMessage.warning('该维度已存在')
-    return
-  }
-  if (dimsDraft.value.length >= 8) {
-    ElMessage.warning('最多 8 个维度（雷达图过多难以阅读）')
-    return
-  }
-  dimsDraft.value.push(d)
-  newDim.value = ''
+// —— 由子组件事件驱动的跳转 ——
+function onCreate() {
+  formTarget.value = null
+  formKey.value++
+  activeTab.value = 'form'
 }
 
-function removeDim(d) {
-  if (dimsDraft.value.length <= 3) {
-    ElMessage.warning('至少保留 3 个维度')
-    return
-  }
-  dimsDraft.value = dimsDraft.value.filter((x) => x !== d)
+function onEdit(row) {
+  formTarget.value = row
+  formKey.value++
+  activeTab.value = 'form'
 }
 
-async function saveDims() {
-  if (dimsDraft.value.length < 3) {
-    ElMessage.warning('至少 3 个维度')
-    return
-  }
-  dimsSaving.value = true
-  try {
-    const r = await competitorApi.setRatingDimensions(dimsDraft.value)
-    ratingDims.value = r.dimensions
-    ElMessage.success('评分维度已更新（新维度对雷达图、对比与报告立即生效）')
-  } catch (e) {
-    ElMessage.error(e.message)
-  } finally {
-    dimsSaving.value = false
-  }
+function onFormSaved() {
+  // 列表页在重新挂载时会自取最新数据，这里只需回到列表
+  activeTab.value = 'list'
+  refreshPendingCount()
+}
+
+function onFormCancel() {
+  activeTab.value = 'list'
+}
+
+function onCompare(ids) {
+  compareIds.value = ids
+  activeTab.value = 'compare'
+}
+
+// 列表/待校对页发生增删后：刷新侧栏徽标计数
+function onDataChanged() {
+  refreshPendingCount()
+}
+
+function onDimsSaved(dims) {
+  ratingDims.value = dims
 }
 
 // —— RAG 知识库就绪状态（顶栏显示用；问答组件 RagChat 自持其余状态）——
@@ -614,130 +236,24 @@ async function loadRagStatus() {
   try {
     const r = await competitorApi.ragStatus()
     ragReady.value = r.ready
-  } catch (e) {
+  } catch {
     ragReady.value = false
   }
 }
 
-// —— 竞品变化记录 ——
-const changes = ref([])
-const changesLoading = ref(false)
-
-async function loadChanges() {
-  changesLoading.value = true
-  try {
-    changes.value = await competitorApi.listChanges({ limit: 100 })
-  } catch (e) {
-    ElMessage.error('加载变化记录失败：' + e.message)
-  } finally {
-    changesLoading.value = false
+// 登录态失效监听（401 触发）
+onMounted(() => {
+  window.addEventListener('auth-expired', () => {
+    currentUser.value = null
+    ElMessage.warning('登录已过期，请重新登录')
+  })
+  if (isLoggedIn.value) {
+    // 已有 token，直接初始化壳层级数据
+    refreshPendingCount()
+    loadDims()
+    loadRagStatus()
   }
-}
-
-async function doMonitor() {
-  try {
-    const r = await competitorApi.triggerMonitor()
-    ElMessage.success(`监控检查完成：共检查 ${r.checked} 个竞品`)
-    loadChanges()
-  } catch (e) {
-    ElMessage.error(e.message)
-  }
-}
-
-// —— 知识库管理（admin 专属） ——
-const kbDocuments = ref([])
-const kbLoading = ref(false)
-const kbRebuilding = ref(false)
-const kbUploadCategory = ref('')
-const kbUploadFile = ref(null)
-// 分页
-const kbPage = ref(1)
-const kbPageSize = 20
-const kbTotal = ref(0)
-
-async function loadKbDocuments() {
-  kbLoading.value = true
-  try {
-    const r = await kbApi.listDocuments(kbPage.value, kbPageSize)
-    kbDocuments.value = r.items
-    kbTotal.value = r.total
-  } catch (e) {
-    ElMessage.error('加载知识库文档失败：' + e.message)
-  } finally {
-    kbLoading.value = false
-  }
-}
-
-function onKbPageChange(p) {
-  kbPage.value = p
-  loadKbDocuments()
-}
-
-function onKbFileChange(file) {
-  kbUploadFile.value = file.raw
-}
-
-async function doKbUpload() {
-  if (!kbUploadFile.value) {
-    ElMessage.warning('请先选择 .md 文件')
-    return
-  }
-  try {
-    await kbApi.uploadDocument(kbUploadFile.value, kbUploadCategory.value || undefined)
-    ElMessage.success('上传成功，请重建向量库后生效')
-    kbUploadFile.value = null
-    loadKbDocuments()
-  } catch (e) {
-    ElMessage.error(e.message)
-  }
-}
-
-async function doKbDelete(doc) {
-  try {
-    await ElMessageBox.confirm(`确认删除「${doc.filename}」？删除后需重建向量库才彻底移除。`, '删除确认', {
-      type: 'warning',
-    })
-  } catch {
-    return
-  }
-  try {
-    await kbApi.deleteDocument(doc.path)
-    ElMessage.success('已删除')
-    loadKbDocuments()
-  } catch (e) {
-    ElMessage.error(e.message)
-  }
-}
-
-async function doKbRebuild() {
-  try {
-    await ElMessageBox.confirm(
-      '重建向量库会重新分块并 embedding 全部语料（首次可能耗时较长）。确认继续？',
-      '重建确认',
-      { type: 'warning' },
-    )
-  } catch {
-    return
-  }
-  kbRebuilding.value = true
-  try {
-    await kbApi.rebuild()
-    ElMessage.success('已触发重建，正在后台执行…')
-  } catch (e) {
-    ElMessage.error(e.message)
-  } finally {
-    kbRebuilding.value = false
-  }
-}
-
-function kbSize(bytes) {
-  if (bytes < 1024) return bytes + ' B'
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
-  return (bytes / 1024 / 1024).toFixed(1) + ' MB'
-}
-
-// —— RAG 会话侧栏 / 批量删除 ——
-// 已抽离至 components/RagChat.vue（自持会话列表、切换、批量删除、反馈等状态）
+})
 </script>
 
 <template>
@@ -811,8 +327,8 @@ function kbSize(bytes) {
         >
           <span class="sidebar-icon">{{ m.icon }}</span>
           <span class="sidebar-label">{{ m.label }}</span>
-          <span v-if="m.name === 'pending' && pending.length" class="sidebar-badge">
-            {{ pending.length }}
+          <span v-if="m.name === 'pending' && pendingCount" class="sidebar-badge">
+            {{ pendingCount }}
           </span>
           <span v-else-if="m.adminOnly" class="sidebar-admin">admin</span>
         </div>
@@ -853,509 +369,81 @@ function kbSize(bytes) {
       </header>
 
       <main class="main">
-      <!-- 列表页 -->
-      <div v-if="activeTab === 'list'">
-        <!-- 统计卡片 -->
-        <div class="stat-row">
-          <div class="stat-card">
-            <div class="stat-icon blue">📦</div>
-            <div><div class="stat-val">{{ compStats.total }}</div><div class="stat-label">竞品总数</div></div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon green">✅</div>
-            <div><div class="stat-val">{{ compStats.online }}</div><div class="stat-label">已上线</div></div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon orange">⏳</div>
-            <div><div class="stat-val">{{ compStats.pending }}</div><div class="stat-label">待校对</div></div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon purple">📄</div>
-            <div><div class="stat-val">{{ compStats.offline }}</div><div class="stat-label">未上线</div></div>
-          </div>
-        </div>
-
-        <div class="toolbar">
-          <el-input
-            v-model="keyword"
-            placeholder="搜索名称"
-            clearable
-            style="width: 220px"
-            @keyup.enter="onSearch"
-            @clear="onSearch"
-          />
-          <el-select
-            v-model="filterType"
-            placeholder="平台类型"
-            clearable
-            style="width: 140px"
-            @change="onSearch"
-          >
-            <el-option v-for="t in typeOptions" :key="t" :label="t" :value="t" />
-          </el-select>
-          <el-button type="primary" @click="onSearch">查询</el-button>
-          <span class="toolbar-spacer" />
-          <el-button type="primary" plain @click="openCreate">+ 录入竞品</el-button>
-          <el-button type="success" plain @click="openFetch">抓取竞品</el-button>
-          <el-button
-            type="warning"
-            plain
-            :disabled="selectedIds.length < 2"
-            @click="goCompare"
-          >
-            对比 ({{ selectedIds.length }})
-          </el-button>
-          <el-button type="info" plain :loading="exporting" @click="doExportReport">
-            导出报告{{ selectedIds.length ? `(${selectedIds.length})` : '' }}
-          </el-button>
-        </div>
-
-        <el-table
-          v-loading="loading"
-          :data="pagedCompetitors"
-          border
-          stripe
-          @selection-change="onSelectionChange"
-        >
-          <el-table-column type="selection" width="50" />
-          <el-table-column prop="name" label="名称" min-width="140" />
-          <el-table-column prop="type" label="类型" width="80">
-            <template #default="{ row }">
-              <el-tag :type="typeTag(row.type)" size="small">{{ row.type }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="positioning" label="定位" min-width="200" show-overflow-tooltip />
-          <el-table-column prop="launch_status" label="状态" width="90">
-            <template #default="{ row }">
-              <el-tag :type="statusTag(row.launch_status)" size="small">
-                {{ row.launch_status }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="website" label="官网" min-width="160" show-overflow-tooltip />
-          <el-table-column label="操作" width="140" fixed="right">
-            <template #default="{ row }">
-              <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
-              <el-button link type="danger" @click="remove(row)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        <div class="list-pagination">
-          <el-pagination
-            v-model:current-page="compPage"
-            :page-size="compPageSize"
-            :total="competitors.length"
-            layout="total, prev, pager, next"
-            background
-          />
-        </div>
-      </div>
-
-      <!-- 待校对页 -->
-      <div v-else-if="activeTab === 'pending'">
-        <el-alert
-          title="以下是从网页抓取并由 AI 提炼的竞品，请人工校对后确认入库"
-          type="warning"
-          :closable="false"
-          show-icon
-          style="margin-bottom: 16px"
+        <!-- 竞品列表 -->
+        <CompetitorList
+          v-if="activeTab === 'list'"
+          :pending-count="pendingCount"
+          @create="onCreate"
+          @edit="onEdit"
+          @compare="onCompare"
+          @changed="onDataChanged"
         />
-        <el-table v-loading="pendingLoading" :data="pending" border stripe>
-          <el-table-column prop="name" label="名称" min-width="140" />
-          <el-table-column prop="type" label="类型" width="80">
-            <template #default="{ row }">
-              <el-tag :type="typeTag(row.type)" size="small">{{ row.type }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="positioning" label="定位" min-width="200" show-overflow-tooltip />
-          <el-table-column prop="website" label="来源" min-width="180" show-overflow-tooltip />
-          <el-table-column prop="data_status" label="状态" width="90">
-            <template #default="{ row }">
-              <el-tag :type="dataStatusTag(row.data_status)" size="small">
-                {{ row.data_status }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="200" fixed="right">
-            <template #default="{ row }">
-              <el-button link type="success" @click="approve(row)">确认入库</el-button>
-              <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
-              <el-button link type="danger" @click="remove(row)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        <p class="count">共 {{ pending.length }} 条待校对</p>
-      </div>
 
-      <!-- 录入页 -->
-      <div v-else-if="activeTab === 'form'" class="form-wrap">
-        <el-form :model="form" label-width="100px">
-          <h3 class="section">基础信息</h3>
-          <el-row :gutter="20">
-            <el-col :span="12">
-              <el-form-item label="名称" required>
-                <el-input v-model="form.name" placeholder="必填" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="平台类型" required>
-                <el-select v-model="form.type" style="width: 100%">
-                  <el-option v-for="t in typeOptions" :key="t" :label="t" :value="t" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-form-item label="定位">
-            <el-input v-model="form.positioning" placeholder="一句话定位" />
-          </el-form-item>
-          <el-row :gutter="20">
-            <el-col :span="12">
-              <el-form-item label="官网">
-                <el-input v-model="form.website" placeholder="https://..." />
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="上线状态">
-                <el-select v-model="form.launch_status" style="width: 100%">
-                  <el-option v-for="s in statusOptions" :key="s" :label="s" :value="s" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-          </el-row>
-
-          <h3 class="section">功能与业务</h3>
-          <el-form-item label="核心功能">
-            <el-input v-model="form.features" type="textarea" :rows="2" />
-          </el-form-item>
-          <el-row :gutter="20">
-            <el-col :span="12">
-              <el-form-item label="目标用户">
-                <el-input v-model="form.target_users" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="业务模式">
-                <el-input v-model="form.business_model" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-form-item label="定价">
-            <el-input v-model="form.pricing" />
-          </el-form-item>
-
-          <h3 class="section">评分（用于对比雷达图）</h3>
-          <el-form-item
-            v-for="d in ratingDims"
-            :key="d"
-            :label="d"
-          >
-            <el-slider
-              v-model="form.ratings[d]"
-              :min="0"
-              :max="5"
-              :step="1"
-              show-stops
-              style="width: 400px"
-            />
-          </el-form-item>
-
-          <h3 class="section">评价与备注</h3>
-          <el-row :gutter="20">
-            <el-col :span="12">
-              <el-form-item label="优势">
-                <el-input v-model="form.strengths" type="textarea" :rows="2" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="不足">
-                <el-input v-model="form.weaknesses" type="textarea" :rows="2" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-form-item label="标签">
-            <el-select
-              v-model="form.tags"
-              multiple
-              filterable
-              allow-create
-              default-first-option
-              placeholder="输入后回车创建标签"
-              style="width: 100%"
-            />
-          </el-form-item>
-          <el-form-item label="备注">
-            <el-input v-model="form.remark" type="textarea" :rows="2" />
-          </el-form-item>
-
-          <el-form-item>
-            <el-button type="primary" :loading="saving" @click="save">
-              {{ isEdit ? '保存修改' : '保存竞品' }}
-            </el-button>
-            <el-button @click="cancel">取消</el-button>
-          </el-form-item>
-        </el-form>
-      </div>
-
-      <!-- 对比页 -->
-      <div v-else-if="activeTab === 'compare'">
-        <div class="toolbar">
-          <el-button plain @click="activeTab = 'list'">← 返回选择</el-button>
-          <el-button @click="loadCompare">刷新对比</el-button>
-        </div>
-
-        <div v-if="compareData && compareData.items.length" v-loading="compareLoading">
-          <div class="card">
-            <h3 class="card-title">评分雷达图对比</h3>
-            <div ref="radarEl" class="radar" />
-          </div>
-
-          <div class="card">
-            <h3 class="card-title">详细对比表</h3>
-            <el-table :data="compareData.items" border stripe>
-              <el-table-column prop="name" label="竞品" min-width="120" fixed="left" />
-              <el-table-column prop="type" label="类型" width="80">
-                <template #default="{ row }">
-                  <el-tag :type="typeTag(row.type)" size="small">{{ row.type }}</el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="launch_status" label="状态" width="90">
-                <template #default="{ row }">
-                  <el-tag :type="statusTag(row.launch_status)" size="small">
-                    {{ row.launch_status }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="positioning" label="定位" min-width="200" show-overflow-tooltip />
-              <el-table-column prop="features" label="核心功能" min-width="200" show-overflow-tooltip />
-              <el-table-column prop="target_users" label="目标用户" min-width="140" show-overflow-tooltip />
-              <el-table-column prop="business_model" label="业务模式" min-width="160" show-overflow-tooltip />
-              <el-table-column prop="pricing" label="定价" min-width="120" show-overflow-tooltip />
-              <el-table-column prop="strengths" label="优势" min-width="180" show-overflow-tooltip />
-              <el-table-column prop="weaknesses" label="不足" min-width="180" show-overflow-tooltip />
-            </el-table>
-          </div>
-        </div>
-
-        <el-empty v-else-if="!compareLoading" description="请在列表页勾选至少 2 个竞品进行对比" />
-      </div>
-
-      <!-- 知识库问答页（懒加载组件） -->
-      <RagChat v-else-if="activeTab === 'rag'" :key="ragChatKey" :ready="ragReady" />
-
-      <!-- 变化记录页 -->
-      <div v-else-if="activeTab === 'changes'" class="changes-wrap">
-        <div class="card">
-          <div class="changes-head">
-            <h3 class="card-title">竞品变化记录</h3>
-            <el-button size="small" type="primary" plain @click="doMonitor">
-              手动触发监控检查
-            </el-button>
-          </div>
-          <p class="rag-tip">
-            记录竞品字段的变化（人工编辑时自动追踪）。定时监控每小时自动做一次快照检查。
-          </p>
-          <el-table :data="changes" v-loading="changesLoading" border stripe>
-            <el-table-column prop="competitor_name" label="竞品" min-width="120" />
-            <el-table-column prop="field" label="字段" width="110" />
-            <el-table-column label="旧值" min-width="180">
-              <template #default="{ row }">
-                <span class="muted">{{ row.old_value ?? '（空）' }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="新值" min-width="180">
-              <template #default="{ row }">
-                <span>{{ row.new_value ?? '（空）' }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="来源" width="90">
-              <template #default="{ row }">
-                <el-tag size="small" :type="row.source === 'monitor' ? 'warning' : 'info'">
-                  {{ row.source === 'monitor' ? '监控' : '人工' }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="时间" width="170">
-              <template #default="{ row }">
-                {{ (row.changed_at || '').replace('T', ' ').slice(0, 19) }}
-              </template>
-            </el-table-column>
-          </el-table>
-          <p v-if="!changes.length && !changesLoading" class="muted" style="margin-top: 16px">
-            暂无变化记录。
-          </p>
-        </div>
-      </div>
-
-      <!-- 知识库管理页（admin 专属） -->
-      <div v-else-if="activeTab === 'kb'" class="kb-wrap">
-        <div class="card">
-          <div class="changes-head">
-            <h3 class="card-title">知识库文档管理</h3>
-            <el-button type="primary" plain :loading="kbRebuilding" @click="doKbRebuild">
-              重建向量库
-            </el-button>
-          </div>
-          <p class="rag-tip">
-            管理知识库语料（canonical 下的 Markdown + FAQ JSON）。上传/删除文档后需「重建向量库」才会进入检索。
-            上传文件名需符合 <code>&lt;id&gt;_&lt;标题&gt;.md</code>（id 形如 A-001，且已在 seeds 中登记）。
-          </p>
-
-          <div class="kb-upload">
-            <el-upload
-              :auto-upload="false"
-              :limit="1"
-              accept=".md"
-              :on-change="onKbFileChange"
-              :on-remove="() => (kbUploadFile = null)"
-            >
-              <el-button>选择 .md 文件</el-button>
-            </el-upload>
-            <el-button type="primary" :disabled="!kbUploadFile" @click="doKbUpload">
-              上传
-            </el-button>
-          </div>
-
-          <el-table v-loading="kbLoading" :data="kbDocuments" border stripe>
-            <el-table-column prop="filename" label="文件名" min-width="260" show-overflow-tooltip />
-            <el-table-column prop="category" label="分类" width="140" />
-            <el-table-column label="类型" width="80">
-              <template #default="{ row }">
-                <el-tag size="small" :type="row.kind === 'md' ? 'primary' : 'success'">
-                  {{ row.kind === 'md' ? 'MD' : 'FAQ' }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="大小" width="100">
-              <template #default="{ row }">{{ kbSize(row.size) }}</template>
-            </el-table-column>
-            <el-table-column label="操作" width="100" fixed="right">
-              <template #default="{ row }">
-                <el-button link type="danger" @click="doKbDelete(row)">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-          <div class="kb-pagination">
-            <el-pagination
-              v-model:current-page="kbPage"
-              :page-size="kbPageSize"
-              :total="kbTotal"
-              layout="total, prev, pager, next, jumper"
-              background
-              @current-change="onKbPageChange"
-            />
-          </div>
-        </div>
-      </div>
-
-      <!-- 设置页 -->
-      <div v-else-if="activeTab === 'settings'" class="form-wrap">
-        <h3 class="section">评分维度配置</h3>
-        <el-alert
-          title="评分维度用于雷达图、竞品评分与报告导出。修改后新维度立即生效；已录入竞品在新维度下无评分的按 0 分处理。"
-          type="info"
-          :closable="false"
-          show-icon
-          style="margin-bottom: 16px"
+        <!-- 待校对 -->
+        <PendingReview
+          v-else-if="activeTab === 'pending'"
+          @edit="onEdit"
+          @count="pendingCount = $event"
+          @changed="onDataChanged"
         />
-        <div class="dims-list">
-          <el-tag
-            v-for="d in dimsDraft"
-            :key="d"
-            closable
-            size="large"
-            style="margin: 0 8px 8px 0"
-            @close="removeDim(d)"
-          >
-            {{ d }}
-          </el-tag>
-        </div>
-        <div class="dims-add">
-          <el-input
-            v-model="newDim"
-            placeholder="输入新维度名称，如：验机能力"
-            style="width: 280px"
-            maxlength="12"
-            @keyup.enter="addDim"
-          />
-          <el-button @click="addDim">添加</el-button>
-        </div>
-        <p class="count">当前 {{ dimsDraft.length }} 个维度（3~8 个）</p>
-        <el-button type="primary" :loading="dimsSaving" @click="saveDims">保存配置</el-button>
-      </div>
 
-    <!-- 抓取对话框 -->
-    <el-dialog v-model="fetchDialogVisible" title="抓取竞品" width="540px">
-      <p class="fetch-tip">输入竞品官网 URL，系统将抓取页面并用 AI 提炼结构化信息，生成待校对草稿。</p>
-      <el-input
-        v-model="fetchUrl"
-        placeholder="https://www.weipaitang.com/"
-        clearable
-        @keyup.enter="doFetch"
-      />
-      <div class="cost-bar" v-if="costStatus">
-        <span>
-          本会话 LLM 已消费
-          <b>¥{{ costStatus.total_cost_cny }}</b>
-          / 限额 ¥{{ costStatus.cost_limit_cny }}
-          <el-tag v-if="costStatus.blocked" type="danger" size="small">已熔断</el-tag>
-        </span>
-        <el-button link type="primary" size="small" @click="resetCost">重置累计</el-button>
-      </div>
-      <template #footer>
-        <el-button @click="fetchDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="fetching" @click="doFetch">抓取并提炼</el-button>
-      </template>
-    </el-dialog>
+        <!-- 录入 / 编辑 -->
+        <CompetitorForm
+          v-else-if="activeTab === 'form'"
+          :key="formKey"
+          :model="formTarget"
+          :dims="ratingDims"
+          @saved="onFormSaved"
+          @cancel="onFormCancel"
+        />
 
-    <!-- 成本熔断征询对话框 -->
-    <el-dialog v-model="costDialog" title="LLM 调用费用确认" width="480px">
-      <el-alert
-        type="warning"
-        :closable="false"
-        show-icon
-        title="本次 LLM 调用预估费用已超过会话限额，需你确认后才会真正发出请求。"
-        style="margin-bottom: 14px"
-      />
-      <div v-if="costInfo" class="cost-detail">
-        <p>
-          本次预估费用：
-          <b class="num">¥{{ costInfo.estimate_cost_cny }}</b>
-        </p>
-        <p>
-          当前已累计：<b class="num">¥{{ costInfo.total_cost_cny }}</b>
-          <span v-if="costInfo.projected_total_cny" class="muted">
-            （累计后约 ¥{{ costInfo.projected_total_cny }}）
-          </span>
-        </p>
-        <p class="muted">会话限额：¥{{ costInfo.cost_limit_cny }}</p>
-      </div>
-      <template #footer>
-        <el-button @click="cancelFetch">取消本次</el-button>
-        <el-button type="warning" :loading="costConfirming" @click="confirmFetch">
-          同意，继续本次调用
-        </el-button>
-      </template>
-    </el-dialog>
+        <!-- 多竞品对比 -->
+        <ComparePanel
+          v-else-if="activeTab === 'compare'"
+          :ids="compareIds"
+          @back="activeTab = 'list'"
+        />
 
-    <!-- 修改密码对话框 -->
-    <el-dialog v-model="pwdDialog" title="修改密码" width="420px">
-      <el-form @submit.prevent>
-        <el-form-item label="旧密码">
-          <el-input v-model="pwdOld" type="password" show-password />
-        </el-form-item>
-        <el-form-item label="新密码">
-          <el-input v-model="pwdNew" type="password" show-password placeholder="至少 6 位" />
-        </el-form-item>
-        <el-form-item label="确认新密码">
-          <el-input v-model="pwdConfirm" type="password" show-password />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="pwdDialog = false">取消</el-button>
-        <el-button type="primary" :loading="pwdSaving" @click="doChangePwd">确认修改</el-button>
-      </template>
-    </el-dialog>
-    </main>
+        <!-- 知识库问答（懒加载组件） -->
+        <RagChat v-else-if="activeTab === 'rag'" :key="ragChatKey" :ready="ragReady" />
+
+        <!-- 变化记录 -->
+        <ChangesPanel v-else-if="activeTab === 'changes'" />
+
+        <!-- 知识库管理（admin 专属） -->
+        <KbManage v-else-if="activeTab === 'kb'" />
+
+        <!-- 设置 -->
+        <SettingsPanel
+          v-else-if="activeTab === 'settings'"
+          :dims="ratingDims"
+          @saved="onDimsSaved"
+        />
+
+        <!-- 修改密码对话框 -->
+        <el-dialog v-model="pwdDialog" title="修改密码" width="420px">
+          <el-form @submit.prevent>
+            <el-form-item label="旧密码">
+              <el-input v-model="pwdOld" type="password" show-password />
+            </el-form-item>
+            <el-form-item label="新密码">
+              <el-input
+                v-model="pwdNew"
+                type="password"
+                show-password
+                placeholder="至少 8 位，含字母与数字"
+              />
+            </el-form-item>
+            <el-form-item label="确认新密码">
+              <el-input v-model="pwdConfirm" type="password" show-password />
+            </el-form-item>
+          </el-form>
+          <template #footer>
+            <el-button @click="pwdDialog = false">取消</el-button>
+            <el-button type="primary" :loading="pwdSaving" @click="doChangePwd">确认修改</el-button>
+          </template>
+        </el-dialog>
+      </main>
     </div>
   </div>
 </template>
@@ -1562,6 +650,7 @@ body {
   width: 100%;
   margin: 0 auto;
 }
+/* ===== 多个功能页共用的基础样式 ===== */
 .toolbar {
   display: flex;
   gap: 10px;
@@ -1569,52 +658,6 @@ body {
 }
 .toolbar-spacer {
   flex: 1;
-}
-/* 统计卡片 */
-.stat-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 16px;
-}
-.stat-card {
-  background: #fff;
-  border-radius: 6px;
-  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
-  padding: 18px 20px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-.stat-icon {
-  width: 46px;
-  height: 46px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  flex-shrink: 0;
-}
-.stat-icon.blue { background: #ecf5ff; }
-.stat-icon.green { background: #f0f9eb; }
-.stat-icon.orange { background: #fdf6ec; }
-.stat-icon.purple { background: #f4f0ff; }
-.stat-val {
-  font-size: 24px;
-  font-weight: 700;
-  color: #303133;
-  line-height: 1.2;
-}
-.stat-label {
-  font-size: 12px;
-  color: #909399;
-  margin-top: 2px;
-}
-.list-pagination {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
 }
 .count {
   color: #909399;
@@ -1632,11 +675,6 @@ body {
   border-bottom: 1px solid #ebeef5;
   color: #303133;
   font-size: 15px;
-}
-.fetch-tip {
-  color: #909399;
-  font-size: 13px;
-  margin: 0 0 12px;
 }
 .card {
   background: #fff;
@@ -1657,9 +695,6 @@ body {
 .rag-head .card-title {
   margin: 0;
 }
-.changes-wrap {
-  max-width: 1100px;
-}
 .changes-head {
   display: flex;
   align-items: center;
@@ -1668,49 +703,13 @@ body {
 .changes-head .card-title {
   margin: 0;
 }
-.radar {
-  width: 100%;
-  height: 420px;
-}
 .rag-tip {
   color: #909399;
   font-size: 13px;
   margin: 12px 0 16px;
   line-height: 1.6;
 }
-.dims-list {
-  margin-bottom: 12px;
-}
-.dims-add {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-.cost-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 12px;
-  padding: 8px 12px;
-  background: #f5f7fa;
-  border-radius: 4px;
-  color: #606266;
-  font-size: 13px;
-}
-.cost-bar b {
-  color: #e6a23c;
-}
-.cost-detail p {
-  margin: 6px 0;
-}
-.cost-detail .num {
-  color: #e6a23c;
-}
-.cost-detail .muted {
-  color: #909399;
-  font-size: 13px;
-}
-/* 登录页 */
+/* ===== 登录页 ===== */
 .auth-wrap {
   min-height: 100vh;
   display: flex;
@@ -1745,21 +744,5 @@ body {
   text-align: center;
   color: #909399;
   font-size: 13px;
-}
-/* 用户信息栏（侧边栏底部已承载用户信息，此样式废弃） */
-/* 知识库管理 */
-.kb-wrap {
-  max-width: 1100px;
-}
-.kb-upload {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 16px;
-}
-.kb-pagination {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
 }
 </style>
