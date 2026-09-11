@@ -28,3 +28,21 @@ class AskResponse(BaseModel):
     sources: list[SourceDoc] = []
     question: str
     session_id: str | None = None
+
+
+class BatchDeleteRequest(BaseModel):
+    """批量删除会话请求体。"""
+
+    session_ids: list[str] = Field(..., min_length=1, max_length=100)
+
+
+class FeedbackRequest(BaseModel):
+    """问答反馈请求体（👍/👎）。"""
+
+    session_id: str = Field(..., max_length=64)
+    rating: str = Field(...)  # "like" | "dislike"
+    question: str = Field(..., min_length=1, max_length=500)
+    answer: str = Field("", max_length=20000)
+    mode: str = Field("fallback")  # "hit" | "fallback"
+    source_doc_ids: list[str] = Field(default_factory=list)
+    comment: str | None = Field(None, max_length=2000)

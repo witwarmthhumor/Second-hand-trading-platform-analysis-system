@@ -1,37 +1,41 @@
 """RAG 问答 API。
 
-- POST /api/rag/ask        ：问答（检索命中直出 + 来源，未命中 LLM 兜底）；支持 session_id 多轮，
-                             会话不存在时懒创建（前端本地生成 session_id，首问即落库）
-- GET  /api/rag/status     ：知识库就绪状态
-- GET  /api/rag/sessions   ：列出当前用户的会话（admin 可见全部）
-- POST /api/rag/sessions   ：新建会话（绑定当前用户）
-- GET  /api/rag/sessions/{session_id} ：获取指定会话的消息历史（仅本人或 admin）
-- POST /api/rag/sessions/batch-delete ：批量删除会话（只能删自己的；admin 可删任意）
-- DELETE /api/rag/sessions/{session_id} ：删除指定会话（仅本人或 admin）
-"""
+端点只做「解析请求 → 调服务 → 返回响应」；会话与消息的持久化逻辑下沉到
+``app.services.chat_session_service``（路线图 M2），避免单文件承载过多职责。
 
-import uuid
+- POST   /api/rag/ask                     ：问答（命中直出 + 来源 / 未命中 LLM 兜底），支持多轮
+- POST   /api/rag/ask/stream              ：流式问答（SSE）
+- GET    /api/rag/status                  ：知识库就绪状态
+- GET    /api/rag/sessions                ：会话摘要列表（admin 可见全部）
+- POST   /api/rag/sessions                ：新建空会话
+- GET    /api/rag/sessions/{session_id}   ：会话消息历史（仅本人或 admin）
+- DELETE /api/rag/sessions/{session_id}   ：删除会话（仅本人或 admin）
+- POST   /api/rag/sessions/batch-delete   ：批量删除会话
+- POST   /api/rag/feedback                ：提交 👍/👎 反馈
+"""
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.deps import get_current_user
 from app.models.chat_session import ChatSession
 from app.models.message_feedback import FEEDBACK_DISLIKE, FEEDBACK_LIKE, MessageFeedback
-from app.models.user import ROLE_ADMIN, User
+from app.models.user import User
 from app.rag.retriever import get_retriever
-from app.schemas.rag import AskRequest, AskResponse, SourceDoc
+from app.schemas.rag import (
+    AskRequest,
+    AskResponse,
+    BatchDeleteRequest,
+    FeedbackRequest,
+    SourceDoc,
+)
+from app.services import chat_session_service as sessions
 from app.services import rag_service
 from app.services.change_service import list_stored_competitors
 
 router = APIRouter(prefix="/api/rag", tags=["rag"])
-
-# 注入 LLM 兜底时保留的最近历史轮数（一轮 = 一问一答）
-_HISTORY_ROUNDS = 5
 
 
 async def _load_competitors_context(session: AsyncSession) -> str:
@@ -40,34 +44,14 @@ async def _load_competitors_context(session: AsyncSession) -> str:
     return rag_service.build_competitors_context(competitors)
 
 
-async def _get_owned_session(
-    session_id: str, user: User, db: AsyncSession
-) -> ChatSession | None:
-    """按会话归属读取：普通用户只能取自己的会话，admin 可取任意会话。"""
-    row = await db.get(ChatSession, session_id)
-    if row is None:
-        return None
-    if user.role != ROLE_ADMIN and row.user_id != user.id:
-        return None
-    return row
-
-
-class BatchDeleteRequest(BaseModel):
-    """批量删除会话请求体。"""
-
-    session_ids: list[str] = Field(..., min_length=1, max_length=100)
-
-
-class FeedbackRequest(BaseModel):
-    """问答反馈请求体。"""
-
-    session_id: str = Field(..., max_length=64)
-    rating: str = Field(...)  # "like" | "dislike"
-    question: str = Field(..., min_length=1, max_length=500)
-    answer: str = Field("", max_length=20000)
-    mode: str = Field("fallback")  # "hit" | "fallback"
-    source_doc_ids: list[str] = Field(default_factory=list)
-    comment: str | None = Field(None, max_length=2000)
+async def _load_for_ask(
+    session_id: str | None, user: User, db: AsyncSession
+) -> tuple[list[dict], ChatSession | None]:
+    """读取历史与既有会话；越权访问统一映射为 404（不泄露会话是否存在）。"""
+    try:
+        return await sessions.load_for_ask(session_id, user, db)
+    except sessions.SessionAccessDenied:
+        raise HTTPException(status_code=404, detail="会话不存在或无权访问") from None
 
 
 @router.post("/ask", response_model=AskResponse)
@@ -77,23 +61,7 @@ async def ask(
     user: User = Depends(get_current_user),
 ) -> AskResponse:
     """二手交易知识库问答（支持多轮会话与竞品数据联动，会话按用户隔离）。"""
-    session_id = payload.session_id
-
-    # 读取历史：带 session_id 时从 DB 取本人会话，取最近 _HISTORY_ROUNDS 轮
-    history: list[dict] = []
-    existing: ChatSession | None = None
-    if session_id:
-        existing = await session.get(ChatSession, session_id)
-        if (
-            existing is not None
-            and user.role != ROLE_ADMIN
-            and existing.user_id != user.id
-        ):
-            # 会话存在但不属于当前用户：拒绝，避免越权读写他人会话
-            raise HTTPException(status_code=404, detail="会话不存在或无权访问")
-        if existing is not None:
-            history = (existing.messages or [])[-(_HISTORY_ROUNDS * 2) :]
-        # 会话不存在：懒创建模式，保存阶段落库归属当前用户（前端本地生成 session_id）
+    history, existing = await _load_for_ask(payload.session_id, user, session)
 
     # 读取已入库竞品数据作为对比类问题的上下文
     competitors_context = await _load_competitors_context(session)
@@ -101,32 +69,22 @@ async def ask(
     response = await rag_service.ask(
         payload.question,
         top_k=payload.top_k,
-        session_id=session_id,
+        session_id=payload.session_id,
         history=history,
         competitors_context=competitors_context,
     )
 
-    # 保存本轮问答到会话（仅当带 session_id 时，实现多轮记忆；不存在则懒创建）
-    if session_id:
-        new_messages = [
-            {"role": "user", "content": payload.question},
-            {
-                "role": "assistant",
-                "content": response.answer,
-                "mode": response.mode,
-                "sources": [s.model_dump() for s in response.sources],
-            },
-        ]
-        if existing is None:
-            session.add(
-                ChatSession(
-                    session_id=session_id, user_id=user.id, messages=new_messages
-                )
-            )
-        else:
-            existing.messages = (existing.messages or []) + new_messages
-        await session.commit()
-
+    # 保存本轮问答（懒创建 + 归属已在上面校验）
+    await sessions.save_round(
+        session,
+        session_id=payload.session_id,
+        user_id=user.id,
+        question=payload.question,
+        answer=response.answer,
+        mode=response.mode,
+        sources=response.sources,
+        existing=existing,
+    )
     return response
 
 
@@ -138,59 +96,17 @@ async def ask_stream(
 ):
     """问答流式版本（SSE）。
 
-    - 检索命中：直出原文（一次性，非流式）后结束
+    - 检索命中：直出原文（一次性）后结束
     - 未命中：LLM 兜底逐 token 推送（`data: {delta}`），结束推 `data: [DONE]`
 
-    会话保存与多轮记忆逻辑与 ask 一致（懒创建 + 归属校验）。
     检索走 `rag_service.retrieve`（缓存 + singleflight），与非流式端点共用同一套
     缓存 key —— 否则前端默认走的这条路会完全绕过缓存。
     """
     import json as _json
 
-    session_id = payload.session_id
-
-    history: list[dict] = []
-    existing: ChatSession | None = None
-    if session_id:
-        existing = await session.get(ChatSession, session_id)
-        if (
-            existing is not None
-            and user.role != ROLE_ADMIN
-            and existing.user_id != user.id
-        ):
-            raise HTTPException(status_code=404, detail="会话不存在或无权访问")
-        if existing is not None:
-            history = (existing.messages or [])[-(_HISTORY_ROUNDS * 2) :]
-
+    history, existing = await _load_for_ask(payload.session_id, user, session)
     competitors_context = await _load_competitors_context(session)
-
     retriever = get_retriever()
-
-    async def _save_session(answer: str, mode: str, sources: list[SourceDoc]) -> None:
-        """保存本轮问答到会话（懒创建 + 归属校验已在前面完成）。
-
-        answer/mode/sources 一并落库，使历史会话回显时能还原来源引用。
-        """
-        if not session_id:
-            return
-        new_messages = [
-            {"role": "user", "content": payload.question},
-            {
-                "role": "assistant",
-                "content": answer,
-                "mode": mode,
-                "sources": [s.model_dump() for s in sources],
-            },
-        ]
-        if existing is None:
-            session.add(
-                ChatSession(
-                    session_id=session_id, user_id=user.id, messages=new_messages
-                )
-            )
-        else:
-            existing.messages = (existing.messages or []) + new_messages
-        await session.commit()
 
     async def event_stream():
         if not retriever.is_ready:
@@ -204,16 +120,14 @@ async def ask_stream(
             )
             return
 
-        # 先做一次检索判定（命中直出，未命中走流式兜底）；
-        # 走 retrieve 以复用检索缓存，避免流式路径每次都重算 embedding
+        # 先做一次检索判定（命中直出，未命中走流式兜底）
         results = await rag_service.retrieve(
             payload.question, top_k=payload.top_k, retriever=retriever
         )
-        # 命中判定 + 来源构造与非流式 ask 共用 build_hit_gate，避免两处逻辑漂移
         hit = rag_service.build_hit_gate(results)
         if hit is not None:
             full_answer = hit["answer"]
-            sources = hit["sources"]
+            sources: list[SourceDoc] = hit["sources"]
             yield (
                 "data: "
                 + _json.dumps(
@@ -227,7 +141,16 @@ async def ask_stream(
                 )
                 + "\n\n"
             )
-            await _save_session(full_answer, "hit", sources)
+            await sessions.save_round(
+                session,
+                session_id=payload.session_id,
+                user_id=user.id,
+                question=payload.question,
+                answer=full_answer,
+                mode="hit",
+                sources=sources,
+                existing=existing,
+            )
             return
 
         # 未命中：流式兜底，逐 token 推送
@@ -246,7 +169,16 @@ async def ask_stream(
             + _json.dumps({"type": "done", "mode": "fallback"}, ensure_ascii=False)
             + "\n\n"
         )
-        await _save_session("".join(full_answer_parts), "fallback", [])
+        await sessions.save_round(
+            session,
+            session_id=payload.session_id,
+            user_id=user.id,
+            question=payload.question,
+            answer="".join(full_answer_parts),
+            mode="fallback",
+            sources=[],
+            existing=existing,
+        )
 
     return StreamingResponse(
         event_stream(),
@@ -273,71 +205,7 @@ async def list_sessions(
     user: User = Depends(get_current_user),
 ) -> list[dict]:
     """列出会话摘要（按更新时间倒序）。普通用户仅见自己的，admin 可见全部。"""
-    stmt = select(ChatSession).order_by(ChatSession.updated_at.desc())
-    if user.role != ROLE_ADMIN:
-        stmt = stmt.where(ChatSession.user_id == user.id)
-    result = await session.execute(stmt)
-    rows = result.scalars().all()
-    return [
-        {
-            "session_id": r.session_id,
-            "message_count": len(r.messages or []),
-            "first_question": (
-                (r.messages or [])[0]["content"] if (r.messages or []) else ""
-            ),
-            "updated_at": r.updated_at.isoformat() if r.updated_at else None,
-        }
-        for r in rows
-    ]
-
-
-@router.delete("/sessions/{session_id}")
-async def delete_session(
-    session_id: str,
-    session: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user),
-) -> dict:
-    """删除指定会话（仅本人或 admin）。"""
-    row = await _get_owned_session(session_id, user, session)
-    if row is None:
-        return {"deleted": False, "session_id": session_id}
-    await session.delete(row)
-    await session.commit()
-    return {"deleted": True, "session_id": session_id}
-
-
-@router.get("/sessions/{session_id}")
-async def get_session_messages(
-    session_id: str,
-    session: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user),
-) -> dict:
-    """获取指定会话的完整消息历史（仅本人或 admin），供前端切换会话时回显。"""
-    row = await _get_owned_session(session_id, user, session)
-    if row is None:
-        raise HTTPException(status_code=404, detail="会话不存在或无权访问")
-    return {
-        "session_id": row.session_id,
-        "messages": row.messages or [],
-        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-    }
-
-
-@router.post("/sessions/batch-delete")
-async def batch_delete_sessions(
-    payload: BatchDeleteRequest,
-    session: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user),
-) -> dict:
-    """批量删除会话。普通用户只能删自己的，admin 可删任意；不存在的 id 静默跳过。"""
-    deleted = 0
-    for sid in payload.session_ids:
-        row = await _get_owned_session(sid, user, session)
-        if row is not None:
-            await session.delete(row)
-            deleted += 1
-    await session.commit()
-    return {"deleted": deleted, "requested": len(payload.session_ids)}
+    return await sessions.list_summaries(session, user)
 
 
 @router.post("/sessions")
@@ -350,10 +218,42 @@ async def create_session(
     注：前端已改为「首问懒创建」（ask 会话不存在时自动落库），此接口保留供
     显式建会话的场景与既有测试使用。
     """
-    session_id = uuid.uuid4().hex
-    session.add(ChatSession(session_id=session_id, user_id=user.id, messages=[]))
-    await session.commit()
-    return {"session_id": session_id}
+    return {"session_id": await sessions.create(session, user)}
+
+
+@router.post("/sessions/batch-delete")
+async def batch_delete_sessions(
+    payload: BatchDeleteRequest,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """批量删除会话。普通用户只能删自己的，admin 可删任意；不存在的 id 静默跳过。"""
+    deleted, requested = await sessions.delete_many(session, payload.session_ids, user)
+    return {"deleted": deleted, "requested": requested}
+
+
+@router.get("/sessions/{session_id}")
+async def get_session_messages(
+    session_id: str,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """获取指定会话的完整消息历史（仅本人或 admin），供前端切换会话时回显。"""
+    try:
+        return await sessions.get_messages(session, session_id, user)
+    except sessions.SessionNotFound:
+        raise HTTPException(status_code=404, detail="会话不存在或无权访问") from None
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_session(
+    session_id: str,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """删除指定会话（仅本人或 admin）。"""
+    deleted = await sessions.delete_one(session, session_id, user)
+    return {"deleted": deleted, "session_id": session_id}
 
 
 @router.post("/feedback")
@@ -371,7 +271,7 @@ async def submit_feedback(
 
     # 校验会话归属（与其它会话接口一致）
     if payload.session_id:
-        row = await _get_owned_session(payload.session_id, user, session)
+        row = await sessions.get_owned_session(payload.session_id, user, session)
         if row is None:
             raise HTTPException(status_code=404, detail="会话不存在或无权访问")
 
