@@ -59,16 +59,31 @@ bash .workbuddy/skills/run-app/scripts/run-app.sh status   # 检查各项状态
 
 在 WorkBuddy/CodeBuddy Agent 里执行时，**不要只用脚本一次的 `start` 就把前后端留在后台**：脚本内部用 `nohup ... &` 起的后端/前端属于该次 Bash 调用的子进程，当这条 Bash 任务结束时会被一起回收。表现是——脚本当场打印"项目已启动"且健康检查通过，但紧接着再跑 `status` 就变成"后端/前端未运行"，端口 8000/5173 也没有监听。
 
-推荐做法：把后端和前端各自作为**独立的常驻后台任务**拉起（而不是依赖脚本里的 nohup）：
+推荐做法：**不要把前后端交给 bash 的后台任务（`nohup ... &` 或工具的 run_in_background 都会在任务结束时被回收）**，改用 `DETACHED_PROCESS` 脱离进程树拉起，进程不再挂在任何 shell 上：
 
 ```bash
-# 后端（单独一个常驻后台任务）
-cd /e/AIDevelop/AIProject/Agent/backend && exec .venv/Scripts/python -m uvicorn app.main:app --port 8000
-# 前端（另一个常驻后台任务）
-cd /e/AIDevelop/AIProject/Agent/frontend && exec npm run dev
+# 后端（在 backend/ 下执行；日志追加到 .run-app/backend.log）
+cd /e/AIDevelop/AIProject/Agent/backend && .venv/Scripts/python.exe -c "
+import subprocess, os
+p = subprocess.Popen(
+    [os.path.abspath('.venv/Scripts/python.exe'), '-m', 'uvicorn', 'app.main:app',
+     '--host', '127.0.0.1', '--port', '8000'],
+    cwd=os.getcwd(), stdout=open('../.run-app/backend.log', 'ab'),
+    stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+    creationflags=0x00000008 | 0x00000200,  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    close_fds=True,
+)
+print('detached pid =', p.pid)
+"
 ```
 
-`docker compose up -d db`（容器）与宿主机 Ollama 不受影响，照常由脚本负责。用 `curl` 复核时加 `--noproxy '*'`，避免本机代理把 `localhost:5173` 判成 502。
+前端同理（`cwd=frontend`、命令 `npm run dev`、日志 `.run-app/frontend.log`）；若前端已在 5173 监听则无需重启。
+
+`docker compose up -d db`（容器）与宿主机 Ollama 不受影响，照常由脚本负责。用 `curl` 复核时加 `--noproxy '*'`，避免本机代理（环境变量 `HTTP_PROXY/HTTPS_PROXY` 默认有值）把 `localhost:8000/5173` 判成 502。`run-app.sh status/start` 里的探测已内建 `--noproxy '*'`。
+
+**验证常驻是否成功**：`sleep 8` 后再 `netstat -ano | grep -E ":8000 " | grep LISTENING`，并在**下一次工具调用**里再探一次 `/health`——若只在启动当次可见、下一次就消失，说明进程被回收了，需改用上面的 DETACHED_PROCESS 方式。
+
+**另一个 curl 假阴性坑**：在 Windows Git Bash 下用 `curl -o /dev/null -w "%{http_code}"` 探前端，可能先正确打印 `HTTP 200`，随后却因写入 `/dev/null` 失败（`curl: (23) Failure writing output to destination`）返回非零退出码，触发 `|| echo "(不通)"`，看起来像前端挂了。**判定以打印出来的 HTTP 状态码为准，不要以退出码为准**；或改用 `-o /tmp/x -w "%{http_code}"`。
 
 完成后报告：
 

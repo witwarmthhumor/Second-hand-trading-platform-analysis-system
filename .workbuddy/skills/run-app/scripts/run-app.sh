@@ -22,7 +22,10 @@ wait_for_url() {
   local url="$1"
   local attempts="${2:-30}"
   for _ in $(seq 1 "$attempts"); do
-    if curl -fsS "$url" >/dev/null 2>&1; then
+    # --noproxy '*'：环境里可能设了 HTTP_PROXY/HTTPS_PROXY，必须显式绕过，
+    #   否则本机端口探测会被代理拦成 502，出现「服务其实活着却报未运行」的假阴性；
+    # --max-time 3：单次探测限时，避免慢响应拖长整轮检查。
+    if curl -fsS --noproxy '*' --max-time 3 "$url" >/dev/null 2>&1; then
       return 0
     fi
     sleep 2
@@ -112,9 +115,9 @@ status_app() {
   echo "项目目录：$ROOT"
   echo "Docker：$(docker info >/dev/null 2>&1 && echo 运行中 || echo 未运行)"
   echo "数据库：$(cd "$ROOT" && docker compose ps --status running --services 2>/dev/null | grep -qx db && echo 运行中 || echo 未运行)"
-  echo "后端：$(wait_for_url "http://localhost:8000/health" 1 && echo 运行中 || echo 未运行)"
-  echo "前端：$(wait_for_url "http://localhost:5173/" 1 && echo 运行中 || echo 未运行)"
-  echo "Ollama：$(curl -fsS "http://127.0.0.1:11434/api/tags" 2>/dev/null | grep -q bge-m3 && echo 'bge-m3 可用' || echo '未就绪或缺少 bge-m3')"
+  echo "后端：$(wait_for_url "http://localhost:8000/health" 3 && echo 运行中 || echo 未运行)"
+  echo "前端：$(wait_for_url "http://localhost:5173/" 3 && echo 运行中 || echo 未运行)"
+  echo "Ollama：$(curl -fsS --noproxy '*' --max-time 3 "http://127.0.0.1:11434/api/tags" 2>/dev/null | grep -q bge-m3 && echo 'bge-m3 可用' || echo '未就绪或缺少 bge-m3')"
   local vector_store="$ROOT/rag_data/vector_store"
   echo "向量库：$([[ -d "$vector_store" ]] && [[ -n "$(ls -A "$vector_store" 2>/dev/null)" ]] && echo 已就绪 || echo 缺失/为空)"
 }
