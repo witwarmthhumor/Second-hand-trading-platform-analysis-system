@@ -42,7 +42,7 @@ _CACHE_PREFIX = "rag:search:"
 # 注：ANCHOR_QUOTA 的 A/B 实验（配额 1 vs 4）曾在同版本 key 下写入两套结果，实验后
 # 已清空 `rag:search:*`（见 RAGAS 评估实验.md 第十三节）；日后真正切换该值时**必须**
 # 再次清缓存或升版本。
-_CACHE_VERSION = "v3"
+_CACHE_VERSION = "v4"  # v4：value 从单视图 list[dict] 变为 [breadth, depth] 双视图（P1-②）
 
 # Redis 故障熔断窗口（秒）：一次失败后窗口内不再尝试建连
 _CIRCUIT_COOLDOWN = 30.0
@@ -255,6 +255,62 @@ class SearchCache:
         n = len(self._l1)
         self._l1.clear()
         return n
+
+    # ---- 双视图读写（P1-②：value = [breadth, depth]）----
+
+    async def get_pair(
+        self, question: str, top_k: int = 5, version: str = ""
+    ) -> tuple[list[dict], list[dict]] | None:
+        """读取双视图缓存；未命中返回 None。拷贝语义与 ``get`` 相同（防 L1 污染）。"""
+        if not self._enabled:
+            return None
+        key = self.key_for(question, top_k, version)
+        hit = self._l1_get(key)
+        if hit is not None:
+            return [[dict(r) for r in view] for view in hit]
+
+        client = await self._get_client()
+        if client is None:
+            return None
+        try:
+            raw = await client.get(key)
+        except Exception as exc:  # noqa: BLE001
+            self._trip(exc)
+            return None
+        if raw is None:
+            return None
+        try:
+            value = json.loads(raw)
+        except (ValueError, TypeError) as exc:
+            logger.warning("读检索缓存失败（反序列化）：%s", exc)
+            return None
+        self._l1_set(key, value)
+        return [[dict(r) for r in view] for view in value]
+
+    async def set_pair(
+        self,
+        question: str,
+        breadth: list[dict],
+        depth: list[dict],
+        top_k: int = 5,
+        version: str = "",
+    ) -> None:
+        """写入双视图：L1 立即可用，Redis 带 TTL 抖动（同 ``set``）。"""
+        if not self._enabled:
+            return
+        key = self.key_for(question, top_k, version)
+        self._l1_set(key, [breadth, depth])
+
+        client = await self._get_client()
+        if client is None:
+            return
+        ttl = max(1, int(self._ttl * random.uniform(0.9, 1.1)))
+        try:
+            await client.set(
+                key, json.dumps([breadth, depth], ensure_ascii=False), ex=ttl
+            )
+        except Exception as exc:  # noqa: BLE001
+            self._trip(exc)
 
     async def clear(self) -> int:
         """按前缀清空所有检索缓存（含 L1），返回删除 key 数。"""

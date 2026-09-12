@@ -34,6 +34,8 @@ class Metrics:
         self._errors = 0  # 未捕获异常（500）计数
         # 被限流（429）次数，按策略分组：{policy: count}
         self._rate_limited: dict[str, int] = {}
+        # 合成答案路径计数（P1-②）：trigger/ok/degraded/refused
+        self._synth: dict[str, int] = {}
 
     def observe_request(
         self, method: str, path: str, status: int, duration_ms: float
@@ -64,6 +66,17 @@ class Metrics:
         with self._lock:
             self._rate_limited[policy] = self._rate_limited.get(policy, 0) + 1
 
+    def observe_synth(self, outcome: str) -> None:
+        """记录合成答案路径事件（P1-②）。
+
+        - trigger：命中且分流规则要求合成（SYNTH_MODE 命中时）
+        - ok：合成成功返回
+        - degraded：LLM 失败/熔断 → 降级直出
+        - refused：合成输出为拒答/剥标后为空 → 降级直出
+        """
+        with self._lock:
+            self._synth[outcome] = self._synth.get(outcome, 0) + 1
+
     def snapshot(self) -> dict:
         """导出当前指标快照（JSON 可序列化）。"""
         with self._lock:
@@ -91,6 +104,7 @@ class Metrics:
                 "unhandled_errors": self._errors,
                 "rate_limited_total": sum(self._rate_limited.values()),
                 "rate_limited_by_policy": dict(sorted(self._rate_limited.items())),
+                "synth": dict(sorted(self._synth.items())),
                 "status_classes": dict(sorted(self._by_class.items())),
                 "latency_avg_ms": round(self._latency_sum_ms / self._total, 2)
                 if self._total
@@ -111,6 +125,7 @@ class Metrics:
             self._latency_buckets = [0] * (len(_LATENCY_BUCKETS_MS) + 1)
             self._errors = 0
             self._rate_limited.clear()
+            self._synth.clear()
             self._started_at = time.time()
 
 

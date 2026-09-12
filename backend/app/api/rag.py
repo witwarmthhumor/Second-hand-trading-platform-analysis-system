@@ -122,14 +122,69 @@ async def ask_stream(
             )
             return
 
-        # 先做一次检索判定（命中直出，未命中走流式兜底）
-        results = await rag_service.retrieve(
-            payload.question, top_k=payload.top_k, retriever=retriever
+        # 先做一次检索判定（命中直出/合成，未命中走流式兜底）。
+        # 双视图：来源/命中判定用广度，合成上下文用深度（P1-②）。
+        breadth, depth = await rag_service.retrieve(
+            payload.question, top_k=payload.top_k, retriever=retriever, with_depth=True
         )
-        hit = rag_service.build_hit_gate(results)
+        hit = rag_service.build_hit_gate(breadth)
         if hit is not None:
-            full_answer = hit["answer"]
             sources: list[SourceDoc] = hit["sources"]
+
+            # P1-② 合成分流：触发失败/拒答 → 降级直出（failed 保证发生在任何 delta 之前）
+            if rag_service._should_synthesize(sources):
+                synth_parts: list[str] = []
+                synth_failed = False
+                async for kind, text in rag_service._llm_synthesize_stream(
+                    payload.question, depth
+                ):
+                    if kind == "failed":
+                        synth_failed = True
+                        break
+                    synth_parts.append(text)
+                    yield (
+                        "data: "
+                        + _json.dumps(
+                            {"type": "delta", "content": text}, ensure_ascii=False
+                        )
+                        + "\n\n"
+                    )
+
+                if not synth_failed:
+                    finalized = rag_service.finalize_stream_synthesis(
+                        "".join(synth_parts), sources, depth
+                    )
+                    if finalized is not None:
+                        cleaned, merged = finalized
+                        rag_service.observe_synth("ok")
+                        yield (
+                            "data: "
+                            + _json.dumps(
+                                {
+                                    "type": "done",
+                                    "answer": cleaned,
+                                    "mode": "synth",
+                                    "sources": [s.model_dump() for s in merged],
+                                },
+                                ensure_ascii=False,
+                            )
+                            + "\n\n"
+                        )
+                        await sessions.save_round(
+                            session,
+                            session_id=payload.session_id,
+                            user_id=user.id,
+                            question=payload.question,
+                            answer=cleaned,
+                            mode="synth",
+                            sources=merged,
+                            existing=existing,
+                        )
+                        return
+                    # 拒答/剥标为空：拒答 delta 已推送，done 降级为直出原文
+                    rag_service.observe_synth("refused")
+
+            full_answer = hit["answer"]
             yield (
                 "data: "
                 + _json.dumps(
@@ -157,7 +212,7 @@ async def ask_stream(
 
         # 未命中：先取「临界片段」。连临界标准都达不到 → 直接拒答，不调 LLM
         #（没有知识库依据时调用 LLM 只会得到凭参数知识编造的答案）。
-        fallback_docs = rag_service.build_fallback_context(results)
+        fallback_docs = rag_service.build_fallback_context(breadth)
         if fallback_docs is None:
             yield (
                 "data: "

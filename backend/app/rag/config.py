@@ -110,6 +110,22 @@ ANCHOR_QUOTA = int(os.getenv("ANCHOR_QUOTA", "1"))
 BREADTH_QUOTA = int(os.getenv("BREADTH_QUOTA", str(ANCHOR_QUOTA)))
 DEPTH_QUOTA = int(os.getenv("DEPTH_QUOTA", "4"))
 
+# ---- 合成答案分流（P1-②，见 docs/合成答案分流方案.md）----
+# 命中（build_hit_gate）后的路径选择：
+#   off       默认。全部直出原文——现网行为逐字节不变（116b933 裁定：无合成消费者时不牺牲现网）。
+#   multi_doc 广度视图 sources ≥ 2 篇（多文档信号，检索结果的被动产物）才合成，单文档留直出。
+#   all       命中即合成（体验统一；代价：faith 1.0→~0.97、每问 +1 次 LLM 调用、+1~3s 延迟）。
+# 判据刻意用「sources 篇数」而非相似度阈值——bge-m3 相似度不可做细粒度分级（P0-2 证伪）。
+# 合成上下文用深度视图（DEPTH_QUOTA），来源列表仍用广度视图；合成失败/拒答一律降级直出。
+# 默认档位的最终取值由生成侧 A/B（compare_synth_mode.py）按预登记规则裁定。
+_SYNTH_MODE_RAW = os.getenv("SYNTH_MODE", "off")
+SYNTH_MODE = _SYNTH_MODE_RAW if _SYNTH_MODE_RAW in ("off", "multi_doc", "all") else "off"
+
+# v1 提示词的拒答语（要求 2）。合成输出包含该短语 → 视为「片段不足以回答」，
+# 降级直出 top1 原文（top1 是全局最相似 chunk，比拒答更稳妥）。116b933 实测
+# 深度视图下拒答率 0/40，此为低概率安全网。
+SYNTH_REFUSED_PHRASE = "知识库中未找到相关信息"
+
 # 兜底路径（未命中时）：把相似度落在 [FALLBACK_CONTEXT_MIN_SIM, SIMILARITY_THRESHOLD)
 # 的 top-k 片段作为「临界片段」注入 prompt，让模型有据可依，而不是凭参数知识作答。
 # 依据：`_llm_fallback` 原先完全不携带检索结果，是全局最容易编造费率/时限/制度条款的

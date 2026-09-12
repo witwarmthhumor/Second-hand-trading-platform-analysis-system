@@ -8,17 +8,21 @@
 from __future__ import annotations
 
 import asyncio
+import re
 
 import httpx
 
 from app.ai.cost import get_cost_tracker
 from app.ai.provider import is_llm_configured
 from app.config import settings
+from app.metrics import get_metrics
 from app.rag.cache import SingleFlight, get_search_cache
 from app.rag.config import (
     FALLBACK_CONTEXT_MAX_CHUNKS,
     FALLBACK_CONTEXT_MIN_SIM,
     SIMILARITY_THRESHOLD,
+    SYNTH_MODE,
+    SYNTH_REFUSED_PHRASE,
 )
 from app.rag.retriever import HybridRetriever, get_retriever
 from app.schemas.rag import AskResponse, SourceDoc
@@ -326,36 +330,325 @@ async def _llm_fallback(
         )
 
 
+# ---------------------------------------------------------------------------
+# 合成答案路径（P1-②，docs/合成答案分流方案.md）
+# ---------------------------------------------------------------------------
+# 命中（build_hit_gate）后的可选增强：用深度视图（DEPTH_QUOTA 名额分配）作上下文
+# 调 LLM 合成，来源列表仍用广度视图。任何失败（LLM 不可用/熔断/拒答/剥标为空）
+# 一律降级直出 top1 原文——直出永远是最安全的兜底。
+
+
+def _observe_synth(outcome: str) -> None:
+    """合成路径事件计数（trigger/ok/degraded/refused），/metrics 可观测。"""
+    get_metrics().observe_synth(outcome)
+
+
+def _should_synthesize(sources: list[SourceDoc]) -> bool:
+    """分流判据（P1-②）：命中后是否走合成。
+
+    - ``off``：不合成（默认，现网逐字节不变）；
+    - ``multi_doc``：广度视图 sources ≥ 2 篇（多文档信号，检索结果的被动产物，
+      零成本、不依赖相似度阈值——bge-m3 相似度不可做细粒度分级，P0-2 证伪）；
+    - ``all``：命中即合成。
+    触发时计一次 ``trigger`` 指标（非流式/流式两条路径自动统一）。
+    """
+    if SYNTH_MODE == "all":
+        _observe_synth("trigger")
+        return True
+    if SYNTH_MODE == "multi_doc" and len(sources) >= 2:
+        _observe_synth("trigger")
+        return True
+    return False
+
+
+_SYNTH_SYSTEM_PROMPT = (
+    "你是二手交易平台（闲鱼、转转等）的问答助手。请严格依据「知识片段」回答用户问题。\n\n"
+    "要求：\n"
+    "1. 只使用知识片段中的信息作答，不得引入片段之外的任何知识，不得编造数字、比例或规则。\n"
+    "2. 若知识片段不足以回答问题，直接回复「知识库中未找到相关信息」，不要勉强作答。\n"
+    "3. 若片段来自多个文档，请分点归纳，覆盖每一条与问题相关的信息，不要遗漏。\n"
+    "4. 每个要点末尾用【来源:doc_id】标注依据（doc_id 见片段标签），不要编造来源。\n"
+    "5. 语言简洁，直接给答案，不要复述问题、不要输出多余前缀。"
+)
+
+
+def _build_synth_messages(question: str, depth_results: list[dict]) -> list[dict]:
+    """合成答案的 messages：片段带【doc_id】标签。
+
+    与评测 ``gen_answers.build_synth_messages``（746ebbc 实测 faith 0.9682 的 v1
+    形态）同构，避免评测与生产提示词漂移。
+    """
+    blocks = [f"【{r['doc_id']}】\n{r['text']}" for r in depth_results]
+    context = "\n\n".join(blocks)
+    return [
+        {"role": "system", "content": _SYNTH_SYSTEM_PROMPT},
+        {"role": "user", "content": f"知识片段：\n{context}\n\n用户问题：{question}"},
+    ]
+
+
+# 来源标注形如 【A-001】/【来源:D-161】/【来源：FAQ-049】（与评测 CITE_RE 同构）
+_CITE_RE = re.compile(r"【(?:来源[:：])?\s*([A-Za-z]+-\d+)\s*】")
+
+
+def _strip_citations(text: str) -> tuple[str, list[str]]:
+    """剥掉正文内联的【来源:x】标注（方案开放问题 4 的裁定：v1 行为 + 正文剥标）。
+
+    剥标只是**后处理**，不改变 LLM 生成行为——提示词仍是 faith 最高的 v1
+    （内联标注引导模型对齐来源）；剥掉是为了正文干净（v2 的动机已证明正文
+    夹带标记伤可读性）。返回 (剥标正文, 引用 doc_id 去重保序列表)。
+    """
+    ids: list[str] = []
+    for m in _CITE_RE.finditer(text):
+        did = m.group(1)
+        if did not in ids:
+            ids.append(did)
+    cleaned = _CITE_RE.sub("", text)
+    cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    return cleaned, ids
+
+
+def _merge_synth_sources(
+    hit_sources: list[SourceDoc], depth_results: list[dict], cited: list[str]
+) -> list[SourceDoc]:
+    """合成回答的来源 = 广度视图 + 正文引用补齐。
+
+    正文引用的 doc_id 不在广度视图时（模型归纳了深度视图里的其他文档），
+    从深度视图取该文档的代表块补进来源，保证「正文里出现的每个引用都可点验」。
+    """
+    sources = list(hit_sources)
+    have = {s.doc_id for s in sources}
+    for did in cited:
+        if did in have:
+            continue
+        for r in depth_results:
+            if r.get("doc_id") == did:
+                sources.append(
+                    SourceDoc(
+                        doc_id=did,
+                        title=_title_from_doc_id(did),
+                        text=r.get("text", ""),
+                        score=r.get("vector_sim", 0.0),
+                    )
+                )
+                break
+        have.add(did)
+    return sources
+
+
+def _finalize_text(raw_answer: str) -> tuple[str, list[str]] | None:
+    """合成文本后处理的共用规则：拒答检测 + 剥标。
+
+    返回 None 表示输出不可用（空/拒答/剥标后为空），调用方降级直出；
+    否则返回 (剥标正文, 引用 doc_id 列表)。非流式与流式共用，保证规则一致。
+    """
+    raw = (raw_answer or "").strip()
+    if not raw or SYNTH_REFUSED_PHRASE in raw:
+        return None
+    cleaned, cited = _strip_citations(raw)
+    if not cleaned:
+        return None
+    return cleaned, cited
+
+
+def observe_synth(outcome: str) -> None:
+    """供 api 层记录合成事件（ok/refused）；与内部 ``_observe_synth`` 同一指标。"""
+    _observe_synth(outcome)
+
+
+def finalize_stream_synthesis(
+    raw_answer: str, hit_sources: list[SourceDoc], depth_results: list[dict]
+) -> tuple[str, list[SourceDoc]] | None:
+    """流式合成的收尾处理（基于 ``_finalize_text`` + 来源合并）。
+
+    返回 None 表示合成输出不可用（拒答/剥标后为空），调用方降级直出。
+    """
+    out = _finalize_text(raw_answer)
+    if out is None:
+        return None
+    cleaned, cited = out
+    return cleaned, _merge_synth_sources(hit_sources, depth_results, cited)
+
+
+async def _llm_synthesize(
+    question: str, depth_results: list[dict]
+) -> tuple[str, list[str]] | None:
+    """合成命中答案（非流式）。失败/拒答返回 None → 调用方降级直出。
+
+    成本预检/记账/错误翻译与 ``_llm_fallback`` 同一套；区别仅在提示词与上下文
+    来源（深度视图），以及失败语义：兜底失败返回「错误提示文本」，合成失败
+    返回 None（因为降级直出永远可用，不需要文本兜底）。
+    """
+    if not depth_results or not is_llm_configured():
+        return None
+    tracker = get_cost_tracker()
+    await tracker.restore_from_db()
+
+    messages = _build_synth_messages(question, depth_results)
+    est_input = _estimate_tokens("".join(str(m.get("content", "")) for m in messages))
+    pre = tracker.precheck(est_input)
+    if pre.get("blocked"):
+        return None
+
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                f"{settings.llm_api_base.rstrip('/')}/chat/completions",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {settings.llm_api_key}",
+                },
+                json={
+                    "model": settings.llm_model,
+                    "messages": messages,
+                    "temperature": 0.3,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            content = data["choices"][0]["message"]["content"]
+
+            usage = data.get("usage") or {}
+            input_tokens = int(usage.get("prompt_tokens") or est_input)
+            output_tokens = int(
+                usage.get("completion_tokens") or _estimate_tokens(content)
+            )
+            tracker.record(input_tokens, output_tokens)
+    except (httpx.TimeoutException, httpx.HTTPError):
+        _observe_synth("degraded")
+        return None
+
+    content = (content or "").strip()
+    out = _finalize_text(content)
+    if out is None:
+        _observe_synth("refused")
+        return None
+    return out
+
+
+async def _llm_synthesize_stream(question: str, depth_results: list[dict]):
+    """合成答案的流式生成器：yield ``(kind, text)``。
+
+    - ``("delta", text)``：增量正文（含内联来源标注；调用方在 done 事件给出
+      剥标后的干净全文，前端用它替换显示）；
+    - ``("failed", reason)``：合成失败——**保证只会在产出任何 delta 之前出现**，
+      调用方据此干净降级直出；已产出 delta 后的中途异常以 delta 形式追加错误
+      提示（用户已看到部分内容，不再换稿）。
+    """
+    if not depth_results or not is_llm_configured():
+        yield ("failed", "llm 未配置或片段为空")
+        return
+
+    tracker = get_cost_tracker()
+    await tracker.restore_from_db()
+
+    messages = _build_synth_messages(question, depth_results)
+    est_input = _estimate_tokens("".join(str(m.get("content", "")) for m in messages))
+    pre = tracker.precheck(est_input)
+    if pre.get("blocked"):
+        yield ("failed", "成本熔断")
+        return
+
+    produced = False
+    usage: dict = {}
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            async with client.stream(
+                "POST",
+                f"{settings.llm_api_base.rstrip('/')}/chat/completions",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {settings.llm_api_key}",
+                },
+                json={
+                    "model": settings.llm_model,
+                    "messages": messages,
+                    "temperature": 0.3,
+                    "stream": True,
+                },
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue
+                    data = line[len("data:") :].strip()
+                    if data == "[DONE]":
+                        break
+                    import json as _json
+
+                    try:
+                        chunk = _json.loads(data)
+                    except ValueError:
+                        continue
+                    if chunk.get("usage"):
+                        usage = chunk["usage"]
+                    choices = chunk.get("choices") or []
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta") or {}
+                    content = delta.get("content")
+                    if content:
+                        produced = True
+                        yield ("delta", content)
+
+            input_tokens = int(usage.get("prompt_tokens") or est_input)
+            output_tokens = int(usage.get("completion_tokens") or 0)
+            if output_tokens > 0 or not usage:
+                tracker.record(input_tokens, output_tokens)
+    except (httpx.TimeoutException, httpx.HTTPError) as exc:
+        hint = _llm_error_hint(exc)
+        if produced:
+            yield ("delta", f"\n\n（合成中断：{hint}）")
+        else:
+            yield ("failed", hint)
+
+
 async def retrieve(
     question: str,
     top_k: int = 5,
     retriever: HybridRetriever | None = None,
-) -> list[dict]:
-    """带缓存 + singleflight 的检索：命中缓存直接返回，未命中才真正回源。
+    *,
+    with_depth: bool = False,
+):
+    """带缓存 + singleflight 的检索（双视图，P1-②）。
 
-    分层防护：
-    - 缓存：热点问题命中时免 embedding + 向量/BM25 检索（key 含语料版本与 top_k）
-    - singleflight：同一 key 的并发 miss 只放一个回源，其余 await 同一结果（防击穿）
-    - 线程池：检索是同步阻塞调用（Ollama HTTP + Chroma），放到线程里避免堵事件循环
+    返回：
+    - ``with_depth=False``（默认）：广度视图 ``list[dict]``——兼容旧契约，
+      与现网 ``search()`` 输出逐位一致；
+    - ``with_depth=True``：``(广度, 深度)`` 元组——ask 的合成路径用深度视图
+      作上下文，来源列表仍用广度。
+
+    缓存 value 统一为 ``[breadth, depth]``（``cache._CACHE_VERSION`` v4）；检索
+    走 ``search_dual``（同一候选池两次名额分配，零额外 embedding 成本）。fake/旧
+    检索器没有 ``search_dual`` 时退化为两份相同的 ``search()`` 结果——合成上下文
+    退化为广度，行为安全。
     """
     rtv = retriever if retriever is not None else get_retriever()
     cache = get_search_cache()
     # 语料版本：mock/未实现该属性的检索器按空版本处理，不影响缓存可用性
     version = getattr(rtv, "corpus_version", "")
-    cached = await cache.get(question, top_k, version)
+    cached = await cache.get_pair(question, top_k, version)
     if cached is not None:
-        return cached
+        return cached if with_depth else cached[0]
 
-    async def _compute() -> list[dict]:
+    async def _compute() -> tuple[list[dict], list[dict]]:
         # 二次检查：等锁期间可能已被其它请求写入
-        again = await cache.get(question, top_k, version)
+        again = await cache.get_pair(question, top_k, version)
         if again is not None:
             return again
-        results = await asyncio.to_thread(rtv.search, question, top_k)
-        await cache.set(question, results, top_k, version)
-        return results
+        dual = getattr(rtv, "search_dual", None)
+        if dual is not None:
+            breadth, depth = await asyncio.to_thread(dual, question, top_k)
+        else:
+            breadth = await asyncio.to_thread(rtv.search, question, top_k)
+            depth = breadth
+        await cache.set_pair(question, breadth, depth, top_k, version)
+        return breadth, depth
 
-    return await _RETRIEVE_FLIGHT.run(cache.key_for(question, top_k, version), _compute)
+    breadth, depth = await _RETRIEVE_FLIGHT.run(
+        cache.key_for(question, top_k, version), _compute
+    )
+    return (breadth, depth) if with_depth else breadth
 
 
 def build_hit_gate(results: list[dict]) -> dict | None:
@@ -410,10 +703,25 @@ async def ask(
             session_id=session_id,
         )
 
-    results = await retrieve(question, top_k=top_k, retriever=retriever)
+    breadth, depth = await retrieve(
+        question, top_k=top_k, retriever=retriever, with_depth=True
+    )
 
-    hit = build_hit_gate(results)
+    hit = build_hit_gate(breadth)
     if hit is not None:
+        # P1-② 合成分流：触发条件不满足 / 合成失败 / 拒答 → 一律降级直出 top1 原文
+        if _should_synthesize(hit["sources"]):
+            synth = await _llm_synthesize(question, depth)
+            if synth is not None:
+                cleaned, cited = synth
+                _observe_synth("ok")
+                return AskResponse(
+                    answer=cleaned,
+                    mode="synth",
+                    sources=_merge_synth_sources(hit["sources"], depth, cited),
+                    question=question,
+                    session_id=session_id,
+                )
         return AskResponse(
             answer=hit["answer"],
             mode="hit",
@@ -424,7 +732,7 @@ async def ask(
 
     # 未命中：先取「临界片段」。连临界标准都达不到 → 直接拒答，不调 LLM
     #（没有知识库依据时调用 LLM 只会得到凭参数知识编造的答案，见 docs/RAG优化方案.md 五）。
-    fallback_docs = build_fallback_context(results)
+    fallback_docs = build_fallback_context(breadth)
     if fallback_docs is None:
         return AskResponse(
             answer=NO_KB_CONTENT_MSG,

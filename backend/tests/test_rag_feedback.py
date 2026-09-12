@@ -112,11 +112,13 @@ async def test_ask_hit_persists_sources(client, monkeypatch):
     """非流式 ask 命中时，assistant 消息携带 sources 落库。"""
     from app.services import rag_service
 
-    async def _fake_retrieve(question, top_k=5, retriever=None):
-        return [
+    async def _fake_retrieve(question, top_k=5, retriever=None, with_depth=False):
+        results = [
             {"doc_id": "A-001", "text": "命中原文", "vector_sim": 0.8},
             {"doc_id": "A-002", "text": "次相关", "vector_sim": 0.72},
         ]
+        # P1-②：ask 走双视图检索（with_depth=True），旧单视图 mock 同步升级
+        return (results, results) if with_depth else results
 
     monkeypatch.setattr(rag_service, "retrieve", _fake_retrieve)
 
