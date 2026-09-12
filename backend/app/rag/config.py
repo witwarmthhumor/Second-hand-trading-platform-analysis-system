@@ -112,13 +112,21 @@ DEPTH_QUOTA = int(os.getenv("DEPTH_QUOTA", "4"))
 
 # ---- 合成答案分流（P1-②，见 docs/合成答案分流方案.md）----
 # 命中（build_hit_gate）后的路径选择：
-#   off       默认。全部直出原文——现网行为逐字节不变（116b933 裁定：无合成消费者时不牺牲现网）。
-#   multi_doc 广度视图 sources ≥ 2 篇（多文档信号，检索结果的被动产物）才合成，单文档留直出。
-#   all       命中即合成（体验统一；代价：faith 1.0→~0.97、每问 +1 次 LLM 调用、+1~3s 延迟）。
-# 判据刻意用「sources 篇数」而非相似度阈值——bge-m3 相似度不可做细粒度分级（P0-2 证伪）。
-# 合成上下文用深度视图（DEPTH_QUOTA），来源列表仍用广度视图；合成失败/拒答一律降级直出。
-# 默认档位的最终取值由生成侧 A/B（compare_synth_mode.py）按预登记规则裁定。
-_SYNTH_MODE_RAW = os.getenv("SYNTH_MODE", "off")
+#   multi_doc **默认（2026-09-12 生成侧 A/B 裁定）**：广度视图 sources ≥ 2 篇
+#     （多文档信号）才合成，单文档留直出；合成失败/拒答一律降级直出。
+#   off       全部直出原文（P1-② 之前的现网形态，可随时回退）。
+#   all       命中即合成。
+# 裁定依据（compare_synth_mode.py，40 问单/多各半 seed=42，实花 ≈¥3.2，RAGAS 裁判
+# + DeepSeek 生成）：multi_doc 对直出——relevancy 0.8209→0.8996（+7.87pp）、
+# coverage 0.6025→0.7025（+10pp）、faithfulness 1.0→0.9867（-1.33pp，预登记阈值
+# 0.965 通过）；合成 40/40 全部 ok（零降级零拒答）；6 项判定全过 → 判定
+# multi_doc_pass=True。all 与 multi_doc 几乎重合（40 问中 38 问 sources≥2 触发
+# 分流），multi_doc 保留「单文档直出」逃生舱语义且更保守，故取 multi_doc。
+# 判据刻意用「sources 篇数」而非相似度阈值——bge-m3 相似度不可做细粒度分级
+#（P0-2 证伪）；注意本语料同域相似度普遍 ≥0.65，sources 几乎总是 4~5 篇，
+# 即分流判据当前近似「恒合成」，保留判据以备语料异质化后的成本控制。
+# 合成上下文用深度视图（DEPTH_QUOTA），来源列表仍用广度视图。
+_SYNTH_MODE_RAW = os.getenv("SYNTH_MODE", "multi_doc")
 SYNTH_MODE = _SYNTH_MODE_RAW if _SYNTH_MODE_RAW in ("off", "multi_doc", "all") else "off"
 
 # v1 提示词的拒答语（要求 2）。合成输出包含该短语 → 视为「片段不足以回答」，

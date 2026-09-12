@@ -74,9 +74,10 @@ def _patch_llm_ok(monkeypatch, text="整合后的答案【来源:D-000】"):
 
 
 async def test_off_命中直出_不调合成(client, monkeypatch):
-    """SYNTH_MODE 默认 off：命中直出原文，合成函数不应被调用。"""
+    """SYNTH_MODE=off：命中直出原文，合成函数不应被调用（默认档位已切 multi_doc，显式声明 off）。"""
     breadth, depth = _dual(3)
     monkeypatch.setattr(rag_service, "retrieve", _ok(breadth, depth))
+    monkeypatch.setattr(rag_service, "SYNTH_MODE", "off")
 
     async def _boom(*a, **k):
         raise AssertionError("off 模式不应触发合成")

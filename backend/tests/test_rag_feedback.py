@@ -121,6 +121,9 @@ async def test_ask_hit_persists_sources(client, monkeypatch):
         return (results, results) if with_depth else results
 
     monkeypatch.setattr(rag_service, "retrieve", _fake_retrieve)
+    # 默认档位已是 multi_doc（sources≥2 会触发合成）；本用例聚焦「命中落 sources」，
+    # 显式固定 off 避免依赖真实 LLM。
+    monkeypatch.setattr(rag_service, "SYNTH_MODE", "off")
 
     _, token = await _register(client)
     sid = secrets.token_hex(16)

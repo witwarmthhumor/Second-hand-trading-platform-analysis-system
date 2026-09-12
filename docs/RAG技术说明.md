@@ -68,12 +68,35 @@
 
 | 档位 | 条件（`results[0].vector_sim`） | 行为 |
 |---|---|---|
-| **命中** | `≥ 0.65` | 直出最优 chunk 原文，附来源列表（按 `doc_id` 去重，同一文档多 chunk 不重复展示） |
+| **命中** | `≥ 0.65` | 视 `SYNTH_MODE` 分流（见下节 4.1）：默认 `multi_doc` 档下，多文档信号命中走 LLM 合成，否则直出最优 chunk 原文；来源列表（按 `doc_id` 去重）不变 |
 | **注入兜底** | `[0.4, 0.65)` | 把灰区片段（带「来源 + 相似度」标注，上限 3 条）注入 system prompt，再调 LLM；片段同时作为来源返回供核验 |
 | **直接拒答** | `< 0.4` 或结果为空 | 回「知识库暂无相关内容」，**不调用 LLM**（无依据时不猜测，杜绝编造） |
 
 兜底 LLM 走 OpenAI 兼容接口（`LLM_API_BASE` / `LLM_MODEL`），并接入成本熔断记账
 （`ai/cost.py`，会话累计消费超阈值即中断征询）。
+
+### 4.1 合成答案分流（P1-②，双视图）
+
+命中后由 `SYNTH_MODE` 决定是否用 LLM 合成（`docs/合成答案分流方案.md`）：
+
+| 档位 | 行为 |
+|---|---|
+| `multi_doc`（**默认**） | 广度来源 ≥2 篇（多文档信号）→ 合成；否则直出。A/B 实测 relevancy +7.87pp、coverage +10pp、faith -1.33pp（阈值 0.965 内） |
+| `off` | 全部直出（P1-② 之前形态，一键回退） |
+| `all` | 命中即合成 |
+
+- **双视图**：检索一次产出两个视图（`retriever.search_dual`，同一候选池按
+  `BREADTH_QUOTA`/`DEPTH_QUOTA` 各排一次名额，零额外 embedding 成本）——
+  **来源列表用广度视图**（点验需要覆盖面），**合成上下文用深度视图**（top1
+  文档多占名额，消除 20% 无谓拒答，见 116b933）。
+- **合成实现**：v1 提示词（746ebbc 实测 faith 最高）+ 深度视图 5 块作上下文；
+  输出剥掉正文内联【来源:x】标注、把引用 doc_id 并入来源列表（正文引用全部可点验）。
+- **降级安全网**：LLM 未配置 / 成本熔断 / 超时 / 输出为拒答语或剥标后为空 →
+  一律回退直出 top1 原文（`mode="hit"`）；合成成功 `mode="synth"`。
+- **观测**：`/metrics` 的 `synth.trigger/ok/degraded/refused`；反馈管理面板按
+  mode 区分 👍/👎 分布。
+- **成本**：命中 +1 次 LLM 调用（DeepSeek ≈¥0.01/问）+ 1~3s 延迟（流式缓解）；
+  `llm` 档限流与成本熔断沿用。
 
 ## 5. 建库流程
 
@@ -88,8 +111,8 @@ bash scripts/build_vector_store.sh
 
 | 接口 | 方法 | 说明 |
 |------|------|------|
-| `/api/rag/ask` | POST | 请求 `{"question": "...", "top_k": 5}`，返回 `answer` / `mode`（`hit` 或 `fallback`）/ `sources` |
-| `/api/rag/ask/stream` | POST | 流式（SSE）：命中直出，未命中逐 token 推 `delta`，结束推 `done` |
+| `/api/rag/ask` | POST | 请求 `{"question": "...", "top_k": 5}`，返回 `answer` / `mode`（`hit`=直出原文 / `synth`=LLM 合成 / `fallback`=兜底生成）/ `sources` |
+| `/api/rag/ask/stream` | POST | 流式（SSE）：命中（直出或合成）逐 token 推 `delta`，结束推 `done`；未命中走兜底 |
 | `/api/rag/status` | GET | 返回知识库是否就绪 `{"ready": true}` |
 
 ## 7. 检索缓存（L1 进程内 + Redis L2）

@@ -147,6 +147,8 @@ async def test_ask_hit_returns_direct_answer(monkeypatch):
     """命中：mode=hit，answer 直出首条原文，来源按 doc_id 去重。"""
     from app.services import rag_service
 
+    # 默认档位已是 multi_doc；本用例验证「直出」契约，显式固定 off
+    monkeypatch.setattr(rag_service, "SYNTH_MODE", "off")
     monkeypatch.setattr(
         rag_service, "get_retriever", lambda: _ReadyRetriever(_hit_results())
     )
@@ -306,6 +308,7 @@ def test_ask_returns_session_id(monkeypatch):
     """带 session_id 时，响应回带 session_id。"""
     from app.services import rag_service
 
+    monkeypatch.setattr(rag_service, "SYNTH_MODE", "off")  # 聚焦直出契约
     monkeypatch.setattr(
         rag_service, "get_retriever", lambda: _ReadyRetriever(_hit_results())
     )

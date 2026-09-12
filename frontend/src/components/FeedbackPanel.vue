@@ -17,6 +17,10 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 
+// mode → 展示名（synth 为 P1-② 合成答案路径）
+const MODE_LABELS = { hit: '检索命中直出', synth: 'LLM 合成', fallback: 'LLM 兜底生成' }
+const modeLabel = (m) => MODE_LABELS[m] || m
+
 async function loadStats() {
   try {
     stats.value = await competitorApi.ragFeedbackStats()
@@ -83,7 +87,7 @@ onMounted(() => {
       <template #header><b>按回答模式分布</b></template>
       <div class="fb-mode-grid">
         <div v-for="(m, key) in stats.by_mode" :key="key" class="fb-mode-item">
-          <div class="fb-mode-name">{{ key === 'hit' ? '检索命中直出' : 'LLM 兜底生成' }}</div>
+          <div class="fb-mode-name">{{ modeLabel(key) }}</div>
           <div class="fb-mode-bar">
             <span class="good">👍 {{ m.like }}</span>
             <span class="bad">👎 {{ m.dislike }}</span>
@@ -117,7 +121,7 @@ onMounted(() => {
         </el-table-column>
         <el-table-column prop="question" label="问题" min-width="240" show-overflow-tooltip />
         <el-table-column label="模式" width="120">
-          <template #default="{ row }">{{ row.mode === 'hit' ? '命中直出' : '兜底生成' }}</template>
+          <template #default="{ row }">{{ modeLabel(row.mode) }}</template>
         </el-table-column>
         <el-table-column label="时间" width="180">
           <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
