@@ -3,7 +3,7 @@
 端点只做「解析请求 → 调服务 → 返回响应」；会话与消息的持久化逻辑下沉到
 ``app.services.chat_session_service``（路线图 M2），避免单文件承载过多职责。
 
-- POST   /api/rag/ask                     ：问答（命中直出 + 来源 / 未命中 LLM 兜底），支持多轮
+- POST   /api/rag/ask                     ：问答（命中合成/直出 + 来源 / 未命中 LLM 兜底），支持多轮
 - POST   /api/rag/ask/stream              ：流式问答（SSE）
 - GET    /api/rag/status                  ：知识库就绪状态
 - GET    /api/rag/sessions                ：会话摘要列表（admin 可见全部）
@@ -15,6 +15,9 @@
 - GET    /api/rag/feedback                ：反馈列表（仅管理员，分页）
 - GET    /api/rag/feedback/stats          ：反馈统计聚合（仅管理员）
 """
+
+import json
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -39,11 +42,44 @@ from app.services.change_service import list_stored_competitors
 
 router = APIRouter(prefix="/api/rag", tags=["rag"])
 
+logger = logging.getLogger(__name__)
+
 
 async def _load_competitors_context(session: AsyncSession) -> str:
     """读取已入库竞品数据，序列化为文本上下文（供 LLM 兜底回答对比类问题）。"""
     competitors = await list_stored_competitors(session)
     return rag_service.build_competitors_context(competitors)
+
+
+async def _safe_save_round(
+    session: AsyncSession,
+    *,
+    session_id: str | None,
+    user_id: int,
+    question: str,
+    answer: str,
+    mode: str,
+    sources: list[SourceDoc],
+    existing: ChatSession | None,
+) -> None:
+    """流内落库的安全包装：失败只记日志、不中断 SSE。
+
+    调用点都在 done 事件 yield 之后（用户已收到完整回答），此时持久化失败
+    若向上抛会异常关闭连接并污染错误指标，而对用户已无感知收益。
+    """
+    try:
+        await sessions.save_round(
+            session,
+            session_id=session_id,
+            user_id=user_id,
+            question=question,
+            answer=answer,
+            mode=mode,
+            sources=sources,
+            existing=existing,
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("流式问答落库失败（mode=%s, session_id=%s）", mode, session_id)
 
 
 async def _load_for_ask(
@@ -98,14 +134,14 @@ async def ask_stream(
 ):
     """问答流式版本（SSE）。
 
-    - 检索命中：直出原文（一次性）后结束
+    - 检索命中：SYNTH_MODE 触发时先推送合成增量（含内联来源标注），成功后
+      done 事件给出剥标全文与合并来源（mode=synth）；合成失败/拒答降级直出
+      原文（mode=hit）
     - 未命中：LLM 兜底逐 token 推送（`data: {delta}`），结束推 `data: [DONE]`
 
     检索走 `rag_service.retrieve`（缓存 + singleflight），与非流式端点共用同一套
     缓存 key —— 否则前端默认走的这条路会完全绕过缓存。
     """
-    import json as _json
-
     history, existing = await _load_for_ask(payload.session_id, user, session)
     competitors_context = await _load_competitors_context(session)
     retriever = get_retriever()
@@ -114,7 +150,7 @@ async def ask_stream(
         if not retriever.is_ready:
             yield (
                 "data: "
-                + _json.dumps(
+                + json.dumps(
                     {"type": "done", "answer": "知识库尚未就绪，请先运行建库脚本。"},
                     ensure_ascii=False,
                 )
@@ -132,10 +168,10 @@ async def ask_stream(
             sources: list[SourceDoc] = hit["sources"]
 
             # P1-② 合成分流：触发失败/拒答 → 降级直出（failed 保证发生在任何 delta 之前）
-            if rag_service._should_synthesize(sources):
+            if rag_service.should_synthesize(sources):
                 synth_parts: list[str] = []
                 synth_failed = False
-                async for kind, text in rag_service._llm_synthesize_stream(
+                async for kind, text in rag_service.llm_synthesize_stream(
                     payload.question, depth
                 ):
                     if kind == "failed":
@@ -144,7 +180,7 @@ async def ask_stream(
                     synth_parts.append(text)
                     yield (
                         "data: "
-                        + _json.dumps(
+                        + json.dumps(
                             {"type": "delta", "content": text}, ensure_ascii=False
                         )
                         + "\n\n"
@@ -159,7 +195,7 @@ async def ask_stream(
                         rag_service.observe_synth("ok")
                         yield (
                             "data: "
-                            + _json.dumps(
+                            + json.dumps(
                                 {
                                     "type": "done",
                                     "answer": cleaned,
@@ -170,7 +206,7 @@ async def ask_stream(
                             )
                             + "\n\n"
                         )
-                        await sessions.save_round(
+                        await _safe_save_round(
                             session,
                             session_id=payload.session_id,
                             user_id=user.id,
@@ -187,7 +223,7 @@ async def ask_stream(
             full_answer = hit["answer"]
             yield (
                 "data: "
-                + _json.dumps(
+                + json.dumps(
                     {
                         "type": "done",
                         "answer": full_answer,
@@ -198,7 +234,7 @@ async def ask_stream(
                 )
                 + "\n\n"
             )
-            await sessions.save_round(
+            await _safe_save_round(
                 session,
                 session_id=payload.session_id,
                 user_id=user.id,
@@ -216,7 +252,7 @@ async def ask_stream(
         if fallback_docs is None:
             yield (
                 "data: "
-                + _json.dumps(
+                + json.dumps(
                     {
                         "type": "done",
                         "answer": rag_service.NO_KB_CONTENT_MSG,
@@ -227,7 +263,7 @@ async def ask_stream(
                 )
                 + "\n\n"
             )
-            await sessions.save_round(
+            await _safe_save_round(
                 session,
                 session_id=payload.session_id,
                 user_id=user.id,
@@ -241,7 +277,7 @@ async def ask_stream(
 
         # 未命中但存在临界片段：流式兜底（注入片段作参考），逐 token 推送
         full_answer_parts: list[str] = []
-        async for delta in rag_service._llm_fallback_stream(
+        async for delta in rag_service.llm_fallback_stream(
             payload.question,
             history=history,
             competitors_context=competitors_context,
@@ -250,12 +286,12 @@ async def ask_stream(
             full_answer_parts.append(delta)
             yield (
                 "data: "
-                + _json.dumps({"type": "delta", "content": delta}, ensure_ascii=False)
+                + json.dumps({"type": "delta", "content": delta}, ensure_ascii=False)
                 + "\n\n"
             )
         yield (
             "data: "
-            + _json.dumps(
+            + json.dumps(
                 {
                     "type": "done",
                     "mode": "fallback",
@@ -265,7 +301,7 @@ async def ask_stream(
             )
             + "\n\n"
         )
-        await sessions.save_round(
+        await _safe_save_round(
             session,
             session_id=payload.session_id,
             user_id=user.id,

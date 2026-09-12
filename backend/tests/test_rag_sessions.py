@@ -251,7 +251,7 @@ async def test_ask_stream_fallback(client, monkeypatch):
         for piece in ["流式", "回答", "内容"]:
             yield piece
 
-    monkeypatch.setattr(rag_service, "_llm_fallback_stream", _fake_stream)
+    monkeypatch.setattr(rag_service, "llm_fallback_stream", _fake_stream)
 
     # mock retriever：灰区（0.4 ≤ top1 < 阈值）→ 注入临界片段后走流式兜底
     class _Retriever:
@@ -297,7 +297,7 @@ async def test_ask_stream_rejects_without_llm_when_too_weak(client, monkeypatch)
         raise AssertionError("相似度过低时不应调用 LLM")
         yield  # pragma: no cover  —— 使其成为异步生成器
 
-    monkeypatch.setattr(rag_service, "_llm_fallback_stream", _should_not_call)
+    monkeypatch.setattr(rag_service, "llm_fallback_stream", _should_not_call)
 
     class _Retriever:
         is_ready = True

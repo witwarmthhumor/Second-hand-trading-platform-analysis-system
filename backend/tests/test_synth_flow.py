@@ -18,7 +18,9 @@ from app.main import app
 from app.metrics import get_metrics
 from app.services import rag_service
 
-pytestmark = pytest.mark.asyncio
+# 不设 pytestmark = pytest.mark.asyncio：项目是 asyncio_mode=auto（async 测试自动
+# 识别），文件级标记只会把本文件的同步纯逻辑测试（剥标/收尾）也标记成 asyncio
+# 而产生 PytestWarning。
 
 
 @pytest.fixture
@@ -65,7 +67,7 @@ def _patch_llm_ok(monkeypatch, text="整合后的答案【来源:D-000】"):
         cleaned, cited = rag_service._finalize_text(text)
         return (cleaned, cited) if cleaned else None
 
-    monkeypatch.setattr(rag_service, "_llm_synthesize", _fake_synth)
+    monkeypatch.setattr(rag_service, "llm_synthesize", _fake_synth)
 
 
 # ---------------------------------------------------------------------------
@@ -82,7 +84,7 @@ async def test_off_命中直出_不调合成(client, monkeypatch):
     async def _boom(*a, **k):
         raise AssertionError("off 模式不应触发合成")
 
-    monkeypatch.setattr(rag_service, "_llm_synthesize", _boom)
+    monkeypatch.setattr(rag_service, "llm_synthesize", _boom)
 
     token = await _register(client)
     resp = await client.post(
@@ -131,7 +133,7 @@ async def test_multi_doc_单文档直出(client, monkeypatch):
     async def _boom(*a, **k):
         raise AssertionError("单文档问题不应触发合成")
 
-    monkeypatch.setattr(rag_service, "_llm_synthesize", _boom)
+    monkeypatch.setattr(rag_service, "llm_synthesize", _boom)
 
     token = await _register(client)
     resp = await client.post(
@@ -163,7 +165,7 @@ async def test_合成失败降级直出(client, monkeypatch):
     async def _fail(*a, **k):
         return None
 
-    monkeypatch.setattr(rag_service, "_llm_synthesize", _fail)
+    monkeypatch.setattr(rag_service, "llm_synthesize", _fail)
 
     token = await _register(client)
     resp = await client.post(
@@ -263,7 +265,7 @@ async def test_stream_合成成功_done带剥标全文(client, monkeypatch):
         yield ("delta", "部分【来源:D-000】")
         yield ("delta", "答案")
 
-    monkeypatch.setattr(rag_service, "_llm_synthesize_stream", _stream)
+    monkeypatch.setattr(rag_service, "llm_synthesize_stream", _stream)
 
     token = await _register(client)
     sid = secrets.token_hex(16)
@@ -291,7 +293,7 @@ async def test_stream_合成failed_干净降级直出(client, monkeypatch):
         yield ("failed", "成本熔断")
         yield ("delta", "不应出现")
 
-    monkeypatch.setattr(rag_service, "_llm_synthesize_stream", _stream)
+    monkeypatch.setattr(rag_service, "llm_synthesize_stream", _stream)
 
     token = await _register(client)
     sid = secrets.token_hex(16)

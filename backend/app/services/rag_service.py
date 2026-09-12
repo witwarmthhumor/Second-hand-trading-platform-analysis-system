@@ -1,4 +1,8 @@
-"""RAG 问答服务：混合检索命中 → 原文直出 + 来源；未命中 → LLM 兜底生成。
+"""RAG 问答服务：混合检索命中 → 合成/直出 + 来源；未命中 → LLM 兜底生成。
+
+命中后的三态（P1-②）：``synth``（SYNTH_MODE 触发时用深度视图合成，失败/拒答
+一律降级）→ ``hit``（直出 top1 原文）→ 未命中 ``fallback``（LLM 兜底，可注入
+临界片段/竞品数据/多轮历史）。
 
 检索命中判定：最高「向量相似度」≥ SIMILARITY_THRESHOLD 视为命中，直接返回原文；
 否则调用 LLM 兜底（OpenAI 兼容接口，复用 settings 的 LLM 配置与成本熔断记账）。
@@ -8,6 +12,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 
 import httpx
@@ -157,7 +162,123 @@ def _build_fallback_messages(
     return messages
 
 
-async def _llm_fallback_stream(
+class LLMCallError(Exception):
+    """LLM 调用失败（超时/网络/HTTP 错误），``hint`` 是给用户/运维的可读原因。"""
+
+    def __init__(self, hint: str) -> None:
+        super().__init__(hint)
+        self.hint = hint
+
+
+# 成本熔断被预检拦截时给调用方的统一提示（兜底路径直接展示给用户）
+_COST_BLOCKED_MSG = (
+    "（已触发成本熔断，需在「成本」页确认后继续。当前问题未调用大模型。）"
+)
+
+
+def _precheck_blocked(tracker, messages: list[dict]) -> str | None:
+    """成本预检：放行返回 None；被熔断拦截返回统一提示文本（调用方按各自语义处理）。
+
+    估算范围含全部 messages（注入的临界片段/合成上下文），避免低估触发超支。
+    """
+    est_input = _estimate_tokens("".join(str(m.get("content", "")) for m in messages))
+    pre = tracker.precheck(est_input)
+    if pre.get("blocked"):
+        return _COST_BLOCKED_MSG
+    # 放行时把估算值带回给调用方记账（通过 tracker 无法传递，改用闭包属性会隐晦，
+    # 故让调用方自行再算一次——极轻量，且保持各函数签名清晰）
+    return None
+
+
+def _record_usage(tracker, usage: dict, est_input: int, output_fallback: int) -> None:
+    """统一记账：真实 usage 优先，缺失字段用估算兜底。
+
+    流式路径的 output_fallback 传「累计 delta 的估算值」，与非流式（按完整正文
+    估算）语义对齐——此前流式在网关只回部分 usage 时会整单漏记。
+    """
+    input_tokens = int(usage.get("prompt_tokens") or est_input)
+    output_tokens = int(usage.get("completion_tokens") or output_fallback)
+    tracker.record(input_tokens, output_tokens)
+
+
+def _est_input_tokens(messages: list[dict]) -> int:
+    """按全部 messages 的字符数粗估输入 token（供预检与记账兜底共用）。"""
+    return _estimate_tokens("".join(str(m.get("content", "")) for m in messages))
+
+
+async def _post_llm(messages: list[dict]) -> tuple[str, dict]:
+    """非流式 LLM 调用公共层（OpenAI 兼容 chat/completions）。
+
+    返回 (正文, usage)。超时/网络/HTTP 错误统一抛 ``LLMCallError``（hint 可读），
+    由调用方按各自失败语义处理（兜底返回错误文案，合成返回 None 降级直出）。
+    """
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                f"{settings.llm_api_base.rstrip('/')}/chat/completions",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {settings.llm_api_key}",
+                },
+                json={
+                    "model": settings.llm_model,
+                    "messages": messages,
+                    "temperature": 0.3,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        content = data["choices"][0]["message"]["content"]
+        usage = data.get("usage") or {}
+        return (content or ""), usage
+    except (httpx.TimeoutException, httpx.HTTPError) as exc:
+        raise LLMCallError(_llm_error_hint(exc)) from exc
+
+
+async def _stream_llm_deltas(messages: list[dict], usage_out: dict):
+    """流式 LLM 调用公共层：逐条 yield content 增量；usage 回填进 ``usage_out``。
+
+    与 ``_post_llm`` 共用同一套端点/参数；超时/网络/HTTP 错误抛 ``LLMCallError``。
+    调用方在消费增量时自行维护「已产出」状态，以决定失败时的降级形态。
+    """
+    async with httpx.AsyncClient(timeout=60) as client:
+        async with client.stream(
+            "POST",
+            f"{settings.llm_api_base.rstrip('/')}/chat/completions",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {settings.llm_api_key}",
+            },
+            json={
+                "model": settings.llm_model,
+                "messages": messages,
+                "temperature": 0.3,
+                "stream": True,
+            },
+        ) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if not line or not line.startswith("data:"):
+                    continue
+                data = line[len("data:") :].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data)
+                except ValueError:
+                    continue
+                # 流式 chunk 可能带 usage（部分网关在最后一个 chunk 给）
+                if chunk.get("usage"):
+                    usage_out.update(chunk["usage"])
+                choices = chunk.get("choices") or []
+                if not choices:
+                    continue
+                content = (choices[0].get("delta") or {}).get("content")
+                if content:
+                    yield content
+
+
+async def llm_fallback_stream(
     question: str,
     history: list[dict] | None = None,
     competitors_context: str | None = None,
@@ -165,8 +286,9 @@ async def _llm_fallback_stream(
 ):
     """未命中时 LLM 兜底流式生成（SSE 数据源）。
 
-    逐 chunk yield 增量文本；结束时 yield usage（成本记账用）。
-    成本熔断 blocked 时 yield 提示文本后结束。LLM 异常时 yield 降级提示后结束。
+    逐 chunk yield 增量文本；结束时统一记账（含 delta 估算兜底）。
+    成本熔断 blocked 时 yield 提示文本后结束。LLM 异常时 yield 降级提示后结束：
+    已产出部分内容则追加提示（不换稿），否则单独 yield 提示文本。
 
     `retrieved_context`：P1 注入的临界片段文本（见 `build_fallback_context`）。
     """
@@ -182,63 +304,26 @@ async def _llm_fallback_stream(
         yield _LLM_NOT_CONFIGURED_MSG
         return
 
-    # 成本预检：估算全部 messages（含注入的临界片段），避免低估触发超支
-    est_input = _estimate_tokens(
-        "".join(str(m.get("content", "")) for m in messages)
-    )
-    pre = tracker.precheck(est_input)
-    if pre.get("blocked"):
-        yield "（已触发成本熔断，需在「成本」页确认后继续。当前问题未调用大模型。）"
+    blocked = _precheck_blocked(tracker, messages)
+    if blocked is not None:
+        yield blocked
         return
 
+    est_input = _est_input_tokens(messages)
+    usage: dict = {}
+    produced_parts: list[str] = []
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            async with client.stream(
-                "POST",
-                f"{settings.llm_api_base.rstrip('/')}/chat/completions",
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {settings.llm_api_key}",
-                },
-                json={
-                    "model": settings.llm_model,
-                    "messages": messages,
-                    "temperature": 0.3,
-                    "stream": True,
-                },
-            ) as resp:
-                resp.raise_for_status()
-                usage: dict = {}
-                async for line in resp.aiter_lines():
-                    if not line or not line.startswith("data:"):
-                        continue
-                    data = line[len("data:") :].strip()
-                    if data == "[DONE]":
-                        break
-                    import json as _json
-
-                    try:
-                        chunk = _json.loads(data)
-                    except ValueError:
-                        continue
-                    # 流式 chunk 可能带 usage（部分网关在最后一个 chunk 给）
-                    if chunk.get("usage"):
-                        usage = chunk["usage"]
-                    choices = chunk.get("choices") or []
-                    if not choices:
-                        continue
-                    delta = choices[0].get("delta") or {}
-                    content = delta.get("content")
-                    if content:
-                        yield content
-
-            # 记账：优先真实 usage，否则估算
-            input_tokens = int(usage.get("prompt_tokens") or est_input)
-            output_tokens = int(usage.get("completion_tokens") or 0)
-            if output_tokens > 0 or not usage:
-                tracker.record(input_tokens, output_tokens)
+        async for delta in _stream_llm_deltas(messages, usage):
+            produced_parts.append(delta)
+            yield delta
     except (httpx.TimeoutException, httpx.HTTPError) as exc:
-        yield f"\n\n（兜底大模型暂时不可用：{_llm_error_hint(exc)}，请稍后重试。）"
+        hint = _llm_error_hint(exc)
+        if produced_parts:
+            yield f"\n\n（兜底大模型暂时不可用：{hint}，请稍后重试。）"
+        else:
+            yield f"（兜底大模型暂时不可用：{hint}，请稍后重试。）"
+        return
+    _record_usage(tracker, usage, est_input, _estimate_tokens("".join(produced_parts)))
 
 
 def build_competitors_context(competitors: list) -> str:
@@ -266,7 +351,7 @@ def build_competitors_context(competitors: list) -> str:
     return "\n".join(lines)
 
 
-async def _llm_fallback(
+async def llm_fallback(
     question: str,
     history: list[dict] | None = None,
     competitors_context: str | None = None,
@@ -288,46 +373,21 @@ async def _llm_fallback(
     if not is_llm_configured():
         return _LLM_NOT_CONFIGURED_MSG
 
-    # 成本预检：估算全部 messages（含注入的临界片段），避免低估触发超支
-    est_input = _estimate_tokens(
-        "".join(str(m.get("content", "")) for m in messages)
-    )
-    pre = tracker.precheck(est_input)
-    if pre.get("blocked"):
-        return "（已触发成本熔断，需在「成本」页确认后继续。当前问题未调用大模型。）"
+    blocked = _precheck_blocked(tracker, messages)
+    if blocked is not None:
+        return blocked
 
+    est_input = _est_input_tokens(messages)
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(
-                f"{settings.llm_api_base.rstrip('/')}/chat/completions",
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {settings.llm_api_key}",
-                },
-                json={
-                    "model": settings.llm_model,
-                    "messages": messages,
-                    "temperature": 0.3,
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            content = data["choices"][0]["message"]["content"]
-
-            usage = data.get("usage") or {}
-            input_tokens = int(usage.get("prompt_tokens") or est_input)
-            output_tokens = int(
-                usage.get("completion_tokens") or _estimate_tokens(content)
-            )
-            tracker.record(input_tokens, output_tokens)
-
-        return content.strip()
-    except (httpx.TimeoutException, httpx.HTTPError) as exc:
+        content, usage = await _post_llm(messages)
+    except LLMCallError as exc:
         # LLM 兜底失败时优雅降级，不让接口抛 500
         return (
             "抱歉，知识库中未找到与您问题直接相关的内容，且兜底大模型暂时不可用"
-            f"（{_llm_error_hint(exc)}）。请稍后重试，或换个更具体的问题。"
+            f"（{exc.hint}）。请稍后重试，或换个更具体的问题。"
         )
+    _record_usage(tracker, usage, est_input, _estimate_tokens(content))
+    return content.strip()
 
 
 # ---------------------------------------------------------------------------
@@ -343,7 +403,7 @@ def _observe_synth(outcome: str) -> None:
     get_metrics().observe_synth(outcome)
 
 
-def _should_synthesize(sources: list[SourceDoc]) -> bool:
+def should_synthesize(sources: list[SourceDoc]) -> bool:
     """分流判据（P1-②）：命中后是否走合成。
 
     - ``off``：不合成（默认，现网逐字节不变）；
@@ -414,7 +474,9 @@ def _merge_synth_sources(
     """合成回答的来源 = 广度视图 + 正文引用补齐。
 
     正文引用的 doc_id 不在广度视图时（模型归纳了深度视图里的其他文档），
-    从深度视图取该文档的代表块补进来源，保证「正文里出现的每个引用都可点验」。
+    从深度视图取该文档的代表块补进来源；若引用的 doc_id 在两个视图中都
+    不存在（模型编造来源），该引用无法补齐——此时来源列表不含它，靠
+    拒答检测/剥标后的正文核验兜底。
     """
     sources = list(hit_sources)
     have = {s.doc_id for s in sources}
@@ -470,14 +532,14 @@ def finalize_stream_synthesis(
     return cleaned, _merge_synth_sources(hit_sources, depth_results, cited)
 
 
-async def _llm_synthesize(
+async def llm_synthesize(
     question: str, depth_results: list[dict]
 ) -> tuple[str, list[str]] | None:
     """合成命中答案（非流式）。失败/拒答返回 None → 调用方降级直出。
 
-    成本预检/记账/错误翻译与 ``_llm_fallback`` 同一套；区别仅在提示词与上下文
-    来源（深度视图），以及失败语义：兜底失败返回「错误提示文本」，合成失败
-    返回 None（因为降级直出永远可用，不需要文本兜底）。
+    成本预检/记账/错误翻译与 ``llm_fallback`` 走同一公共层（``_post_llm``）；
+    区别仅在提示词与上下文来源（深度视图），以及失败语义：兜底失败返回
+    「错误提示文本」，合成失败返回 None（降级直出永远可用，不需要文本兜底）。
     """
     if not depth_results or not is_llm_configured():
         return None
@@ -485,48 +547,26 @@ async def _llm_synthesize(
     await tracker.restore_from_db()
 
     messages = _build_synth_messages(question, depth_results)
-    est_input = _estimate_tokens("".join(str(m.get("content", "")) for m in messages))
-    pre = tracker.precheck(est_input)
-    if pre.get("blocked"):
+    blocked = _precheck_blocked(tracker, messages)
+    if blocked is not None:
         return None
 
+    est_input = _est_input_tokens(messages)
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(
-                f"{settings.llm_api_base.rstrip('/')}/chat/completions",
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {settings.llm_api_key}",
-                },
-                json={
-                    "model": settings.llm_model,
-                    "messages": messages,
-                    "temperature": 0.3,
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            content = data["choices"][0]["message"]["content"]
-
-            usage = data.get("usage") or {}
-            input_tokens = int(usage.get("prompt_tokens") or est_input)
-            output_tokens = int(
-                usage.get("completion_tokens") or _estimate_tokens(content)
-            )
-            tracker.record(input_tokens, output_tokens)
-    except (httpx.TimeoutException, httpx.HTTPError):
+        content, usage = await _post_llm(messages)
+    except LLMCallError:
         _observe_synth("degraded")
         return None
+    _record_usage(tracker, usage, est_input, _estimate_tokens(content))
 
-    content = (content or "").strip()
-    out = _finalize_text(content)
+    out = _finalize_text(content.strip())
     if out is None:
         _observe_synth("refused")
         return None
     return out
 
 
-async def _llm_synthesize_stream(question: str, depth_results: list[dict]):
+async def llm_synthesize_stream(question: str, depth_results: list[dict]):
     """合成答案的流式生成器：yield ``(kind, text)``。
 
     - ``("delta", text)``：增量正文（含内联来源标注；调用方在 done 事件给出
@@ -543,64 +583,26 @@ async def _llm_synthesize_stream(question: str, depth_results: list[dict]):
     await tracker.restore_from_db()
 
     messages = _build_synth_messages(question, depth_results)
-    est_input = _estimate_tokens("".join(str(m.get("content", "")) for m in messages))
-    pre = tracker.precheck(est_input)
-    if pre.get("blocked"):
+    blocked = _precheck_blocked(tracker, messages)
+    if blocked is not None:
         yield ("failed", "成本熔断")
         return
 
-    produced = False
+    est_input = _est_input_tokens(messages)
     usage: dict = {}
+    produced_parts: list[str] = []
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            async with client.stream(
-                "POST",
-                f"{settings.llm_api_base.rstrip('/')}/chat/completions",
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {settings.llm_api_key}",
-                },
-                json={
-                    "model": settings.llm_model,
-                    "messages": messages,
-                    "temperature": 0.3,
-                    "stream": True,
-                },
-            ) as resp:
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if not line or not line.startswith("data:"):
-                        continue
-                    data = line[len("data:") :].strip()
-                    if data == "[DONE]":
-                        break
-                    import json as _json
-
-                    try:
-                        chunk = _json.loads(data)
-                    except ValueError:
-                        continue
-                    if chunk.get("usage"):
-                        usage = chunk["usage"]
-                    choices = chunk.get("choices") or []
-                    if not choices:
-                        continue
-                    delta = choices[0].get("delta") or {}
-                    content = delta.get("content")
-                    if content:
-                        produced = True
-                        yield ("delta", content)
-
-            input_tokens = int(usage.get("prompt_tokens") or est_input)
-            output_tokens = int(usage.get("completion_tokens") or 0)
-            if output_tokens > 0 or not usage:
-                tracker.record(input_tokens, output_tokens)
+        async for delta in _stream_llm_deltas(messages, usage):
+            produced_parts.append(delta)
+            yield ("delta", delta)
     except (httpx.TimeoutException, httpx.HTTPError) as exc:
         hint = _llm_error_hint(exc)
-        if produced:
+        if produced_parts:
             yield ("delta", f"\n\n（合成中断：{hint}）")
         else:
             yield ("failed", hint)
+        return
+    _record_usage(tracker, usage, est_input, _estimate_tokens("".join(produced_parts)))
 
 
 async def retrieve(
@@ -641,7 +643,9 @@ async def retrieve(
             breadth, depth = await asyncio.to_thread(dual, question, top_k)
         else:
             breadth = await asyncio.to_thread(rtv.search, question, top_k)
-            depth = breadth
+            # 退化形态也要拷贝：depth 与 breadth 共用同一对象会让调用方的
+            # 原地修改跨视图串染（缓存写入的是两份引用）
+            depth = [dict(r) for r in breadth]
         await cache.set_pair(question, breadth, depth, top_k, version)
         return breadth, depth
 
@@ -710,8 +714,8 @@ async def ask(
     hit = build_hit_gate(breadth)
     if hit is not None:
         # P1-② 合成分流：触发条件不满足 / 合成失败 / 拒答 → 一律降级直出 top1 原文
-        if _should_synthesize(hit["sources"]):
-            synth = await _llm_synthesize(question, depth)
+        if should_synthesize(hit["sources"]):
+            synth = await llm_synthesize(question, depth)
             if synth is not None:
                 cleaned, cited = synth
                 _observe_synth("ok")
@@ -743,7 +747,7 @@ async def ask(
         )
 
     # 未命中但存在临界片段：注入 prompt 让模型有据可依，并把片段作为来源返回供核验
-    answer = await _llm_fallback(
+    answer = await llm_fallback(
         question,
         history=history,
         competitors_context=competitors_context,
@@ -759,7 +763,12 @@ async def ask(
 
 
 def _title_from_doc_id(doc_id: str) -> str:
-    """从 doc_id 反查标题（doc_id 即 seeds CSV 的 id，如 A-001）。"""
+    """从 doc_id 反查标题（doc_id 即 seeds CSV 的 id，如 A-001）。
+
+    函数内 import 是刻意为之：``_seed_by_id`` 首次调用会加载整份 seeds CSV
+    （千行级），放到模块顶部会让所有 import 本模块的路径（含测试收集）都
+    承担这笔一次性开销；函数内 import 把成本推迟到首次真实问答。
+    """
     from app.rag.chunking import _seed_by_id
 
     seed = _seed_by_id().get(doc_id)

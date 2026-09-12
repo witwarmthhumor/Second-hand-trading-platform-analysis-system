@@ -136,7 +136,7 @@ SYNTH_REFUSED_PHRASE = "知识库中未找到相关信息"
 
 # 兜底路径（未命中时）：把相似度落在 [FALLBACK_CONTEXT_MIN_SIM, SIMILARITY_THRESHOLD)
 # 的 top-k 片段作为「临界片段」注入 prompt，让模型有据可依，而不是凭参数知识作答。
-# 依据：`_llm_fallback` 原先完全不携带检索结果，是全局最容易编造费率/时限/制度条款的
+# 依据：`llm_fallback` 原先完全不携带检索结果，是全局最容易编造费率/时限/制度条款的
 # 地方；且阈值上调到 0.65 后，更多问题会走到这条路径，风险被放大。
 # 最高相似度连 FALLBACK_CONTEXT_MIN_SIM 都达不到 → 直接回「知识库暂无相关内容」，
 # 不调用 LLM（既省成本，也杜绝无据编造）。

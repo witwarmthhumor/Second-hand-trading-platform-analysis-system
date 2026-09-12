@@ -196,5 +196,5 @@ async def test_fallback_returns_not_configured_message(monkeypatch):
     from app.services import rag_service
 
     monkeypatch.setattr(rag_service, "is_llm_configured", lambda: False)
-    answer = await rag_service._llm_fallback("随便问问")
+    answer = await rag_service.llm_fallback("随便问问")
     assert "未配置" in answer

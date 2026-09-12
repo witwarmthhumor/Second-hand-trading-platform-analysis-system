@@ -1,5 +1,7 @@
 """RAG 问答 Pydantic schema。"""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -43,6 +45,8 @@ class FeedbackRequest(BaseModel):
     rating: str = Field(...)  # "like" | "dislike"
     question: str = Field(..., min_length=1, max_length=500)
     answer: str = Field("", max_length=20000)
-    mode: str = Field("fallback")  # "hit" | "fallback"
-    source_doc_ids: list[str] = Field(default_factory=list)
+    # 回答模式：synth 为 P1-② 合成答案路径；用 Literal 拒绝任意字符串进库
+    mode: Literal["hit", "fallback", "synth"] = "fallback"
+    # 引用来源 id 数量有上限：反馈明细行会被反复全量读取，无上限可被刷出巨行
+    source_doc_ids: list[str] = Field(default_factory=list, max_length=20)
     comment: str | None = Field(None, max_length=2000)

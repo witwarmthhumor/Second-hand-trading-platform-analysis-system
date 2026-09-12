@@ -178,7 +178,7 @@ async def test_ask_gray_zone_injects_context_and_returns_sources(monkeypatch):
         captured["ctx"] = retrieved_context
         return "（mock 兜底回答）"
 
-    monkeypatch.setattr(rag_service, "_llm_fallback", _fake_fallback)
+    monkeypatch.setattr(rag_service, "llm_fallback", _fake_fallback)
     resp = await rag_service.ask("卖家入驻要什么资质")
 
     assert resp.mode == "fallback"
@@ -198,7 +198,7 @@ async def test_ask_rejects_without_llm_when_all_chunks_too_weak(monkeypatch):
     async def _should_not_call(*a, **k):
         raise AssertionError("相似度过低时不应调用 LLM")
 
-    monkeypatch.setattr(rag_service, "_llm_fallback", _should_not_call)
+    monkeypatch.setattr(rag_service, "llm_fallback", _should_not_call)
     resp = await rag_service.ask("今天天气怎么样")
 
     assert resp.mode == "fallback"
@@ -215,14 +215,14 @@ async def test_ask_empty_results_rejects_without_llm(monkeypatch):
     async def _should_not_call(*a, **k):
         raise AssertionError("无检索结果时不应调用 LLM")
 
-    monkeypatch.setattr(rag_service, "_llm_fallback", _should_not_call)
+    monkeypatch.setattr(rag_service, "llm_fallback", _should_not_call)
 
     resp = await rag_service.ask("完全无关的问题")
     assert resp.mode == "fallback"
     assert "暂无" in resp.answer
 
 
-async def test_llm_fallback_graceful_on_timeout(monkeypatch):
+async def testllm_fallback_graceful_on_timeout(monkeypatch):
     """LLM 兜底超时/HTTP 错误时优雅降级，不抛异常。"""
     import httpx
 
@@ -246,7 +246,7 @@ async def test_llm_fallback_graceful_on_timeout(monkeypatch):
         lambda: _PassingTracker(),
     )
 
-    answer = await rag_service._llm_fallback("随便问")
+    answer = await rag_service.llm_fallback("随便问")
     assert "暂时不可用" in answer
 
 
@@ -263,7 +263,7 @@ class _PassingTracker:
         return None
 
 
-async def test_llm_fallback_blocked_returns_hint(monkeypatch):
+async def testllm_fallback_blocked_returns_hint(monkeypatch):
     """成本熔断 blocked 时直接返回提示，不调用 LLM。"""
     from app.services import rag_service
 
@@ -275,7 +275,7 @@ async def test_llm_fallback_blocked_returns_hint(monkeypatch):
             return {"blocked": True}
 
     monkeypatch.setattr(rag_service, "get_cost_tracker", lambda: _BlockedTracker())
-    answer = await rag_service._llm_fallback("随便问")
+    answer = await rag_service.llm_fallback("随便问")
     assert "成本熔断" in answer
 
 
@@ -283,7 +283,7 @@ async def test_llm_fallback_blocked_returns_hint(monkeypatch):
 
 
 async def test_ask_injects_history_to_fallback(monkeypatch):
-    """未命中走兜底时，把历史上下文传给 _llm_fallback。"""
+    """未命中走兜底时，把历史上下文传给 llm_fallback。"""
     from app.services import rag_service
 
     gray = [{"doc_id": "A-001", "text": "参考片段", "vector_sim": 0.5}]
@@ -294,7 +294,7 @@ async def test_ask_injects_history_to_fallback(monkeypatch):
         captured["history"] = history
         return "兜底"
 
-    monkeypatch.setattr(rag_service, "_llm_fallback", _fake)
+    monkeypatch.setattr(rag_service, "llm_fallback", _fake)
 
     history = [
         {"role": "user", "content": "闲鱼抽成多少"},
@@ -319,7 +319,7 @@ def test_ask_returns_session_id(monkeypatch):
     assert resp.mode == "hit"
 
 
-async def test_llm_fallback_history_limits_rounds(monkeypatch):
+async def testllm_fallback_history_limits_rounds(monkeypatch):
     """历史超长时按最近 N 轮截断由调用方控制；此处验证兜底能接受任意历史列表。"""
     from app.services import rag_service
 
@@ -362,7 +362,7 @@ async def test_llm_fallback_history_limits_rounds(monkeypatch):
     monkeypatch.setattr(
         rag_service.httpx, "AsyncClient", lambda **k: _C(k.get("timeout"))
     )
-    answer = await rag_service._llm_fallback(
+    answer = await rag_service.llm_fallback(
         "那转转呢",
         history=[
             {"role": "user", "content": "闲鱼抽成"},
@@ -418,7 +418,7 @@ def test_build_competitors_context_empty():
 
 
 async def test_ask_injects_competitors_context(monkeypatch):
-    """未命中兜底时，竞品上下文透传给 _llm_fallback。"""
+    """未命中兜底时，竞品上下文透传给 llm_fallback。"""
     from app.services import rag_service
 
     gray = [{"doc_id": "A-001", "text": "参考片段", "vector_sim": 0.5}]
@@ -429,7 +429,7 @@ async def test_ask_injects_competitors_context(monkeypatch):
         captured["ctx"] = competitors_context
         return "兜底"
 
-    monkeypatch.setattr(rag_service, "_llm_fallback", _fake)
+    monkeypatch.setattr(rag_service, "llm_fallback", _fake)
     await rag_service.ask(
         "闲鱼和转转哪个抽成高", competitors_context="【闲鱼】抽佣0.6%"
     )

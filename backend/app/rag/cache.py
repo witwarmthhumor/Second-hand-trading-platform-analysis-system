@@ -113,7 +113,13 @@ class SearchCache:
         self._client: aioredis.Redis | None = None
         # 熔断截止时间（time.monotonic），早于该时刻一律直接降级
         self._down_until: float = 0.0
-        self._l1: OrderedDict[str, tuple[float, list[dict]]] = OrderedDict()
+        # L1 值形态：单视图族（get/set，list[dict]）或双视图族（get_pair/set_pair，
+        # [breadth, depth]）二选一。⚠️ 同一 key 的读写必须用同一族——单视图写入后
+        # 用 get_pair 读取会把 dict 当视图迭代而报错。生产路径只用双视图族（v4），
+        # 单视图族由测试与潜在调用方使用。
+        self._l1: OrderedDict[str, tuple[float, list[dict] | list[list[dict]]]] = (
+            OrderedDict()
+        )
 
     # ---- 连接管理 ----
 
@@ -172,7 +178,7 @@ class SearchCache:
 
     # ---- L1（进程内） ----
 
-    def _l1_get(self, key: str) -> list[dict] | None:
+    def _l1_get(self, key: str) -> list[dict] | list[list[dict]] | None:
         row = self._l1.get(key)
         if row is None:
             return None
@@ -183,7 +189,7 @@ class SearchCache:
         self._l1.move_to_end(key)
         return value
 
-    def _l1_set(self, key: str, value: list[dict]) -> None:
+    def _l1_set(self, key: str, value: list[dict] | list[list[dict]]) -> None:
         ttl = min(float(self._ttl), _L1_TTL_CAP)
         self._l1[key] = (time.monotonic() + ttl, value)
         self._l1.move_to_end(key)
