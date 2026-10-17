@@ -23,22 +23,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models.competitor import Competitor
 from app.models.competitor_change import CompetitorChange
-from app.services.change_service import diff_fields, list_stored_competitors
+from app.services.change_service import (
+    CONTENT_FIELDS,
+    diff_fields,
+    list_stored_competitors,
+)
 from app.services.fetch_service import CostLimitExceeded, fetch_and_extract
 
 logger = logging.getLogger(__name__)
-
-# 监控可自动覆盖的字段：全部是「页面内容能客观反映」的信息型字段。
-# 刻意不含 name/type/launch_status——它们需要人工判定，自动覆盖会制造噪声变化。
-_MONITOR_FIELDS = (
-    "positioning",
-    "features",
-    "target_users",
-    "business_model",
-    "pricing",
-    "strengths",
-    "weaknesses",
-)
 
 
 @dataclass
@@ -67,7 +59,7 @@ class MonitorOutcome:
 def _extraction_to_fields(extraction) -> dict:
     """把提炼结果转成「仅含有值字段」的更新字典。"""
     fields: dict = {}
-    for name in _MONITOR_FIELDS:
+    for name in CONTENT_FIELDS:
         value = getattr(extraction, name, None)
         if value is None:
             continue

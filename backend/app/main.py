@@ -19,6 +19,7 @@ from app.api.kb import router as kb_router
 from app.api.rag import router as rag_router
 from app.api.report import router as report_router
 from app.api.settings import router as settings_router
+from app.api.users import router as users_router
 from app.config import settings
 from app.db import engine
 from app.diagnostics import collect_startup_warnings
@@ -31,6 +32,7 @@ from app.models import (  # noqa: F401  # 确保模型被注册到 Base
     ChatSession,
     Competitor,
     CompetitorChange,
+    MessageFeedback,
     User,
 )
 from app.rate_limit import get_rate_limiter
@@ -134,6 +136,7 @@ app.include_router(cost_router)
 app.include_router(rag_router)
 app.include_router(changes_router)
 app.include_router(kb_router)
+app.include_router(users_router)
 
 
 @app.get("/health")

@@ -136,6 +136,26 @@ async def test_top_k_is_part_of_key():
     assert len(await cache.get("担保交易", top_k=5)) == 5
 
 
+def test_cache_key_version_is_v5():
+    """US-007：key 版本升到 v5（rerank 排序键/判定口径变更，须天然淘汰旧 key）。
+
+    key 里不含打分器维度，只改策略不升版本会让 TTL 内的旧结果继续命中，
+    表现为「改了策略线上没变」。这条用例守住版本号本身。
+    """
+    assert cache_mod._CACHE_VERSION == "v5"
+
+    cache = SearchCache("redis://fake", ttl=3600)
+    key = cache.key_for("忘记密码", top_k=5)
+    assert key.startswith("rag:search:v5:")
+    assert "v5" in key
+    # 旧版本 key 不得被新版本命中（前缀不同即天然隔离）
+    assert cache.key_for("忘记密码", top_k=5) != key.replace("v5", "v4")
+    # 语料版本维度仍在版本号之后，结构未被破坏
+    assert cache.key_for("忘记密码", top_k=5, version="aaaa1111").startswith(
+        "rag:search:v5:aaaa1111:k5:"
+    )
+
+
 @pytest.mark.asyncio
 async def test_corpus_version_is_part_of_key():
     """语料版本变化后旧缓存不再命中。"""

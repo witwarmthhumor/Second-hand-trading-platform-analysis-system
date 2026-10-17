@@ -11,6 +11,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.competitor import Competitor, DataStatus
 
+#: 可由页面客观反映、允许自动对比的字段（定位/功能/目标用户/商业模式/定价/优势/不足）。
+#: 监控轮次竞品对比口径的唯一实现——name / type /
+#: launch_status 需要人工判定，自动覆盖只会制造噪声变化。新增字段前先想清楚
+#: 「抓取结果能否可靠反映它」。
+CONTENT_FIELDS = (
+    "positioning",
+    "features",
+    "target_users",
+    "business_model",
+    "pricing",
+    "strengths",
+    "weaknesses",
+)
+
 # 参与变化检测的字段（与竞品核心字段对齐，跳过 id/时间戳/状态）
 _TRACKED_FIELDS = (
     "name",

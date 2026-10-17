@@ -100,7 +100,7 @@ onMounted(loadPending)
 
 <style>
 .empty-guide-tip {
-  color: #909399;
+  color: var(--ink-3);
   font-size: 13px;
   margin-top: 12px;
 }

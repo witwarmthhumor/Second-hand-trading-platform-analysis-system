@@ -2,13 +2,17 @@
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.security import PASSWORD_MIN_LENGTH, validate_password_strength
+from app.security import (
+    PASSWORD_MIN_LENGTH,
+    USERNAME_PATTERN,
+    validate_password_strength,
+)
 
 
 class RegisterRequest(BaseModel):
     """注册请求。"""
 
-    username: str = Field(..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9_\-]+$")
+    username: str = Field(..., min_length=3, max_length=64, pattern=USERNAME_PATTERN)
     password: str = Field(..., min_length=PASSWORD_MIN_LENGTH, max_length=64)
 
     @field_validator("password")

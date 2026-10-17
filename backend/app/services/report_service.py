@@ -111,11 +111,12 @@ def _conclusion(competitors: list[Competitor], dims: list[str]) -> str:
     lines.append(
         "- 以上结论由评分数据规则汇总生成，仅供参考；业务判断请结合优势/不足与定价信息综合评估。"
     )
+
     return "\n".join(lines)
 
 
 def build_markdown(competitors: list[Competitor], dims: list[str]) -> str:
-    """生成 Markdown 报告全文。"""
+    """生成 Markdown 报告全文（手工导出，含对比结论与评分明细）。"""
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     return f"""# 二手交易平台竞品分析报告
 
@@ -140,6 +141,16 @@ def build_markdown(competitors: list[Competitor], dims: list[str]) -> str:
 ---
 *本报告由竞品分析系统自动生成，数据经半自动抓取 + AI 提炼 + 人工校对。*
 """
+
+
+def download_url(filename: str) -> str:
+    """既有下载接口的地址（报告产出的唯一下载口径，**不要新增下载端点**）。
+
+    编排层的事件载荷、聊天回复与 ``POST /api/report/export`` 都从这里取，
+    改路由前缀时只有这一处要动。
+    """
+    return f"/api/report/download/{filename}"
+
 
 
 async def collect_competitors(

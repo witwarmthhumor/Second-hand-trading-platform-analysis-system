@@ -104,6 +104,16 @@ class CostTracker:
             "needs_approval": self._blocked,
         }
 
+    def estimate_call_cny(self, estimated_input_tokens: int) -> float:
+        """估算一次调用的完整花费（元），供各处预检复用同一口径。
+
+        公开方法：供各处「回合级预算预检」复用同一套「输入 → 输出」比例，
+        避免另写一份（两处漂移会让预估与实际记账对不上）。
+        """
+        # 粗略按输入占比估算输出（网页提炼输出远小于输入），给一个保守上界
+        est_output = max(200, estimated_input_tokens // 5)
+        return self.estimate_cost_cny(estimated_input_tokens, est_output)
+
     # ---- 单次调用预检 ----
     def precheck(self, estimated_input_tokens: int) -> dict:
         """发请求前调用：估算本次成本并决定是否拦截。
@@ -111,9 +121,7 @@ class CostTracker:
         拦截条件：已处于熔断态，或「本次估算 + 已累计」超过阈值。
         返回结构供 API 判断：allowed 为 False 时需征询。
         """
-        # 粗略按输入占比估算输出（网页提炼输出远小于输入），给一个保守上界
-        est_output = max(200, estimated_input_tokens // 5)
-        est_cost = self.estimate_cost_cny(estimated_input_tokens, est_output)
+        est_cost = self.estimate_call_cny(estimated_input_tokens)
         self.last_estimate_cost_cny = est_cost
 
         projected = self._total_cost_cny + est_cost

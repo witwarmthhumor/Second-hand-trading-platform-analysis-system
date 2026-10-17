@@ -49,15 +49,54 @@ http.interceptors.response.use(
     // 401：登录失效，清除本地态并跳登录（避免无限循环）
     if (err.response?.status === 401) {
       clearAuth()
-      if (window.location.pathname !== '/login') {
-        // 交给 App.vue 的登录态监听处理跳转
-        window.dispatchEvent(new Event('auth-expired'))
-      }
+      // 交给 App.vue 的登录态监听处理跳转（单页应用无 /login 路由，无需条件判断）
+      window.dispatchEvent(new Event('auth-expired'))
     }
     const msg = typeof detail === 'string' ? detail : err.message || '请求失败'
     return Promise.reject(new Error(msg))
   },
 )
+
+/**
+ * 逐条读取 SSE 响应里的 ``data:`` 载荷。
+ *
+ * 按 ``\n\n`` 切帧（SSE 规范），每帧取第一条 ``data:`` 行并原样 yield 字符串；
+ * ``[DONE]`` 哨兵由调用方处理。
+ */
+async function* readSseData(resp) {
+  const reader = resp.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    let idx
+    while ((idx = buffer.indexOf('\n\n')) >= 0) {
+      const raw = buffer.slice(0, idx)
+      buffer = buffer.slice(idx + 2)
+      const line = raw.split('\n').find((l) => l.startsWith('data:'))
+      if (!line) continue
+      yield line.slice(5).trim()
+    }
+  }
+}
+
+/** 流式请求失败时的统一收尾：401 清登录态，其余取 detail 文案抛出。 */
+async function throwStreamError(resp) {
+  if (resp.status === 401) {
+    clearAuth()
+    window.dispatchEvent(new Event('auth-expired'))
+  }
+  let msg = '请求失败'
+  try {
+    const d = await resp.json()
+    msg = typeof d.detail === 'string' ? d.detail : msg
+  } catch {
+    /* 非 JSON 响应体，用默认文案 */
+  }
+  throw new Error(msg)
+}
 
 export const authApi = {
   register(username, password) {
@@ -171,40 +210,14 @@ export const competitorApi = {
       body: JSON.stringify(payload),
     })
     if (!resp.ok) {
-      if (resp.status === 401) {
-        clearAuth()
-        window.dispatchEvent(new Event('auth-expired'))
-      }
-      let msg = '请求失败'
-      try {
-        const d = await resp.json()
-        msg = typeof d.detail === 'string' ? d.detail : msg
-      } catch {
-        /* ignore */
-      }
-      throw new Error(msg)
+      await throwStreamError(resp)
     }
-    const reader = resp.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      // SSE 事件按 \n\n 分隔
-      let idx
-      while ((idx = buffer.indexOf('\n\n')) >= 0) {
-        const raw = buffer.slice(0, idx)
-        buffer = buffer.slice(idx + 2)
-        const line = raw.split('\n').find((l) => l.startsWith('data:'))
-        if (!line) continue
-        const data = line.slice(5).trim()
-        if (data === '[DONE]') return
-        try {
-          yield JSON.parse(data)
-        } catch {
-          /* 忽略无法解析的行 */
-        }
+    for await (const data of readSseData(resp)) {
+      if (data === '[DONE]') return
+      try {
+        yield JSON.parse(data)
+      } catch {
+        /* 忽略无法解析的行 */
       }
     }
   },
@@ -244,5 +257,30 @@ export const competitorApi = {
   },
   triggerMonitor() {
     return http.post('/changes/monitor')
+  },
+}
+
+
+// —— 用户管理（仅管理员）：账号增删改查 ——
+export const userApi = {
+  /** 用户列表（含创建时间）。 */
+  list() {
+    return http.get('/users')
+  },
+  /** 创建用户：{username, password, role}。 */
+  create(payload) {
+    return http.post('/users', payload)
+  },
+  /** 更新用户：{username?, password?, role?}，只传要改的字段。 */
+  update(id, payload) {
+    return http.put(`/users/${id}`, payload)
+  },
+  /** 删除用户（级联清理其会话/反馈等从属数据）。 */
+  remove(id) {
+    return http.delete(`/users/${id}`)
+  },
+  /** 批量删除（全有或全无）：任一 id 是自己/不存在/会删光管理员则整批拒绝。 */
+  batchDelete(ids) {
+    return http.post('/users/batch-delete', { user_ids: ids })
   },
 }

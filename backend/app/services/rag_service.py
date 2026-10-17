@@ -4,9 +4,12 @@
 一律降级）→ ``hit``（直出 top1 原文）→ 未命中 ``fallback``（LLM 兜底，可注入
 临界片段/竞品数据/多轮历史）。
 
-检索命中判定：最高「向量相似度」≥ SIMILARITY_THRESHOLD 视为命中，直接返回原文；
-否则调用 LLM 兜底（OpenAI 兼容接口，复用 settings 的 LLM 配置与成本熔断记账）。
+检索命中判定：**候选池全局最高**向量相似度 ≥ SIMILARITY_THRESHOLD 视为命中，直接返回
+原文；否则调用 LLM 兜底（OpenAI 兼容接口，复用 settings 的 LLM 配置与成本熔断记账）。
 注意：判据是向量相似度而非 RRF 得分——RRF 量级仅 0.016~0.033，无法做绝对阈值。
+
+取「全局最高」而非「首位」是 US-006 的解耦：rerank 接入后排序键已是 cross-encoder
+分，``results[0]`` 不再保证是余弦最高那个，沿用首位会把 rerank 收益吃掉。
 """
 
 from __future__ import annotations
@@ -42,8 +45,12 @@ _FALLBACK_SYSTEM_PROMPT = (
 )
 
 
-def _estimate_tokens(text: str) -> int:
-    """极简 token 估算（中英文混合按字符数/2 粗估）。"""
+def estimate_tokens(text: str) -> int:
+    """极简 token 估算（中英文混合按字符数/2 粗估）。
+
+    公开函数：token 估算口径只有这一份，各处成本预检与实际记账都走它，
+    避免预估值与记账用的估值漂移。
+    """
     return max(1, len(text) // 2)
 
 
@@ -85,6 +92,16 @@ NO_KB_CONTENT_MSG = (
 )
 
 
+def _max_vector_sim(results: list[dict]) -> float:
+    """候选池全局最高 bge-m3 余弦（空池为 0.0）。
+
+    命中判定与灰区闸门共用同一口径（US-006）：判「本批候选里有没有余弦达标的
+    chunk」，而不是「排在第一位的那个有没有达标」。rerank 接入后排序键是
+    cross-encoder 分，`results[0]` 未必是余弦最高者，沿用首位会误判。
+    """
+    return max((r["vector_sim"] for r in results), default=0.0)
+
+
 def build_fallback_context(
     results: list[dict],
     min_sim: float = FALLBACK_CONTEXT_MIN_SIM,
@@ -95,13 +112,15 @@ def build_fallback_context(
     临界片段 = 相似度落在 `[min_sim, SIMILARITY_THRESHOLD)` 的片段：达不到「命中直出」
     的标准，但又不是全无关系，可作为 LLM 的参考线索（注入时会标注相似度）。
 
-    返回 `None` 表示**连临界标准都达不到**（结果为空，或最高相似度 < `min_sim`）——
-    调用方应直接拒答、不调用 LLM：这种输入下模型只能凭参数知识作答。
+    返回 `None` 表示**连临界标准都达不到**（结果为空，或**候选池全局最高**相似度
+    < `min_sim`）——调用方应直接拒答、不调用 LLM：这种输入下模型只能凭参数知识作答。
+    与 `build_hit_gate` 同口径取全局最高（US-006），不看首位：rerank 态下首位可能
+    恰好是低余弦块，用首位会把「池里另有临界片段」误判成「连沾边都算不上」。
 
     来源按 `doc_id` 去重（同文档多 chunk 只留最相似的一个），最多 `max_chunks` 个。
     纯函数，便于单测。
     """
-    if not results or results[0]["vector_sim"] < min_sim:
+    if not results or _max_vector_sim(results) < min_sim:
         return None
 
     seen: set[str] = set()
@@ -116,7 +135,7 @@ def build_fallback_context(
         picked.append(
             SourceDoc(
                 doc_id=r["doc_id"],
-                title=_title_from_doc_id(r["doc_id"]),
+                title=title_from_doc_id(r["doc_id"]),
                 text=r["text"],
                 score=r["vector_sim"],
             )
@@ -181,7 +200,11 @@ def _precheck_blocked(tracker, messages: list[dict]) -> str | None:
 
     估算范围含全部 messages（注入的临界片段/合成上下文），避免低估触发超支。
     """
-    est_input = _estimate_tokens("".join(str(m.get("content", "")) for m in messages))
+    return _precheck_tokens(tracker, _est_input_tokens(messages))
+
+
+def _precheck_tokens(tracker, est_input: int) -> str | None:
+    """按给定 token 估算值做预检（工具清单等不在 messages 里的负载也要算进来）。"""
     pre = tracker.precheck(est_input)
     if pre.get("blocked"):
         return _COST_BLOCKED_MSG
@@ -203,36 +226,48 @@ def _record_usage(tracker, usage: dict, est_input: int, output_fallback: int) ->
 
 def _est_input_tokens(messages: list[dict]) -> int:
     """按全部 messages 的字符数粗估输入 token（供预检与记账兜底共用）。"""
-    return _estimate_tokens("".join(str(m.get("content", "")) for m in messages))
+    return estimate_tokens("".join(str(m.get("content", "")) for m in messages))
 
 
-async def _post_llm(messages: list[dict]) -> tuple[str, dict]:
-    """非流式 LLM 调用公共层（OpenAI 兼容 chat/completions）。
+async def _post_chat(
+    payload: dict, transport: httpx.AsyncBaseTransport | None = None
+) -> dict:
+    """chat/completions 的公共 HTTP 层：端点/鉴权/超时与错误翻译只此一份。
 
-    返回 (正文, usage)。超时/网络/HTTP 错误统一抛 ``LLMCallError``（hint 可读），
-    由调用方按各自失败语义处理（兜底返回错误文案，合成返回 None 降级直出）。
+    返回网关的原始 dict；``transport`` 仅用于测试注入（``httpx.MockTransport``），
+    生产按默认 TCP 传输。超时/网络/HTTP 错误统一抛 ``LLMCallError``（hint 可读）。
     """
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=60, transport=transport) as client:
             resp = await client.post(
                 f"{settings.llm_api_base.rstrip('/')}/chat/completions",
                 headers={
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {settings.llm_api_key}",
                 },
-                json={
-                    "model": settings.llm_model,
-                    "messages": messages,
-                    "temperature": 0.3,
-                },
+                json=payload,
             )
             resp.raise_for_status()
-            data = resp.json()
-        content = data["choices"][0]["message"]["content"]
-        usage = data.get("usage") or {}
-        return (content or ""), usage
+            return resp.json()
     except (httpx.TimeoutException, httpx.HTTPError) as exc:
         raise LLMCallError(_llm_error_hint(exc)) from exc
+
+
+async def _post_llm(
+    messages: list[dict], transport: httpx.AsyncBaseTransport | None = None
+) -> tuple[str, dict]:
+    """非流式 LLM 调用公共层（OpenAI 兼容 chat/completions）。
+
+    返回 (正文, usage)。超时/网络/HTTP 错误统一抛 ``LLMCallError``（hint 可读），
+    由调用方按各自失败语义处理（兜底返回错误文案，合成返回 None 降级直出）。
+    """
+    data = await _post_chat(
+        {"model": settings.llm_model, "messages": messages, "temperature": 0.3},
+        transport,
+    )
+    content = data["choices"][0]["message"]["content"]
+    usage = data.get("usage") or {}
+    return (content or ""), usage
 
 
 async def _stream_llm_deltas(messages: list[dict], usage_out: dict):
@@ -323,7 +358,7 @@ async def llm_fallback_stream(
         else:
             yield f"（兜底大模型暂时不可用：{hint}，请稍后重试。）"
         return
-    _record_usage(tracker, usage, est_input, _estimate_tokens("".join(produced_parts)))
+    _record_usage(tracker, usage, est_input, estimate_tokens("".join(produced_parts)))
 
 
 def build_competitors_context(competitors: list) -> str:
@@ -386,7 +421,7 @@ async def llm_fallback(
             "抱歉，知识库中未找到与您问题直接相关的内容，且兜底大模型暂时不可用"
             f"（{exc.hint}）。请稍后重试，或换个更具体的问题。"
         )
-    _record_usage(tracker, usage, est_input, _estimate_tokens(content))
+    _record_usage(tracker, usage, est_input, estimate_tokens(content))
     return content.strip()
 
 
@@ -488,7 +523,7 @@ def _merge_synth_sources(
                 sources.append(
                     SourceDoc(
                         doc_id=did,
-                        title=_title_from_doc_id(did),
+                        title=title_from_doc_id(did),
                         text=r.get("text", ""),
                         score=r.get("vector_sim", 0.0),
                     )
@@ -557,7 +592,7 @@ async def llm_synthesize(
     except LLMCallError:
         _observe_synth("degraded")
         return None
-    _record_usage(tracker, usage, est_input, _estimate_tokens(content))
+    _record_usage(tracker, usage, est_input, estimate_tokens(content))
 
     out = _finalize_text(content.strip())
     if out is None:
@@ -602,7 +637,7 @@ async def llm_synthesize_stream(question: str, depth_results: list[dict]):
         else:
             yield ("failed", hint)
         return
-    _record_usage(tracker, usage, est_input, _estimate_tokens("".join(produced_parts)))
+    _record_usage(tracker, usage, est_input, estimate_tokens("".join(produced_parts)))
 
 
 async def retrieve(
@@ -620,7 +655,7 @@ async def retrieve(
     - ``with_depth=True``：``(广度, 深度)`` 元组——ask 的合成路径用深度视图
       作上下文，来源列表仍用广度。
 
-    缓存 value 统一为 ``[breadth, depth]``（``cache._CACHE_VERSION`` v4）；检索
+    缓存 value 统一为 ``[breadth, depth]``（``cache._CACHE_VERSION`` v5）；检索
     走 ``search_dual``（同一候选池两次名额分配，零额外 embedding 成本）。fake/旧
     检索器没有 ``search_dual`` 时退化为两份相同的 ``search()`` 结果——合成上下文
     退化为广度，行为安全。
@@ -660,17 +695,24 @@ def build_hit_gate(results: list[dict]) -> dict | None:
 
     返回 None 表示未命中，调用方应走 LLM 兜底；否则返回 {"answer", "sources"}。
 
-    判定用最高向量相似度（cosine 0~1），不用 RRF 得分——RRF 量级仅 0.016~0.033，
-    无法做绝对阈值。来源列表按同一阈值过滤：BM25 单独命中的 chunk 其 vector_sim
-    为 0，不过滤就会以「相关度 0.0%」混进来源，属于无意义引用。
+    判定用**候选池全局最高**向量相似度（cosine 0~1），不用 RRF 得分——RRF 量级仅
+    0.016~0.033，无法做绝对阈值。取全局最高而非首位是 US-006 的解耦：rerank 接入后
+    排序键已是 cross-encoder 分，`results[0]` 未必是余弦最高那个，沿用首位会把
+    「rerank 判为最相关、余弦 0.60」误判成未命中，把 rerank 收益吃掉。阈值语义与
+    标定依据不变（仍是 285 问上的分布空隙）。
+
+    来源列表：余弦达阈值的照旧保留；**余弦低于阈值但带 rerank 分数**（= 被
+    cross-encoder 打过分的候选，US-005 的 `rerank_score`）同样保留，否则 rerank
+    提上来的真相关 chunk 会被来源列表剔除。纯 BM25 噪声（余弦 0 且无 rerank 分，
+    如 rerank 关闭时）仍被过滤，避免「相关度 0.0%」的无意义引用。
     """
-    if not results or results[0]["vector_sim"] < SIMILARITY_THRESHOLD:
+    if not results or _max_vector_sim(results) < SIMILARITY_THRESHOLD:
         return None
 
     seen: set[str] = set()  # 同一文档多个 chunk 可能同时进 Top-K，按 doc_id 去重
     sources: list[SourceDoc] = []
     for r in results:
-        if r["vector_sim"] < SIMILARITY_THRESHOLD:
+        if r["vector_sim"] < SIMILARITY_THRESHOLD and r.get("rerank_score") is None:
             continue
         if r["doc_id"] in seen:
             continue
@@ -678,12 +720,13 @@ def build_hit_gate(results: list[dict]) -> dict | None:
         sources.append(
             SourceDoc(
                 doc_id=r["doc_id"],
-                title=_title_from_doc_id(r["doc_id"]),
+                title=title_from_doc_id(r["doc_id"]),
                 text=r["text"],
                 score=r["vector_sim"],
             )
         )
-    # results[0] 已过阈值，故 sources 必非空；此处仅作防御，避免「命中但无来源」的空壳回答。
+    # 候选池中存在余弦达阈值的 chunk，故 sources 必非空；此处仅作防御，
+    # 避免「命中但无来源」的空壳回答。
     if not sources:
         return None
     return {"answer": results[0]["text"], "sources": sources}
@@ -762,8 +805,11 @@ async def ask(
     )
 
 
-def _title_from_doc_id(doc_id: str) -> str:
+def title_from_doc_id(doc_id: str) -> str:
     """从 doc_id 反查标题（doc_id 即 seeds CSV 的 id，如 A-001）。
+
+    公开入口：命中/合成的来源构造与 Agent 工具层（``query_kb`` 的 sources）
+    共用同一份映射，避免两处各查各的导致标题口径漂移。
 
     函数内 import 是刻意为之：``_seed_by_id`` 首次调用会加载整份 seeds CSV
     （千行级），放到模块顶部会让所有 import 本模块的路径（含测试收集）都

@@ -9,7 +9,7 @@
 import os
 from pathlib import Path
 
-# 项目根目录（backend/ 的上一级，即 Agent/）
+# 项目根目录（backend/ 的上一级）
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 # ---- 语料资产路径（rag_data/）----
@@ -48,7 +48,58 @@ SIMILARITY_THRESHOLD = 0.65  # 命中阈值：最高向量相似度(cosine 0~1)�
 RERANK_BY_VSIM = True
 # 实测：相关查询约 0.70~0.74，无关查询约 0.48。注意不能用 RRF 得分(量级仅 0.016~0.033)。
 
+# ---- cross-encoder 精排（US-004，见 docs/Rerank方案.md）----
+# 背景：上面那条 `RERANK_BY_VSIM` 的打分器是 **bge-m3 余弦**（bi-encoder），P0-2 已证伪
+# 它做不了细粒度分级（期望 / 非期望文档代表块的余弦中位差仅 0.036，多档阈值扫描逐位相同）。
+# 本组配置把打分器换成 ONNX cross-encoder（bge-reranker-v2-m3），**只重排候选池、
+# 不扩大召回**：多文档问题的期望文档若没进候选池，rerank 无能为力
+# （实测候选池 distinct_docs@20 仅 4.99）。
+#
+# ⚠️ 检索缓存 key 不含本组任何维度：改动后**必须清一次 `rag:search:*`**
+# （或升级 cache._CACHE_VERSION），否则 TTL 内仍命中旧排序的结果。
+#
+# 开关默认 **false**：开启后每问多一次 CPU 推理（实测 285 问 × 20 候选共 3289s，
+# ≈11.5s/问，4 线程 batch 8），且必须先跑 285 问离线对拍确认指标（US-008）才上线。
+# 关着时检索链路一行都不多跑（retriever 只经 reranker.get_active_reranker() 取精排器，
+# 关闭态直接拿到 None，连模型目录都不碰）。
+_RERANKER_ENABLED_RAW = os.getenv("RERANKER_ENABLED", "false")
+# 布尔解析：只有显式真值才开启；拼错 / 非法值一律回落安全默认 False（关）。
+RERANKER_ENABLED = _RERANKER_ENABLED_RAW.strip().lower() in ("1", "true", "yes", "on")
+
+# 模型落点：`scripts/download_reranker.py` 的默认落点（backend/models/ 已 gitignore）。
+# 这里是**唯一口径**——app/rag/reranker.py 的 DEFAULT_MODEL_DIR 直接引用本值。
+RERANKER_MODEL_DIR = Path(
+    os.getenv(
+        "RERANKER_MODEL_DIR",
+        str(PROJECT_ROOT / "backend" / "models" / "bge-reranker-v2-m3"),
+    )
+)
+
+# 打分窗口：只对 RRF 融合后前 N 个候选打 cross-encoder 分，其余按 0（不扩大召回）。
+# 默认 15（US-003，rerank_topn_sweep.md 实测选点）：285 问效果-延迟曲线显示
+#   ① FR-2 三项主指标（MRR@10 / nDCG@10 / 多文档 coverage@5）在 TOP_N≥12 全部
+#      优于关闭态，TOP_N≤11 多文档 coverage 跌破关闭态（无「换入新成员」能力）；
+#   ② §8 辅助指标（单文档 coverage@5 = 1.0）把合规下限抬到 15（14 及以下跌破）；
+#   ③ 15 是完全合规档里延迟最低的（实测 10198 ms，且三项主指标为全场最优）。
+# ⚠️ 硬下限：必须 ≥ TOP_K(=5)，否则 rerank 连 top-5 都产不出来（见 US-003 单测）。
+# ⚠️ 改动本值后必须清 rag:search:* 检索缓存——缓存 key 不含 TOP_N，否则 TTL 内
+#    仍命中旧结果（docs/Rerank方案.md §6.1）。
+RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", "15"))
+
+# pair 截断长度：bge-reranker-v2-m3 的 XLM-R 位置编码上限是 512。
+RERANKER_MAX_LENGTH = int(os.getenv("RERANKER_MAX_LENGTH", "512"))
+# 推理批大小：CPU 上 batch 8 是实测吞吐/内存的平衡点（见 docs/Rerank方案.md §4.2）。
+# US-004 复测（rerank_topn_latency.json）：16 → +2% 无收益、32 → +14% 更差，维持 8。
+RERANKER_BATCH_SIZE = int(os.getenv("RERANKER_BATCH_SIZE", "8"))
+# ONNX 推理线程数：默认 8 = 匹配物理核数（Ryzen 7 5800H 8C16T）。
+# US-004 实测（TOP_N=15、30 问，rerank_topn_latency.json）：4 → 10198ms 基线、
+# 8 → 8119ms（-20%）、16 → 9800ms（超线程争抢反而退化）。批 8 时效果零变化。
+RERANKER_NUM_THREADS = int(os.getenv("RERANKER_NUM_THREADS", "8"))
+
 # 多文档召回：文档级去重 + 保底补位（见 retriever.diversify_with_refill）。
+# ⚠️ US-005 起，保底闸门比较的是**当前排序分数**而非固定余弦：rerank 开启时传入的是
+# cross-encoder 分（同为 0~1，但分布与 bge-m3 余弦不同量纲）。本值默认 0.0（关闭），
+# 换打分器后若要重新启用闸门必须按新分布重标定，不能沿用余弦时代的取值。
 # 动机：top_k=5 是固定预算，同文档 chunk 抱团占位导致多文档问题期望文档覆盖率
 # 仅 0.3755（distinct_docs@5 平均 2.84）。开启后每篇文档保底 1 个 chunk、
 # 名额不足再回填同文档次优 chunk。

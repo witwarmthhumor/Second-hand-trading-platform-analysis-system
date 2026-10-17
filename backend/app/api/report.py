@@ -42,7 +42,7 @@ async def export_report(
     return ReportOut(
         filename=filename,
         competitor_count=len(competitors),
-        download_url=f"/api/report/download/{filename}",
+        download_url=report_service.download_url(filename),
     )
 
 

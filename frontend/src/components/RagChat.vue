@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Delete, Plus } from '@element-plus/icons-vue'
 import { competitorApi } from '../api'
 
 // 知识库就绪状态由父组件（App.vue）加载并下发，本组件只消费
@@ -51,7 +52,10 @@ async function doAsk() {
   }
   // 新对话的首问：本地生成 session_id，后端 ask 懒创建并归属当前用户
   if (!ragSessionId.value) {
-    ragSessionId.value = crypto.randomUUID().replace(/-/g, '')
+    // 非 https 环境（局域网 IP 访问）没有 crypto.randomUUID，降级为时间+随机串
+    ragSessionId.value =
+      crypto.randomUUID?.().replace(/-/g, '') ??
+      `${Date.now()}${Math.random().toString(16).slice(2)}`
   }
   ragQuestion.value = ''
   // 记录用户消息到本地历史
@@ -150,7 +154,7 @@ async function copySourceText(s) {
   }
 }
 
-// —— 问答反馈（👍/👎）——
+// —— 问答反馈（有用 / 无用）——
 async function submitFeedback(msg, rating) {
   // 未关联会话或问题，无法落库（通常不会发生）
   if (!ragSessionId.value || !msg.question) {
@@ -167,7 +171,7 @@ async function submitFeedback(msg, rating) {
       source_doc_ids: (msg.sources || []).map((s) => s.doc_id),
     })
     msg.feedback = rating
-    ElMessage.success(rating === 'like' ? '感谢反馈，已记录 👍' : '感谢反馈，已记录 👎')
+    ElMessage.success('感谢反馈，已记录')
   } catch (e) {
     ElMessage.error(e.message)
   }
@@ -193,7 +197,7 @@ async function switchSession(sessionId) {
     // 从后端拉取该会话的完整消息历史并回显到对话区
     const detail = await competitorApi.ragGetSession(sessionId)
     // 消息表只存 role/content，不存「这条回答对应的提问」，因此回显时按顺序
-    // 把每条 AI 回答与其上一条用户提问配成对，赋给 question 供 👍/👎 反馈落库；
+    // 把每条 AI 回答与其上一条用户提问配成对，赋给 question 供「有用 / 无用」反馈落库；
     // 否则历史消息的反馈按钮会一律提示「当前消息暂不支持反馈」。
     let lastUserQuestion = ''
     ragHistory.value = (detail.messages || []).map((m) => {
@@ -291,7 +295,7 @@ onMounted(() => {
       <div class="rag-side">
         <div class="rag-side-actions">
           <el-button class="new-chat-btn" type="primary" plain @click="newRagSession">
-            ＋ 新建对话
+            <el-icon><Plus /></el-icon>&nbsp;新建对话
           </el-button>
           <el-tooltip :content="batchMode ? '退出批量删除' : '批量删除'" placement="top">
             <el-button
@@ -300,7 +304,7 @@ onMounted(() => {
               text
               @click="toggleBatchMode"
             >
-              🗑
+              <el-icon><Delete /></el-icon>
             </el-button>
           </el-tooltip>
         </div>
@@ -351,9 +355,9 @@ onMounted(() => {
                   d="M12 3C7.03 3 3 6.58 3 11c0 2.09.9 4 2.38 5.42-.17 1.08-.68 2.35-1.85 3.32-.24.2-.1.6.21.58 1.68-.12 3.13-.75 4.14-1.4 1.26.44 2.65.68 4.12.68 4.97 0 9-3.58 9-8s-4.03-8-9-8Z"
                   fill="#fff"
                 />
-                <circle cx="8.5" cy="11" r="1.1" fill="#7b5cff" />
-                <circle cx="12" cy="11" r="1.1" fill="#7b5cff" />
-                <circle cx="15.5" cy="11" r="1.1" fill="#7b5cff" />
+                <circle cx="8.5" cy="11" r="1.1" fill="var(--brand-600)" />
+                <circle cx="12" cy="11" r="1.1" fill="var(--brand-600)" />
+                <circle cx="15.5" cy="11" r="1.1" fill="var(--brand-600)" />
               </svg>
             </div>
             <p class="chat-welcome-title">开始新的对话吧</p>
@@ -391,7 +395,7 @@ onMounted(() => {
                 v-if="m.role === 'assistant' && (m.status === 'aborted' || m.status === 'failed')"
                 class="chat-error"
               >
-                <span class="chat-error-text">⚠ {{ m.error || '回答生成失败' }}</span>
+                <span class="chat-error-text">{{ m.error || "回答生成失败" }}</span>
                 <el-button size="small" type="primary" text @click="retryAsk(m)">重试</el-button>
               </div>
               <!-- 反馈按钮：仅 AI 消息、有内容且已结束后显示 -->
@@ -403,12 +407,12 @@ onMounted(() => {
                   class="fb-btn"
                   :class="{ active: m.feedback === 'like' }"
                   @click="submitFeedback(m, 'like')"
-                >👍</span>
+                >有用</span>
                 <span
                   class="fb-btn"
                   :class="{ active: m.feedback === 'dislike' }"
                   @click="submitFeedback(m, 'dislike')"
-                >👎</span>
+                >无用</span>
               </div>
               <!-- AI 消息带来源引用 -->
               <div
@@ -458,15 +462,6 @@ onMounted(() => {
 </template>
 
 <style>
-.rag-wrap {
-  /* 知识库问答页容器：内部高度由 chat-layout 计算 */
-}
-.rag-tip {
-  color: #909399;
-  font-size: 13px;
-  margin: 0 0 16px;
-  line-height: 1.6;
-}
 .rag-src-title {
   display: flex;
   align-items: center;
@@ -475,11 +470,11 @@ onMounted(() => {
 }
 .rag-src-title b {
   font-size: 13px;
-  color: #303133;
+  color: var(--ink-1);
 }
 .rag-src-body p {
   margin: 0 0 8px;
-  color: #606266;
+  color: var(--ink-2);
   background: #fafafa;
   padding: 8px 10px;
   border-radius: 4px;
@@ -489,14 +484,14 @@ onMounted(() => {
 }
 .rag-score {
   margin-left: auto;
-  color: #909399;
+  color: var(--ink-3);
   font-size: 12px;
 }
 .chat-layout {
   display: flex;
   gap: 16px;
   align-items: stretch;
-  height: calc(100vh - 60px - 40px - 12px);
+  height: calc(100vh - 56px - var(--page-pad) * 2); /* 顶栏 56 + 主区上下留白 */
   min-height: 480px;
 }
 .rag-side {
@@ -545,11 +540,11 @@ onMounted(() => {
   border: 1px solid transparent;
 }
 .rag-side-item:hover {
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
 }
 .rag-side-item.active {
-  background: #ecf5ff;
-  border-color: #c6e2ff;
+  background: var(--brand-50);
+  border-color: var(--brand-100);
 }
 .rag-side-item-body {
   min-width: 0;
@@ -557,19 +552,19 @@ onMounted(() => {
 }
 .rag-side-title {
   font-size: 13px;
-  color: #303133;
+  color: var(--ink-1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .rag-side-meta {
   font-size: 12px;
-  color: #909399;
+  color: var(--ink-3);
   margin-top: 4px;
 }
 .rag-side-empty {
   text-align: center;
-  color: #c0c4cc;
+  color: var(--ink-4);
   font-size: 13px;
   padding: 32px 0;
 }
@@ -594,23 +589,24 @@ onMounted(() => {
   margin: 0 auto;
 }
 .chat-welcome-icon {
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
   margin: 0 auto 18px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #409eff, #7b5cff);
+  border-radius: 14px;
+  background: var(--brand-50);
+  color: var(--brand-600);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .chat-welcome-title {
   font-size: 15px;
-  color: #909399;
+  color: var(--ink-3);
   margin-bottom: 8px;
 }
 .chat-welcome-sub {
   font-size: 12px;
-  color: #c0c4cc;
+  color: var(--ink-4);
 }
 .chat-msg {
   display: flex;
@@ -632,10 +628,10 @@ onMounted(() => {
   font-size: 13px;
 }
 .chat-msg.assistant .chat-avatar {
-  background: linear-gradient(135deg, #409eff, #7b5cff);
+  background: var(--brand-600);
 }
 .chat-msg.user .chat-avatar {
-  background: linear-gradient(135deg, #67c23a, #409eff);
+  background: #475569;
 }
 .chat-body {
   max-width: 72%;
@@ -646,22 +642,22 @@ onMounted(() => {
   border-radius: 10px;
   font-size: 14px;
   line-height: 1.7;
-  color: #303133;
+  color: var(--ink-1);
   word-break: break-word;
   white-space: pre-wrap;
 }
 .chat-msg.assistant .chat-bubble {
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
   border-top-left-radius: 2px;
 }
 .chat-msg.user .chat-bubble {
-  background: #409eff;
+  background: var(--el-color-primary);
   color: #fff;
   border-top-right-radius: 2px;
 }
 .chat-sources {
   margin-top: 8px;
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--line-1);
   border-radius: 6px;
   background: #fafbfc;
   overflow: hidden;
@@ -678,19 +674,19 @@ onMounted(() => {
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 6px;
-  color: #909399;
+  color: var(--ink-3);
   border: 1px solid transparent;
   transition: all 0.15s;
   user-select: none;
 }
 .fb-btn:hover {
-  background: #f2f3f5;
-  color: #606266;
+  background: var(--el-fill-color);
+  color: var(--ink-2);
 }
 .fb-btn.active {
-  background: #ecf5ff;
-  border-color: #b3d8ff;
-  color: #409eff;
+  background: var(--brand-50);
+  border-color: var(--brand-100);
+  color: var(--el-color-primary);
 }
 .chat-sources .el-collapse {
   border: none;
@@ -705,7 +701,7 @@ onMounted(() => {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #c0c4cc;
+  background: var(--ink-4);
   animation: typing-blink 1.2s infinite;
 }
 .typing-dot:nth-child(2) {
@@ -721,7 +717,7 @@ onMounted(() => {
 .typing-text {
   margin-left: 8px;
   font-size: 13px;
-  color: #909399;
+  color: var(--ink-3);
 }
 /* 生成中的行末光标，提示「仍在输出」 */
 .stream-caret {
@@ -730,7 +726,7 @@ onMounted(() => {
   height: 15px;
   margin-left: 2px;
   vertical-align: -2px;
-  background: #409eff;
+  background: var(--el-color-primary);
   animation: caret-blink 1s steps(1) infinite;
 }
 @keyframes caret-blink {
@@ -743,18 +739,18 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #fef0f0;
-  border: 1px solid #fde2e2;
+  background: var(--el-color-danger-light-9);
+  border: 1px solid var(--el-color-danger-light-8);
   border-radius: 6px;
   padding: 6px 10px;
 }
 .chat-error-text {
-  color: #f56c6c;
+  color: var(--el-color-danger);
   font-size: 12px;
   line-height: 1.5;
 }
 .chat-input-bar {
-  border-top: 1px solid #e4e7ed;
+  border-top: 1px solid var(--line-1);
   padding: 14px 20px;
   display: flex;
   gap: 10px;

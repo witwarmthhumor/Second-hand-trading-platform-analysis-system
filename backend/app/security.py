@@ -17,6 +17,8 @@ from app.config import settings
 JWT_ALGORITHM = "HS256"
 
 # 密码策略：最短长度
+USERNAME_PATTERN = r"^[a-zA-Z0-9_\-]+$"
+
 PASSWORD_MIN_LENGTH = 8
 # 弱口令黑名单（小写比较）：命中即拒绝，覆盖最常见默认口令
 WEAK_PASSWORDS = frozenset(

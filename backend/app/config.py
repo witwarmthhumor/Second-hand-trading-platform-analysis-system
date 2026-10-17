@@ -49,7 +49,9 @@ class Settings(BaseSettings):
     # ---- 内置管理员 ----
     # 首次启动自动 seed 的管理员账号（仅当 users 表为空时创建）
     admin_username: str = "admin"
-    admin_password: str = "123456"
+    # 必填（与 database_url/jwt_secret 同一口径）：缺失即启动失败，杜绝以
+    # admin/123456 之类的弱默认口令静默上线。.env.example 有模板。
+    admin_password: str
 
     # ---- 登录防爆破 ----
     # 同一用户名连续失败达到该次数即锁定（默认 5 次）
@@ -93,6 +95,7 @@ class Settings(BaseSettings):
     llm_output_price_usd_per_mtok: float = 12.0
     # 汇率（美元→人民币），仅用于费用预估展示
     usd_cny_rate: float = 7.1
+
 
     # ---- CORS 跨域白名单（R6）----
     # 前后端分离部署时，浏览器同源策略会拦截跨域 API 调用。此处配置允许的

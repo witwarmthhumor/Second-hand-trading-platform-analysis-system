@@ -35,6 +35,9 @@ htmlcov/
 # 生成的分析报告（产物不入库）
 backend/reports/
 
+# Agent 轨迹落盘的页面正文（产物不入库；库里只存 sha 与字符长度）
+backend/artifacts/
+
 # RAG 向量库与缓存（建库产物，不入库；语料 canonical/faq_source/facts 入库）
 rag_data/vector_store/
 rag_data/emb_cache/
@@ -46,6 +49,13 @@ rag_data/experiments/vector_store/
 .idea/
 .vscode/
 *.swp
+
+# Ralph 循环运行时状态（prd.json / progress.txt 入库，其余产物不入库）
+scripts/ralph/.last-branch
+scripts/ralph/archive/
+
+# reranker ONNX 模型（约 570MB，本地从 hf-mirror 下载，不入库）
+backend/models/
 
 # WorkBuddy 工作区数据
 .workbuddy/*

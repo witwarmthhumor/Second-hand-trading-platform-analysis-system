@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 import chromadb
@@ -31,15 +32,24 @@ from app.rag.config import (
     FACTS_DIR,
     QUERY_N_RESULTS,
     RERANK_BY_VSIM,
+    RERANKER_TOP_N,
     RRF_K,
     VECTOR_STORE_DIR,
 )
+from app.rag.reranker import get_active_reranker
+
+logger = logging.getLogger(__name__)
 
 _BM25_JSON = VECTOR_STORE_DIR / "bm25_index.json"
 
 
-def rerank_by_vsim(ranked: list[tuple[int, float]], v_scores: dict[int, float], top_k: int) -> list[tuple[int, float]]:
-    """RRF 排序结果按向量相似度二次排序（rerank 精排）。
+def sort_by_vsim(ranked: list[tuple[int, float]], v_scores: dict[int, float], top_k: int) -> list[tuple[int, float]]:
+    """RRF 排序结果按 bge-m3 余弦二次排序（**不是** cross-encoder rerank）。
+
+    命名说明（2026-09-19 由 ``rerank_by_vsim`` 改名）：本项目里 "rerank" 专指
+    cross-encoder 精排（``_rerank_scores`` / 结果的 ``rerank_score`` 字段）；本函数
+    只是 bi-encoder 余弦的二次排序，改名以消除同名不同物。历史文档
+    （docs/RAG优化方案.md）里的旧名不改。
 
     动机：BM25 独有命中的 chunk 向量相似度≈0（纯关键词、语义无关），却会
     通过 RRF 排到靠前位置，挤掉真正相关的 chunk。按 vsim 重排能把这类
@@ -375,31 +385,112 @@ class HybridRetriever:
 
         return rrf, v_scores, v_texts
 
+    def _rerank_scores(
+        self,
+        query: str,
+        rrf: dict[int, float],
+        v_texts: dict[int, str],
+        top_k: int | None = None,
+    ) -> dict[int, float]:
+        """候选池打分（US-005）：只对 **RRF 排序前 ``RERANKER_TOP_N``** 个候选打
+        cross-encoder 分，窗口外的候选按 0（只重排、不扩大召回，见 docs/Rerank方案.md）。
+
+        ``top_k``（可选）：调用方（``search`` / ``search_dual``）传入本次请求的返回
+        名额。窗口硬下限守卫（质量审计 P2-G）：``RERANKER_TOP_N`` 低于 ``top_k`` 时
+        把窗口放大到 ``top_k`` 并记 warning——否则 top-k 名单会混入未打分候选
+        （``rerank_score=None`` 按回退序占位），静默劣化排序。窗口只可能被放大、
+        不会因它缩小（「只重排、不扩召回」的窗口上界仍由候选池决定）。
+
+        开关与可用性都收在 ``get_active_reranker()`` 里：拿到 None 就直接返回空字典，
+        不碰模型目录、不产生任何新增计算（``RERANKER_ENABLED=false`` 的部署零开销）。
+
+        Returns:
+            ``pos → 分数``；**未启用 / 不可用 / 打分失败时返回空字典**。
+            空字典 = 「本次没有 rerank 分数」，调用方据此原样退回余弦排序。
+            不要用「全 0 分」表达失败——那会让所有候选同分、静默改变排序。
+
+        降级可观测性（US-009）：三类故障各有**一条含原因**的 warning ——
+        模型文件缺失 / 加载失败由 ``reranker._load()`` 记（此处拿到 None 直接返回）；
+        推理失败由 ``reranker.score()`` 记，这里再补一条**检索侧**的日志，说明
+        「本次检索已退回余弦排序」。故障一律被吞成空字典，**绝不向上抛**。
+        """
+        reranker = get_active_reranker()
+        if reranker is None:
+            # 未启用（默认）或不可用。不可用时 reranker._load() 已记过含原因的 warning。
+            return {}
+        window_n = RERANKER_TOP_N
+        if top_k is not None and top_k > RERANKER_TOP_N:
+            window_n = top_k
+            logger.warning(
+                "RERANKER_TOP_N=%d 低于本次 top_k=%d，打分窗口已放大到 %d"
+                "（配置疑误：窗口必须 ≥ top_k，否则 top-k 名单会混入未打分候选）",
+                RERANKER_TOP_N,
+                top_k,
+                window_n,
+            )
+        window = sorted(rrf, key=lambda pos: -rrf[pos])[:window_n]
+        if not window:
+            return {}
+        scores = reranker.score(query, [v_texts.get(pos, "") for pos in window])
+        if not scores:
+            # 空列表 = 不可用或推理失败（reranker 自己已记过含原因的 warning）。
+            # 这条日志补的是「检索侧视角」：单看 reranker 那条只知道打分失败，
+            # 不知道本次检索是否真的退回了余弦排序。与下面的「半截分数」分开写，
+            # 避免把「整体打不出分」误报成「长度不符（0 != N）」。
+            logger.warning(
+                "rerank 未产出分数（%d 个候选），本次退回余弦排序：%s",
+                len(window),
+                getattr(reranker, "load_error", None) or "推理失败",
+            )
+            return {}
+        if len(scores) != len(window):
+            # reranker 的契约是「与入参等长，打不出分则空列表」。出现半截分数说明
+            # 状态异常，宁可整体不启用，也不要用「部分分数 + 部分 0」的半开排序。
+            logger.warning(
+                "rerank 分数长度不符（%d != %d），本次退回余弦排序",
+                len(scores),
+                len(window),
+            )
+            return {}
+        return dict(zip(window, scores, strict=True))
+
     def search(self, query: str, top_k: int) -> list[dict]:
-        """混合检索，返回 top_k 条结果，每项含 doc_id/chunk_id/text/rrf_score/vector_sim。"""
+        """混合检索，返回 top_k 条结果。
+
+        每项含 doc_id/chunk_id/text/rrf_score/vector_sim/rerank_score。
+        ``vector_sim`` 始终是 bge-m3 余弦（原义不变）；``rerank_score`` 是
+        cross-encoder 分，rerank 未启用或该 chunk 不在打分窗口内时为 None。
+        """
         rrf, v_scores, v_texts = self._hybrid_candidates(query)
+        rerank = self._rerank_scores(query, rrf, v_texts, top_k=top_k)
+        # 排序键：rerank 生效时用 cross-encoder 分（窗口外按 0），否则仍是余弦。
+        rank_scores = rerank or v_scores
 
-        ranked = sorted(rrf.items(), key=lambda x: -x[1])[:top_k]
-
-        # 多文档召回（可选，默认关）：文档级去重 + 保底补位。
+        # 多文档召回（可选，默认开）：文档级去重 + 保底补位。
         # 注意要在**全量 RRF 候选**上做——若只看已截断的 top_k，就永远救不回
         # 被同文档 chunk 挤掉的其它文档。见 diversify_with_refill 与 docs/RAG优化方案.md。
+        # US-005：排序分数统一换成 rank_scores —— rerank 开启时「锚定文档」变为
+        # cross-encoder 最高分所在文档，补位也按该分排序（函数本身一行不改）。
         if DOC_DEDUP_ENABLED:
-            ranked_all = sorted(rrf.items(), key=lambda x: -v_scores.get(x[0], 0.0))
+            ranked_all = sorted(rrf.items(), key=lambda x: -rank_scores.get(x[0], 0.0))
             ranked = diversify_with_refill(
                 ranked_all,
-                v_scores,
+                rank_scores,
                 self._doc_ids,
                 top_k,
                 min_sim=DOC_MIN_SIM,
                 anchor_quota=ANCHOR_QUOTA,
             )
-        # rerank 精排（可选，默认开）：用向量相似度对 RRF 候选二次排序。
-        # 见 rerank_by_vsim 函数文档与 scripts/experiments/ragas_eval/README.md。
-        elif RERANK_BY_VSIM:
-            ranked = rerank_by_vsim(ranked, v_scores, top_k)
+        else:
+            # 基础排序只在非去重路径需要（去重分支自己全量排序）；放分支内避免
+            # 生产形态下每次检索白算一次（质量审计 P3-R）。
+            ranked = sorted(rrf.items(), key=lambda x: -x[1])[:top_k]
+            # vsim 二次排序（可选）：用 bge-m3 余弦对 RRF 候选沉噪声。
+            # 见 sort_by_vsim 函数文档与 scripts/experiments/ragas_eval/README.md。
+            if RERANK_BY_VSIM:
+                ranked = sort_by_vsim(ranked, rank_scores, top_k)
 
-        return self._assemble_results(ranked, v_scores, v_texts)
+        return self._assemble_results(ranked, v_scores, v_texts, rerank)
 
     def search_dual(self, query: str, top_k: int) -> tuple[list[dict], list[dict]]:
         """一次检索产出双视图：(广度视图, 深度视图)（P1-②，见 docs/合成答案分流方案.md）。
@@ -413,26 +504,29 @@ class HybridRetriever:
         同一份 rerank 结果。
         """
         rrf, v_scores, v_texts = self._hybrid_candidates(query)
+        rerank = self._rerank_scores(query, rrf, v_texts, top_k=top_k)
+        # 排序键：rerank 生效时用 cross-encoder 分（窗口外按 0），否则仍是余弦。
+        rank_scores = rerank or v_scores
 
         if DOC_DEDUP_ENABLED:
-            ranked_all = sorted(rrf.items(), key=lambda x: -v_scores.get(x[0], 0.0))
+            ranked_all = sorted(rrf.items(), key=lambda x: -rank_scores.get(x[0], 0.0))
             breadth, depth = dual_views(
                 ranked_all,
-                v_scores,
+                rank_scores,
                 self._doc_ids,
                 top_k,
                 breadth_quota=BREADTH_QUOTA,
                 depth_quota=DEPTH_QUOTA,
             )
             return (
-                self._assemble_results(breadth, v_scores, v_texts),
-                self._assemble_results(depth, v_scores, v_texts),
+                self._assemble_results(breadth, v_scores, v_texts, rerank),
+                self._assemble_results(depth, v_scores, v_texts, rerank),
             )
 
-        ranked = rerank_by_vsim(
-            sorted(rrf.items(), key=lambda x: -x[1])[:top_k], v_scores, top_k
+        ranked = sort_by_vsim(
+            sorted(rrf.items(), key=lambda x: -x[1])[:top_k], rank_scores, top_k
         )
-        results = self._assemble_results(ranked, v_scores, v_texts)
+        results = self._assemble_results(ranked, v_scores, v_texts, rerank)
         return results, results
 
     def _assemble_results(
@@ -440,10 +534,21 @@ class HybridRetriever:
         ranked: list[tuple[int, float]],
         v_scores: dict[int, float],
         v_texts: dict[int, str],
+        rerank_scores: dict[int, float] | None = None,
     ) -> list[dict]:
-        """把 (pos, rrf_score) 名单组装为结果 dict 列表（search/search_dual 共用）。"""
+        """把 (pos, rrf_score) 名单组装为结果 dict 列表（search/search_dual 共用）。
+
+        ``rerank_scores``（US-005）是 cross-encoder 分（pos → 分）。rerank 未启用
+        或该 chunk 不在打分窗口内 → ``rerank_score`` 为 None。``vector_sim`` 永远是
+        bge-m3 余弦、语义不随 rerank 改变（命中判定读的是它，见 US-006）。
+        """
         results: list[dict] = []
         for pos, score in ranked:
+            rerank_score = (
+                round(rerank_scores[pos], 6)
+                if rerank_scores and pos in rerank_scores
+                else None
+            )
             results.append(
                 {
                     # chunk_id = 全局位置编号（"c<pos>"），与向量库 / BM25 索引同源。
@@ -457,6 +562,7 @@ class HybridRetriever:
                     "text": v_texts.get(pos, ""),
                     "rrf_score": round(score, 6),
                     "vector_sim": round(v_scores.get(pos, 0.0), 4),
+                    "rerank_score": rerank_score,
                 }
             )
         return results

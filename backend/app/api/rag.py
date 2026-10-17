@@ -147,6 +147,7 @@ async def ask_stream(
     retriever = get_retriever()
 
     async def event_stream():
+
         if not retriever.is_ready:
             yield (
                 "data: "

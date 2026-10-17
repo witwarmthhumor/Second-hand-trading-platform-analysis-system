@@ -12,6 +12,21 @@
  */
 import { ref, onMounted, computed, defineAsyncComponent } from 'vue'
 import { ElMessage } from 'element-plus'
+import {
+  DataBoard,
+  DocumentChecked,
+  Plus,
+  TrendCharts,
+  ChatDotRound,
+  Bell,
+  Collection,
+  DataLine,
+  User as UserIcon,
+  Setting,
+  Check,
+  MoreFilled,
+  DataAnalysis,
+} from '@element-plus/icons-vue'
 import { competitorApi, authApi, setAuth, clearAuth, getStoredUser } from './api'
 import { useCompetitorStore } from './stores/competitor'
 
@@ -24,6 +39,7 @@ const ChangesPanel = defineAsyncComponent(() => import('./components/ChangesPane
 const KbManage = defineAsyncComponent(() => import('./components/KbManage.vue'))
 const SettingsPanel = defineAsyncComponent(() => import('./components/SettingsPanel.vue'))
 const FeedbackPanel = defineAsyncComponent(() => import('./components/FeedbackPanel.vue'))
+const UserManage = defineAsyncComponent(() => import('./components/UserManage.vue'))
 // 知识库问答（自持会话、来源、反馈等全部状态）
 const RagChat = defineAsyncComponent(() => import('./components/RagChat.vue'))
 
@@ -41,6 +57,8 @@ const authLoading = ref(false)
 function enterApp(token, user) {
   setAuth(token, user)
   currentUser.value = user
+  // 换号登录同样清一次（防 401 过期路径已残留的状态带进新会话）
+  resetSessionState()
   activeTab.value = 'list'
   // 登录后初始化壳层级数据（各功能页数据由其组件自行加载）
   initShellData()
@@ -90,14 +108,19 @@ function switchAuthMode(mode) {
   authConfirm.value = ''
 }
 
-function doLogout() {
-  clearAuth()
-  currentUser.value = null
-  activeTab.value = 'list'
-  // 清空共享状态与问答组件内部状态，避免下一个账号看到上一个账号的残留数据
+/** 退出/过期共用的会话状态清理：store 与问答组件内部状态必须归零，
+ * 否则下一个账号会看到上一个账号的对比勾选与表单残留（质量审计 P1）。 */
+function resetSessionState() {
   resetStore()
   // 问答组件用 key 强制重建（见 template 里 RagChat 的 :key）
   ragChatKey.value++
+  activeTab.value = 'list'
+}
+
+function doLogout() {
+  clearAuth()
+  currentUser.value = null
+  resetSessionState()
   ElMessage.success('已退出登录')
 }
 
@@ -116,7 +139,7 @@ function openChangePwd() {
 }
 
 async function doChangePwd() {
-  if (pwdNew.value.length < 8) {
+  if (pwdNew.value.length < 8 || !/(?=.*[A-Za-z])(?=.*\d)/.test(pwdNew.value)) {
     ElMessage.warning('新密码至少 8 位，且需同时包含字母与数字')
     return
   }
@@ -136,21 +159,39 @@ async function doChangePwd() {
   }
 }
 
-// —— 导航 ——
+// —— 导航：分组的侧边栏（图标用 Element 官方线性图标，统一 16px 描边风格）——
 const activeTab = ref('list')
-const menuItems = [
-  { name: 'list', label: '竞品列表', icon: '📊' },
-  { name: 'pending', label: '待校对', icon: '📝' },
-  { name: 'form', label: '录入竞品', icon: '➕' },
-  { name: 'compare', label: '对比', icon: '⚖️' },
-  { name: 'rag', label: '知识库问答', icon: '💬' },
-  { name: 'changes', label: '变化记录', icon: '🔔' },
-  { name: 'kb', label: '知识库管理', icon: '📚', adminOnly: true },
-  { name: 'feedback', label: '反馈管理', icon: '📈', adminOnly: true },
-  { name: 'settings', label: '设置', icon: '⚙️' },
+const menuSections = [
+  {
+    title: '竞品情报',
+    items: [
+      { name: 'list', label: '竞品列表', icon: DataBoard },
+      { name: 'pending', label: '待校对', icon: DocumentChecked },
+      { name: 'form', label: '录入竞品', icon: Plus },
+      { name: 'compare', label: '对比', icon: TrendCharts },
+      { name: 'changes', label: '变化记录', icon: Bell },
+    ],
+  },
+  {
+    title: '知识库',
+    items: [{ name: 'rag', label: '知识库问答', icon: ChatDotRound }],
+  },
+  {
+    title: '系统管理',
+    items: [
+      { name: 'kb', label: '知识库管理', icon: Collection, adminOnly: true },
+      { name: 'feedback', label: '反馈管理', icon: DataLine, adminOnly: true },
+      { name: 'users', label: '账号管理', icon: UserIcon, adminOnly: true },
+      { name: 'settings', label: '设置', icon: Setting },
+    ],
+  },
 ]
-// 可见菜单：普通用户过滤掉 adminOnly
-const visibleMenu = computed(() => menuItems.filter((m) => !m.adminOnly || isAdmin.value))
+// 可见菜单：普通用户过滤掉 adminOnly 项，空分组整体隐藏
+const visibleMenu = computed(() =>
+  menuSections
+    .map((sec) => ({ ...sec, items: sec.items.filter((m) => !m.adminOnly || isAdmin.value) }))
+    .filter((sec) => sec.items.length > 0),
+)
 // 当前页面的标题/副标题（顶部面包屑用）
 const pageMeta = {
   list: ['竞品列表', '竞品情报收集、整理与横向对比'],
@@ -160,7 +201,8 @@ const pageMeta = {
   rag: ['知识库问答', '融合 RAG 的智能问答助手'],
   changes: ['变化记录', '竞品信息变更历史追踪'],
   kb: ['知识库管理', '知识库语料维护（管理员专属）'],
-  feedback: ['反馈管理', '问答 👍/👎 反馈回流可视化（管理员专属）'],
+  feedback: ['反馈管理', '好评 / 差评反馈回流分析（管理员专属）'],
+  users: ['账号管理', '用户账号增删改查（管理员专属）'],
   settings: ['设置', '评分维度与系统配置'],
 }
 const currentTitle = computed(() => pageMeta[activeTab.value]?.[0] || '')
@@ -216,6 +258,8 @@ async function loadRagStatus() {
 onMounted(() => {
   window.addEventListener('auth-expired', () => {
     currentUser.value = null
+    // 与 doLogout 同一套清理：过期后换号登录不得继承前账号状态
+    resetSessionState()
     ElMessage.warning('登录已过期，请重新登录')
   })
   if (isLoggedIn.value) {
@@ -227,12 +271,26 @@ onMounted(() => {
 </script>
 
 <template>
-  <!-- 未登录：登录/注册视图 -->
+  <!-- 未登录：登录/注册视图（分屏：左侧品牌区 / 右侧表单） -->
   <div v-if="!isLoggedIn" class="auth-wrap">
+    <aside class="auth-side">
+      <div class="auth-side-brand">
+        <span class="brand-mark"><el-icon :size="16"><DataAnalysis /></el-icon></span>
+        <span class="brand-name">竞品分析平台</span>
+      </div>
+      <h2 class="auth-side-title">竞品情报与知识库问答<br />一站式分析工作台</h2>
+      <ul class="auth-side-points">
+        <li><el-icon><Check /></el-icon>竞品信息统一采集、校对与追踪</li>
+        <li><el-icon><Check /></el-icon>多维度对比与一键导出分析报告</li>
+        <li><el-icon><Check /></el-icon>基于知识库的智能问答与来源追溯</li>
+      </ul>
+      <div class="auth-side-foot">© 2026 二手交易平台分析系统</div>
+    </aside>
+    <div class="auth-panel">
     <div class="auth-card">
       <div class="auth-brand">
-        <h1>二手交易平台分析系统</h1>
-        <p class="sub">竞品情报 · 知识库问答</p>
+        <h1>{{ authMode === 'login' ? '登录工作台' : '创建账号' }}</h1>
+        <p class="sub">{{ authMode === 'login' ? '使用平台账号继续' : '注册后即可开始使用' }}</p>
       </div>
       <el-form @submit.prevent>
         <el-form-item>
@@ -270,12 +328,13 @@ onMounted(() => {
       </el-form>
       <div class="auth-switch">
         <span v-if="authMode === 'login'">
-          还没有账号？<el-link type="primary" @click="switchAuthMode('register')">去注册</el-link>
+          还没有账号？<el-link type="primary" @click="switchAuthMode('register')">创建账号</el-link>
         </span>
         <span v-else>
-          已有账号？<el-link type="primary" @click="switchAuthMode('login')">去登录</el-link>
+          已有账号？<el-link type="primary" @click="switchAuthMode('login')">返回登录</el-link>
         </span>
       </div>
+    </div>
     </div>
   </div>
 
@@ -284,24 +343,27 @@ onMounted(() => {
     <!-- 左侧导航栏 -->
     <aside class="sidebar">
       <div class="sidebar-logo">
-        <span class="sidebar-logo-icon">⇄</span>
-        <span class="sidebar-logo-text">二手交易平台分析</span>
+        <span class="sidebar-logo-icon"><el-icon :size="15"><DataAnalysis /></el-icon></span>
+        <span class="sidebar-logo-text">竞品分析平台</span>
       </div>
       <nav class="sidebar-menu">
-        <div
-          v-for="m in visibleMenu"
-          :key="m.name"
-          class="sidebar-item"
-          :class="{ active: activeTab === m.name }"
-          @click="activeTab = m.name"
-        >
-          <span class="sidebar-icon">{{ m.icon }}</span>
-          <span class="sidebar-label">{{ m.label }}</span>
-          <span v-if="m.name === 'pending' && pendingCount" class="sidebar-badge">
-            {{ pendingCount }}
-          </span>
-          <span v-else-if="m.adminOnly" class="sidebar-admin">admin</span>
-        </div>
+        <template v-for="sec in visibleMenu" :key="sec.title">
+          <div class="sidebar-sec">{{ sec.title }}</div>
+          <div
+            v-for="m in sec.items"
+            :key="m.name"
+            class="sidebar-item"
+            :class="{ active: activeTab === m.name }"
+            @click="activeTab = m.name"
+          >
+            <el-icon class="sidebar-icon" :size="16"><component :is="m.icon" /></el-icon>
+            <span class="sidebar-label">{{ m.label }}</span>
+            <span v-if="m.name === 'pending' && pendingCount" class="sidebar-badge">
+              {{ pendingCount }}
+            </span>
+            <span v-else-if="m.adminOnly" class="sidebar-admin">管理</span>
+          </div>
+        </template>
       </nav>
       <div class="sidebar-footer">
         <el-avatar :size="32" class="sidebar-avatar">
@@ -312,7 +374,7 @@ onMounted(() => {
           <div class="sidebar-user-role">{{ isAdmin ? '管理员' : '普通用户' }}</div>
         </div>
         <el-dropdown trigger="click">
-          <span class="sidebar-more">···</span>
+          <el-icon class="sidebar-more" :size="16"><MoreFilled /></el-icon>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item @click="openChangePwd">修改密码</el-dropdown-item>
@@ -331,10 +393,19 @@ onMounted(() => {
           <span class="topbar-sub">{{ currentSub }}</span>
         </div>
         <div class="topbar-right">
-          <span class="rag-status" :class="{ ready: ragReady !== false }">
-            <i class="dot" /> {{ ragReady === false ? '知识库未就绪' : '知识库就绪' }}
+          <span
+            class="kb-chip"
+            :class="{ ok: ragReady === true, warn: ragReady === false }"
+          >
+            <i class="dot" />{{
+              ragReady === true
+                ? '知识库就绪'
+                : ragReady === false
+                  ? '知识库未就绪'
+                  : '知识库检测中'
+            }}
           </span>
-          <el-tag v-if="isAdmin" type="warning" size="small" effect="dark">管理员</el-tag>
+          <span v-if="isAdmin" class="role-chip">管理员</span>
         </div>
       </header>
 
@@ -368,6 +439,9 @@ onMounted(() => {
         <!-- 反馈管理（admin 专属） -->
         <FeedbackPanel v-else-if="activeTab === 'feedback'" />
 
+        <!-- 账号管理（admin 专属） -->
+        <UserManage v-else-if="activeTab === 'users'" />
+
         <!-- 设置 -->
         <SettingsPanel v-else-if="activeTab === 'settings'" />
 
@@ -400,46 +474,45 @@ onMounted(() => {
 </template>
 
 <style>
-body {
-  margin: 0;
-  background: #f5f7fa;
-}
+/* 壳层样式：只保留 App 自身的布局（侧栏 / 顶栏 / 登录页）。
+   跨页面共享类（.card / .toolbar / .section 等）已移至 styles/global.css。 */
+
+/* ===== 主布局 ===== */
 .app {
   display: flex;
-  min-height: 100vh;
   height: 100vh;
   overflow: hidden;
 }
-/* ===== 侧边栏 ===== */
+
+/* ===== 侧边栏（石板深色 + 分组导航） ===== */
 .sidebar {
-  width: 220px;
+  width: var(--sidebar-width);
   flex-shrink: 0;
-  background: #1d2b36;
-  color: #bfcbd9;
+  background: var(--sidebar-bg);
   display: flex;
   flex-direction: column;
 }
 .sidebar-logo {
-  height: 60px;
+  height: 56px;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 20px;
-  color: #fff;
-  font-size: 15px;
+  padding: 0 14px;
+  color: #f8fafc;
+  font-size: 14px;
   font-weight: 600;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  letter-spacing: 0.3px;
   white-space: nowrap;
 }
 .sidebar-logo-icon {
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #409eff, #7b5cff);
+  background: var(--brand-600);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
   flex-shrink: 0;
 }
 .sidebar-logo-text {
@@ -449,33 +522,50 @@ body {
 .sidebar-menu {
   flex: 1;
   overflow-y: auto;
-  padding: 8px 0;
+  padding: 2px 12px 12px;
+}
+.sidebar-sec {
+  margin: 16px 10px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  color: #55637a;
 }
 .sidebar-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 20px;
-  height: 44px;
+  height: 38px;
+  padding: 0 10px;
+  margin: 2px 0;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s;
-  font-size: 14px;
-  border-left: 3px solid transparent;
+  color: var(--ink-sidebar);
+  font-size: 13.5px;
+  transition: background 0.15s, color 0.15s;
   white-space: nowrap;
 }
 .sidebar-item:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
+  background: rgba(148, 163, 184, 0.09);
+  color: #e2e8f0;
 }
 .sidebar-item.active {
-  background: rgba(64, 158, 255, 0.15);
-  color: #fff;
-  border-left-color: #409eff;
+  background: rgba(99, 102, 241, 0.16);
+  color: #c7d2fe;
+}
+.sidebar-item.active::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--brand-500);
 }
 .sidebar-icon {
-  width: 18px;
-  text-align: center;
-  font-size: 15px;
+  flex-shrink: 0;
 }
 .sidebar-label {
   overflow: hidden;
@@ -483,29 +573,35 @@ body {
 }
 .sidebar-badge {
   margin-left: auto;
-  background: #f56c6c;
+  background: #dc2626;
   color: #fff;
   font-size: 11px;
-  border-radius: 10px;
-  padding: 1px 7px;
+  line-height: 1;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
 }
 .sidebar-admin {
   margin-left: auto;
   font-size: 10px;
-  color: #e6a23c;
-  border: 1px solid #e6a23c;
-  border-radius: 3px;
-  padding: 0 4px;
+  line-height: 1.4;
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  border-radius: 4px;
+  padding: 1px 5px;
+  letter-spacing: 1px;
 }
 .sidebar-footer {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 12px 16px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  padding: 12px;
   display: flex;
   align-items: center;
   gap: 10px;
 }
 .sidebar-avatar {
-  background: linear-gradient(135deg, #409eff, #67c23a);
+  background: var(--brand-600);
+  color: #fff;
+  font-weight: 600;
   flex-shrink: 0;
 }
 .sidebar-user {
@@ -513,7 +609,7 @@ body {
   min-width: 0;
 }
 .sidebar-user-name {
-  color: #fff;
+  color: #f1f5f9;
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
@@ -521,18 +617,21 @@ body {
 }
 .sidebar-user-role {
   font-size: 11px;
-  color: #8a9bb0;
+  color: #64748b;
 }
 .sidebar-more {
-  color: #8a9bb0;
+  color: #64748b;
   cursor: pointer;
-  font-size: 16px;
-  padding: 0 6px;
+  padding: 5px;
+  border-radius: 6px;
   outline: none;
+  transition: background 0.15s, color 0.15s;
 }
 .sidebar-more:hover {
-  color: #fff;
+  color: #e2e8f0;
+  background: rgba(148, 163, 184, 0.09);
 }
+
 /* ===== 主区域 ===== */
 .main-wrap {
   flex: 1;
@@ -541,159 +640,197 @@ body {
   min-width: 0;
 }
 .topbar {
-  height: 60px;
-  background: #fff;
-  border-bottom: 1px solid #e4e7ed;
+  height: 56px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line-1);
   display: flex;
   align-items: center;
-  padding: 0 24px;
+  padding: 0 var(--page-pad);
   flex-shrink: 0;
 }
 .topbar-title {
   display: flex;
   align-items: baseline;
-  gap: 12px;
+  gap: 10px;
+  min-width: 0;
 }
 .topbar-crumb {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  color: #303133;
+  color: var(--ink-1);
+  letter-spacing: 0.2px;
+  white-space: nowrap;
 }
 .topbar-sub {
   font-size: 12px;
-  color: #909399;
+  color: var(--ink-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .topbar-right {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
-.rag-status {
+/* 知识库状态：胶囊 chip（琥珀=未就绪 / 绿=就绪） */
+.kb-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #67c23a;
+  line-height: 1;
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: var(--ink-3);
+  background: var(--el-fill-color-light);
+  border: 1px solid var(--line-1);
+  white-space: nowrap;
 }
-.rag-status .dot {
-  width: 8px;
-  height: 8px;
+.kb-chip.warn {
+  color: var(--el-color-warning-dark-2);
+  background: var(--el-color-warning-light-9);
+  border-color: var(--el-color-warning-light-7);
+}
+.kb-chip.ok {
+  color: var(--el-color-success-dark-2);
+  background: var(--el-color-success-light-9);
+  border-color: var(--el-color-success-light-7);
+}
+.kb-chip .dot {
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: currentColor;
 }
-.rag-status.ready {
-  color: #67c23a;
-}
-.rag-status:not(.ready) {
-  color: #e6a23c;
-}
-.sub {
-  margin: 2px 0 8px;
-  color: #909399;
+/* 角色徽标：中性品牌底，去橙色大标签 */
+.role-chip {
   font-size: 12px;
+  line-height: 1;
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: var(--brand-700);
+  background: var(--brand-50);
+  border: 1px solid var(--brand-100);
+  white-space: nowrap;
 }
 .main {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 24px;
-  max-width: 1200px;
-  width: 100%;
-  margin: 0 auto;
+  padding: var(--page-pad);
 }
-/* ===== 多个功能页共用的基础样式 ===== */
-.toolbar {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-.toolbar-spacer {
-  flex: 1;
-}
-.count {
-  color: #909399;
-  font-size: 13px;
-  margin-top: 12px;
-}
-.form-wrap {
-  background: #fff;
-  padding: 24px;
-  border-radius: 6px;
-}
-.section {
-  margin: 16px 0 12px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid #ebeef5;
-  color: #303133;
-  font-size: 15px;
-}
-.card {
-  background: #fff;
-  border-radius: 6px;
-  padding: 20px;
-  margin-bottom: 16px;
-}
-.card-title {
-  margin: 0 0 16px;
-  font-size: 15px;
-  color: #303133;
-}
-.rag-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.rag-head .card-title {
-  margin: 0;
-}
-.changes-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.changes-head .card-title {
-  margin: 0;
-}
-.rag-tip {
-  color: #909399;
-  font-size: 13px;
-  margin: 12px 0 16px;
-  line-height: 1.6;
-}
-/* ===== 登录页 ===== */
+
+/* ===== 登录页（分屏：左品牌 / 右表单） ===== */
 .auth-wrap {
   min-height: 100vh;
   display: flex;
+  background: var(--surface);
+}
+.auth-side {
+  width: 44%;
+  min-width: 400px;
+  background: var(--sidebar-bg);
+  color: #e2e8f0;
+  padding: 44px 48px;
+  display: flex;
+  flex-direction: column;
+}
+.auth-side-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #f8fafc;
+}
+.brand-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--brand-600);
+  color: #fff;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  flex-shrink: 0;
+}
+.brand-name {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+.auth-side-title {
+  margin: 0;
+  padding-top: 72px;
+  font-size: 24px;
+  line-height: 1.5;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: #f8fafc;
+}
+.auth-side-points {
+  list-style: none;
+  margin: 28px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 16px;
+}
+.auth-side-points li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #94a3b8;
+  font-size: 13.5px;
+}
+.auth-side-points li .el-icon {
+  color: var(--brand-500);
+  background: rgba(99, 102, 241, 0.14);
+  border-radius: 50%;
+  padding: 3px;
+  box-sizing: content-box;
+}
+.auth-side-foot {
+  margin-top: auto;
+  font-size: 12px;
+  color: #475569;
+}
+.auth-panel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
 }
 .auth-card {
-  width: 380px;
-  background: #fff;
-  border-radius: 10px;
-  padding: 40px 36px 28px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+  width: 360px;
 }
 .auth-brand {
-  text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 .auth-brand h1 {
   margin: 0;
-  font-size: 20px;
-  color: #303133;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--ink-1);
 }
 .auth-brand .sub {
-  margin: 6px 0 0;
+  margin: 8px 0 0;
+  color: var(--ink-3);
+  font-size: 13px;
 }
 .auth-submit {
   width: 100%;
+  margin-top: 4px;
 }
 .auth-switch {
-  margin-top: 16px;
+  margin-top: 20px;
   text-align: center;
-  color: #909399;
+  color: var(--ink-3);
   font-size: 13px;
+}
+@media (max-width: 860px) {
+  .auth-side {
+    display: none;
+  }
 }
 </style>

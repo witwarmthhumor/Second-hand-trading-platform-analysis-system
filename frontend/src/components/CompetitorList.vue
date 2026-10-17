@@ -9,6 +9,7 @@
  */
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Box, CircleCheck, Clock, Document, MagicStick, Plus, Download } from '@element-plus/icons-vue'
 import { competitorApi } from '../api'
 import { useCompetitorStore } from '../stores/competitor'
 import { typeTag, statusTag, TYPE_OPTIONS } from '../utils/tags'
@@ -32,11 +33,14 @@ const exporting = ref(false)
 
 const typeOptions = TYPE_OPTIONS
 
-// 统计卡片：总数/已上线/待校对/未上线
+// 统计卡片：总数/已上线/待校对/未上线。
+// 口径注释：offline 按 launch_status 精确计数（不含「内测/已下线」），
+// pending 是 data_status 维度（草稿），两卡允许重叠——不做 total 减法近似。
 const compStats = computed(() => {
   const total = competitors.value.length
   const online = competitors.value.filter((c) => c.launch_status === '已上线').length
-  return { total, online, offline: total - online, pending: pendingCount.value }
+  const offline = competitors.value.filter((c) => c.launch_status === '未上线').length
+  return { total, online, offline, pending: pendingCount.value }
 })
 
 // 前端分页切片
@@ -69,6 +73,12 @@ function dismissOnboard() {
   localStorage.setItem(ONBOARD_KEY, '1')
 }
 
+/** 查询按钮/筛选条件变化：回到第 1 页再拉取。 */
+async function search() {
+  compPage.value = 1
+  await fetchList()
+}
+
 async function fetchList() {
   loading.value = true
   try {
@@ -76,7 +86,6 @@ async function fetchList() {
     if (keyword.value) params.keyword = keyword.value
     if (filterType.value) params.type = filterType.value
     competitors.value = await competitorApi.list(params)
-    compPage.value = 1
   } catch (e) {
     ElMessage.error(e.message)
   } finally {
@@ -241,28 +250,28 @@ watch(listVersion, fetchList)
     <!-- 统计卡片 -->
     <div class="stat-row">
       <div class="stat-card">
-        <div class="stat-icon blue">📦</div>
+        <div class="stat-icon blue"><el-icon :size="20"><Box /></el-icon></div>
         <div>
           <div class="stat-val">{{ compStats.total }}</div>
           <div class="stat-label">竞品总数</div>
         </div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon green">✅</div>
+        <div class="stat-icon green"><el-icon :size="20"><CircleCheck /></el-icon></div>
         <div>
           <div class="stat-val">{{ compStats.online }}</div>
           <div class="stat-label">已上线</div>
         </div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon orange">⏳</div>
+        <div class="stat-icon orange"><el-icon :size="20"><Clock /></el-icon></div>
         <div>
           <div class="stat-val">{{ compStats.pending }}</div>
           <div class="stat-label">待校对</div>
         </div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon purple">📄</div>
+        <div class="stat-icon purple"><el-icon :size="20"><Document /></el-icon></div>
         <div>
           <div class="stat-val">{{ compStats.offline }}</div>
           <div class="stat-label">未上线</div>
@@ -276,33 +285,33 @@ watch(listVersion, fetchList)
         placeholder="搜索名称"
         clearable
         style="width: 220px"
-        @keyup.enter="fetchList"
-        @clear="fetchList"
+        @keyup.enter="search"
+        @clear="search"
       />
       <el-select
         v-model="filterType"
         placeholder="平台类型"
         clearable
         style="width: 140px"
-        @change="fetchList"
+        @change="search"
       >
         <el-option v-for="t in typeOptions" :key="t" :label="t" :value="t" />
       </el-select>
-      <el-button type="primary" @click="fetchList">查询</el-button>
+      <el-button type="primary" @click="search">查询</el-button>
       <span class="toolbar-spacer" />
-      <el-button type="primary" plain @click="goCreate">+ 录入竞品</el-button>
+      <el-button type="primary" plain @click="goCreate"><el-icon><Plus /></el-icon>&nbsp;录入竞品</el-button>
       <el-button type="success" plain @click="openFetch">抓取竞品</el-button>
       <el-button type="warning" plain :disabled="selectedIds.length < 2" @click="goCompare">
         对比 ({{ selectedIds.length }})
       </el-button>
-      <el-button type="info" plain :loading="exporting" @click="doExportReport">
+      <el-button type="info" plain :loading="exporting" @click="doExportReport"><el-icon><Download /></el-icon>&nbsp;
         导出报告{{ selectedIds.length ? `(${selectedIds.length})` : '' }}
       </el-button>
     </div>
 
     <!-- 稀疏引导：数据量少时给出明确的下一步动作（可关闭） -->
     <div v-if="showOnboard" class="onboard">
-      <div class="onboard-icon">💡</div>
+      <div class="onboard-icon"><el-icon :size="18"><MagicStick /></el-icon></div>
       <div class="onboard-body">
         <div class="onboard-title">竞品数量还不多，补几条再做对比更有意义</div>
         <ol class="onboard-steps">
@@ -435,45 +444,49 @@ watch(listVersion, fetchList)
   margin-bottom: 16px;
 }
 .stat-card {
-  background: #fff;
-  border-radius: 6px;
-  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
-  padding: 18px 20px;
+  background: var(--surface);
+  border: 1px solid var(--line-1);
+  border-radius: 10px;
+  padding: 16px 20px;
   display: flex;
   align-items: center;
   gap: 14px;
+  box-shadow: var(--shadow-card);
 }
 .stat-icon {
-  width: 46px;
-  height: 46px;
+  width: 40px;
+  height: 40px;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
   flex-shrink: 0;
 }
 .stat-icon.blue {
-  background: #ecf5ff;
+  background: var(--brand-50);
+  color: var(--brand-600);
 }
 .stat-icon.green {
-  background: #f0f9eb;
+  background: var(--el-color-success-light-9);
+  color: var(--el-color-success);
 }
 .stat-icon.orange {
-  background: #fdf6ec;
+  background: var(--el-color-warning-light-9);
+  color: var(--el-color-warning);
 }
 .stat-icon.purple {
-  background: #f4f0ff;
+  background: var(--el-color-info-light-9);
+  color: var(--violet-600);
 }
 .stat-val {
-  font-size: 24px;
-  font-weight: 700;
-  color: #303133;
-  line-height: 1.2;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ink-1);
+  line-height: 1.25;
 }
 .stat-label {
   font-size: 12px;
-  color: #909399;
+  color: var(--ink-3);
   margin-top: 2px;
 }
 .list-pagination {
@@ -482,7 +495,7 @@ watch(listVersion, fetchList)
   margin-top: 16px;
 }
 .fetch-tip {
-  color: #909399;
+  color: var(--ink-3);
   font-size: 13px;
   margin: 0 0 12px;
 }
@@ -492,26 +505,26 @@ watch(listVersion, fetchList)
   justify-content: space-between;
   margin-top: 12px;
   padding: 8px 12px;
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
   border-radius: 4px;
-  color: #606266;
+  color: var(--ink-2);
   font-size: 13px;
 }
 .cost-bar b {
-  color: #e6a23c;
+  color: var(--el-color-warning);
 }
 .cost-detail p {
   margin: 6px 0;
 }
 .cost-detail .num {
-  color: #e6a23c;
+  color: var(--el-color-warning);
 }
 .cost-detail .muted {
-  color: #909399;
+  color: var(--ink-3);
   font-size: 13px;
 }
 .empty-guide-tip {
-  color: #909399;
+  color: var(--ink-3);
   font-size: 13px;
   margin-top: 12px;
 }
@@ -520,8 +533,8 @@ watch(listVersion, fetchList)
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  background: #ecf5ff;
-  border: 1px solid #d9ecff;
+  background: var(--brand-50);
+  border: 1px solid var(--brand-100);
   border-radius: 6px;
   padding: 14px 16px;
   margin-bottom: 16px;
@@ -537,18 +550,18 @@ watch(listVersion, fetchList)
 }
 .onboard-title {
   font-size: 14px;
-  color: #303133;
+  color: var(--ink-1);
   font-weight: 600;
   margin-bottom: 6px;
 }
 .onboard-steps {
   margin: 0;
   padding-left: 20px;
-  color: #606266;
+  color: var(--ink-2);
   font-size: 13px;
   line-height: 1.9;
 }
 .onboard-steps b {
-  color: #409eff;
+  color: var(--el-color-primary);
 }
 </style>

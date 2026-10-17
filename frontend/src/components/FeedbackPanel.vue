@@ -2,13 +2,14 @@
 /**
  * 反馈管理面板（仅管理员）：问答反馈回流可视化。
  *
- * 顶部聚合统计（总量 / 👍 / 👎 / 好评率 + 按命中模式交叉分布），下方分页
- * 列出反馈明细，展开可看问题与回答原文，用于定位「哪些问题被点 👎」，
+ * 顶部聚合统计（总量 / 好评 / 差评 / 好评率 + 按命中模式交叉分布），下方分页
+ * 列出反馈明细，展开可看问题与回答原文，用于定位「哪些问题被点差评」，
  * 作为检索质量评测与调参的证据来源。
  */
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { competitorApi } from '../api'
+import { fmtTime } from '../utils/format'
 
 const loading = ref(false)
 const stats = ref(null)
@@ -47,11 +48,6 @@ function onPageChange(p) {
   loadList()
 }
 
-function fmtTime(iso) {
-  if (!iso) return '-'
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
-}
-
 onMounted(() => {
   loadStats()
   loadList()
@@ -68,11 +64,11 @@ onMounted(() => {
       </div>
       <div class="fb-stat-card">
         <div class="fb-num good">{{ stats ? stats.like : '-' }}</div>
-        <div class="fb-label">👍 好评</div>
+        <div class="fb-label">好评</div>
       </div>
       <div class="fb-stat-card">
         <div class="fb-num bad">{{ stats ? stats.dislike : '-' }}</div>
-        <div class="fb-label">👎 差评</div>
+        <div class="fb-label">差评</div>
       </div>
       <div class="fb-stat-card">
         <div class="fb-num">
@@ -89,8 +85,8 @@ onMounted(() => {
         <div v-for="(m, key) in stats.by_mode" :key="key" class="fb-mode-item">
           <div class="fb-mode-name">{{ modeLabel(key) }}</div>
           <div class="fb-mode-bar">
-            <span class="good">👍 {{ m.like }}</span>
-            <span class="bad">👎 {{ m.dislike }}</span>
+            <span class="good">好评 {{ m.like }}</span>
+            <span class="bad">差评 {{ m.dislike }}</span>
           </div>
         </div>
         <div v-if="!Object.keys(stats.by_mode).length" class="fb-mode-empty">暂无反馈数据</div>
@@ -115,7 +111,7 @@ onMounted(() => {
         <el-table-column label="评分" width="90">
           <template #default="{ row }">
             <el-tag :type="row.rating === 'like' ? 'success' : 'danger'" size="small">
-              {{ row.rating === 'like' ? '👍' : '👎' }}
+              {{ row.rating === 'like' ? '好评' : '差评' }}
             </el-tag>
           </template>
         </el-table-column>
@@ -147,8 +143,8 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 .fb-stat-card {
-  background: #fff;
-  border: 1px solid #ebeef5;
+  background: var(--surface);
+  border: 1px solid var(--line-1);
   border-radius: 8px;
   padding: 20px;
   text-align: center;
@@ -156,18 +152,18 @@ onMounted(() => {
 .fb-num {
   font-size: 28px;
   font-weight: 700;
-  color: #303133;
+  color: var(--ink-1);
 }
 .fb-num.good {
-  color: #67c23a;
+  color: var(--el-color-success);
 }
 .fb-num.bad {
-  color: #f56c6c;
+  color: var(--el-color-danger);
 }
 .fb-label {
   margin-top: 6px;
   font-size: 13px;
-  color: #909399;
+  color: var(--ink-3);
 }
 .fb-card {
   margin-bottom: 16px;
@@ -182,7 +178,7 @@ onMounted(() => {
 }
 .fb-mode-name {
   font-size: 13px;
-  color: #606266;
+  color: var(--ink-2);
   margin-bottom: 6px;
 }
 .fb-mode-bar {
@@ -191,13 +187,13 @@ onMounted(() => {
   font-size: 14px;
 }
 .fb-mode-bar .good {
-  color: #67c23a;
+  color: var(--el-color-success);
 }
 .fb-mode-bar .bad {
-  color: #f56c6c;
+  color: var(--el-color-danger);
 }
 .fb-mode-empty {
-  color: #909399;
+  color: var(--ink-3);
 }
 .fb-pager {
   margin-top: 14px;
@@ -206,7 +202,7 @@ onMounted(() => {
 .fb-expand {
   padding: 4px 16px 12px;
   font-size: 13px;
-  color: #606266;
+  color: var(--ink-2);
   line-height: 1.7;
 }
 .fb-expand-q {
@@ -216,6 +212,6 @@ onMounted(() => {
   margin-bottom: 6px;
 }
 .fb-expand-src {
-  color: #909399;
+  color: var(--ink-3);
 }
 </style>

@@ -90,17 +90,17 @@ def test_chunk_faq_each_item_is_chunk():
 
 
 def test_title_from_doc_id():
-    from app.services.rag_service import _title_from_doc_id
+    from app.services.rag_service import title_from_doc_id
 
     # A-001 在 seeds 中存在（若 seeds CSV 已就位），否则返回 doc_id 本身
-    title = _title_from_doc_id("A-001")
+    title = title_from_doc_id("A-001")
     assert title in ("用户注册规则", "A-001")  # 有 CSV 时返回标题，无则回退 id
 
 
 def test_title_from_doc_id_unknown():
-    from app.services.rag_service import _title_from_doc_id
+    from app.services.rag_service import title_from_doc_id
 
-    assert _title_from_doc_id("ZZZ-999") == "ZZZ-999"
+    assert title_from_doc_id("ZZZ-999") == "ZZZ-999"
 
 
 async def test_ask_when_not_ready(monkeypatch):
@@ -489,36 +489,36 @@ def test_format_fallback_context_annotates_doc_and_score():
 # ---------------- rerank 精排 ----------------
 
 
-def test_rerank_by_vsim_pushes_bm25_noise_to_tail():
+def test_sort_by_vsim_pushes_bm25_noise_to_tail():
     """rerank 按向量相似度重排，vsim=0 的纯 BM25 命中沉到末尾。"""
-    from app.rag.retriever import rerank_by_vsim
+    from app.rag.retriever import sort_by_vsim
 
     # RRF 排序结果：pos=5 是 BM25 独有命中（vsim 缺失），却排在第 1 位
     ranked = [(5, 0.033), (1, 0.032), (2, 0.031)]
     v_scores = {1: 0.72, 2: 0.68}  # pos=5 无向量分数
-    out = rerank_by_vsim(ranked, v_scores, top_k=3)
+    out = sort_by_vsim(ranked, v_scores, top_k=3)
     # 重排后：vsim 高的在前，vsim 缺失的沉底
     assert [p for p, _ in out] == [1, 2, 5]
 
 
-def test_rerank_by_vsim_respects_top_k():
+def test_sort_by_vsim_respects_top_k():
     """rerank 截断到 top_k。"""
-    from app.rag.retriever import rerank_by_vsim
+    from app.rag.retriever import sort_by_vsim
 
     ranked = [(1, 0.033), (2, 0.032), (3, 0.031), (4, 0.030)]
     v_scores = {1: 0.9, 2: 0.8, 3: 0.7, 4: 0.6}
-    out = rerank_by_vsim(ranked, v_scores, top_k=2)
+    out = sort_by_vsim(ranked, v_scores, top_k=2)
     assert len(out) == 2
     assert [p for p, _ in out] == [1, 2]
 
 
-def test_rerank_by_vsim_stable_on_ties():
+def test_sort_by_vsim_stable_on_ties():
     """vsim 相同时保持 RRF 原顺序（稳定排序）。"""
-    from app.rag.retriever import rerank_by_vsim
+    from app.rag.retriever import sort_by_vsim
 
     ranked = [(1, 0.033), (2, 0.032)]
     v_scores = {1: 0.5, 2: 0.5}
-    out = rerank_by_vsim(ranked, v_scores, top_k=2)
+    out = sort_by_vsim(ranked, v_scores, top_k=2)
     assert [p for p, _ in out] == [1, 2]
 
 
@@ -576,3 +576,90 @@ def test_build_hit_gate_empty_results():
     from app.services.rag_service import build_hit_gate
 
     assert build_hit_gate([]) is None
+
+
+# —— US-006 命中判定与排序解耦：判定看「候选池全局最高余弦」，不看首位 ——
+
+
+def test_build_hit_gate_uses_pool_max_sim_not_first_place():
+    """首位余弦 < 0.65，但候选池内另有 ≥ 0.65 的块 → 仍判命中。
+
+    rerank 态下 results[0] 是 cross-encoder 第一名，未必是余弦最高者；
+    若沿用 results[0]["vector_sim"] 会把这条真命中误判成未命中、白走 LLM 兜底。
+    """
+    from app.services.rag_service import build_hit_gate
+
+    results = [
+        # rerank 判为最相关 → 排首位，但余弦 0.60 低于阈值
+        {"doc_id": "A-001", "text": "rerank 第一名的正文", "vector_sim": 0.60,
+         "rerank_score": 0.9935},
+        # 余弦达标但 rerank 排在后面
+        {"doc_id": "B-002", "text": "余弦最高的正文", "vector_sim": 0.70,
+         "rerank_score": 0.42},
+    ]
+    gate = build_hit_gate(results)
+
+    assert gate is not None
+    # 直出的是排序首位（= rerank 第一名），这是收益而非回归
+    assert gate["answer"] == "rerank 第一名的正文"
+
+
+def test_build_hit_gate_keeps_rerank_promoted_low_cosine_source():
+    """sources 不得剔除「rerank 高分但余弦低于阈值」的片段（US-006 AC-3）。"""
+    from app.services.rag_service import build_hit_gate
+
+    results = [
+        {"doc_id": "A-001", "text": "rerank 高分低余弦", "vector_sim": 0.60,
+         "rerank_score": 0.9935},
+        {"doc_id": "B-002", "text": "余弦达标", "vector_sim": 0.70,
+         "rerank_score": 0.42},
+        # 纯 BM25 噪声：余弦 0 且无 rerank 分，仍应被过滤
+        {"doc_id": "E-051", "text": "极端情绪安抚", "vector_sim": 0.0,
+         "rerank_score": None},
+    ]
+    gate = build_hit_gate(results)
+
+    assert gate is not None
+    assert [s.doc_id for s in gate["sources"]] == ["A-001", "B-002"]
+
+
+def test_build_hit_gate_rejects_when_pool_max_below_threshold():
+    """候选池全局最高余弦 < 0.65 → 未命中（即使带 rerank 分、排位靠前）。"""
+    from app.services.rag_service import build_hit_gate
+
+    results = [
+        {"doc_id": "FAQ-033", "text": "灰区正文", "vector_sim": 0.64,
+         "rerank_score": 0.99},
+        {"doc_id": "B-036", "text": "更低的灰区", "vector_sim": 0.60,
+         "rerank_score": 0.95},
+    ]
+    assert build_hit_gate(results) is None
+
+
+def test_build_fallback_context_uses_pool_max_sim():
+    """灰区闸门同样取全局最高余弦：首位低于 min_sim 但池内另有临界片段 → 不拒答。"""
+    from app.services.rag_service import build_fallback_context
+
+    results = [
+        # rerank 第一名：余弦低于 min_sim(0.4)，但带 rerank 分
+        {"doc_id": "A-001", "text": "rerank 高分低余弦", "vector_sim": 0.30,
+         "rerank_score": 0.88},
+        # 灰区片段：才是闸门该看的那条
+        {"doc_id": "B-002", "text": "灰区", "vector_sim": 0.55,
+         "rerank_score": 0.20},
+    ]
+    docs = build_fallback_context(results)
+
+    assert docs is not None
+    assert [d.doc_id for d in docs] == ["B-002"]
+
+
+def test_build_fallback_context_none_when_pool_max_below_min_sim():
+    """候选池全局最高余弦 < 0.4 → 返回 None（拒答），带不带 rerank 分都一样。"""
+    from app.services.rag_service import build_fallback_context
+
+    results = [
+        {"doc_id": "A-001", "text": "t", "vector_sim": 0.39, "rerank_score": 0.99},
+        {"doc_id": "B-002", "text": "t", "vector_sim": 0.20, "rerank_score": 0.80},
+    ]
+    assert build_fallback_context(results) is None

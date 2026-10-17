@@ -13,7 +13,9 @@
 ┌─────────────────────────────────────────────┐
 │  /api/rag/ask  (rag_service.ask)            │
 │   1. HybridRetriever.search 混合检索         │
-│   2. 命中判定（向量相似度 ≥ 0.55）           │
+│   1.5 cross-encoder 精排（RERANKER_ENABLED， │
+│       默认关，见 §3.1；关时不加载模型）       │
+│   2. 命中判定（候选池最高向量相似度 ≥ 0.65）  │
 │      ├─ 命中 → 直出最优 chunk 原文 + 来源     │
 │      └─ 未命中 → LLM 兜底生成（成本熔断记账） │
 └─────────────────────────────────────────────┘
@@ -51,9 +53,36 @@
 1. **稠密向量检索**：`bge-m3`（1024 维）对 query 编码，Chroma 余弦相似度召回 Top-20。
 2. **稀疏 BM25 检索**：jieba 分词（加载 glossary 同义词扩充词典），`rank_bm25` 召回 Top-20。
 3. **RRF 融合**：`score(d) = Σ 1/(k + rank)`，`k = 60`，两路排名融合后取 Top-K。
-4. **重排与文档级去重**：RRF 之后先按向量相似度**精排**（`RERANK_BY_VSIM`，压掉「BM25 独有命中、语义无关」的噪声），再做**文档级去重 + 保底补位**（`DOC_DEDUP_ENABLED`，2026-09-11 开启）：每篇文档保底保留 1 个最相关 chunk，名额不足 Top-K 时回填同文档次优 chunk。用于解决「同文档多 chunk 抱团占位、多文档问题召回不全」（详见 `docs/RAG优化方案.md`）。
+4. **重排与文档级去重**：RRF 之后先做**精排**（打分器见 §3.1：生产排序分数已从 bge-m3 余弦换成 cross-encoder 分，`RERANKER_ENABLED` 默认关），再做**文档级去重 + 保底补位**（`DOC_DEDUP_ENABLED`，2026-09-11 开启）：每篇文档保底保留 1 个最相关 chunk，名额不足 Top-K 时回填同文档次优 chunk。用于解决「同文档多 chunk 抱团占位、多文档问题召回不全」（详见 `docs/RAG优化方案.md`）。
 
 **BM25 持久化**：分词后的文档 tokens 序列化为 JSON 落到 `rag_data/vector_store/bm25_index.json`（不用 pickle，避免不可信反序列化风险），服务重启后 `load()` 完整恢复，避免退化为纯向量检索。
+
+### 3.1 rerank 接入点（cross-encoder 精排）
+
+动机：bge-m3 是 bi-encoder，query/passage 各自独立编码后算余弦，同域语料被压在极窄
+区间内（P0-2 实测「期望 vs 非期望」中位差仅 **0.036**），**排序分辨率不足**。cross-encoder
+把 (query, passage) 拼成单序列送模型，直接建模交互。方案与实测见 `docs/Rerank方案.md`。
+
+| 项 | 实现 |
+|---|---|
+| 模块 | `app/rag/reranker.py`：ONNX Runtime + `tokenizers`（**不引 transformers/torch**），`CrossEncoderReranker.score(query, passages) -> list[float]`（sigmoid 归一到 0~1） |
+| 模型 | `onnx-community/bge-reranker-v2-m3-ONNX` 的 `model_int8.onnx`（570MB），落 `backend/models/bge-reranker-v2-m3/`（已 gitignore），由 `scripts/download_reranker.py` 经 hf-mirror 下载 |
+| 开关 | `RERANKER_ENABLED`（**默认 false**，关着时行为与改造前**逐位一致**）、`RERANKER_TOP_N`（默认 = `QUERY_N_RESULTS` = 20）、`RERANKER_MAX_LENGTH` / `RERANKER_BATCH_SIZE`，均在 `app/rag/config.py` |
+| 取用入口 | `get_active_reranker()` 是**生产唯一入口**（关闭或不可用 → `None`，关闭态连实例都不建）；`get_reranker()` 是纯惰性单例，供离线闸门脚本用、**不受开关影响** |
+| 打分窗口 | 只对 **RRF 排序前 `RERANKER_TOP_N`** 个候选打分，**只重排候选池、不扩大召回**（`QUERY_N_RESULTS` 保持 20） |
+| 排序键 | `search()` / `search_dual()` 用 `rank_scores = rerank or v_scores` **一处切换**；`diversify_with_refill` / `dual_views` 签名与算法**一行未改**（它们本就接受任意 `pos → 分` 字典）。副作用：rerank 态下**锚定文档**（`ranked_all[0]` 所属文档）会跟着新排序分走 |
+| 结果字段 | `_assemble_results` 新增 `rerank_score`（未启用或窗口外为 `None`）；**`vector_sim` 保持原义**（bge-m3 余弦，语义永不随打分器改变） |
+| 降级 | 模型文件缺失 / 分词器加载失败 / ONNX 推理异常 → 记一条**含原因**的 warning，返回**空字典**，调用方自然退回余弦排序；**问答接口不返回 5xx**（US-009） |
+| 缓存 | `cache._CACHE_VERSION` 升到 **v5**（key 不含打分器维度，不升版本 + 不清 `rag:search:*` 会 TTL 内命中旧排序/旧判定） |
+
+**`sort_by_vsim()` 的定位（已变；原 `rerank_by_vsim`，2026-09-19 改名消歧义）**：它仍是「按 bge-m3 余弦对 RRF 结果二次排序」的纯
+函数，但**已不是生产路径**——生产走 `DOC_DEDUP_ENABLED=true` 的 `diversify_with_refill`
+分支；`sort_by_vsim` 现在只是 `DOC_DEDUP_ENABLED=false` 时的 **`elif` 兜底分支**，
+且其排序键同样已换成 `rank_scores`。即：**换的是「排序分数」，不是「排序算法」**。
+
+> ⚠️ **当前未上线**：285 问对拍（`--top-k 5`）效果侧 6/6 达标（MRR@10 0.9526→0.9693、
+> nDCG@10 0.7957→0.8146），但**延迟增量 11088 ms/问，超 300ms 上限 37 倍** → 判定
+> 「未达到验收标准」，故保持默认关闭。完整数据与结论见 `docs/Rerank方案.md` §11。
 
 ## 4. 命中判定与兜底
 
@@ -63,14 +92,25 @@
 - 无关查询实测 `vector_sim ≈ 0.48`；领域外闲聊 top1 约 **0.6235**
 
 > **注意**：不能使用 RRF 融合得分做阈值——其量级仅 `0.016~0.033`（`1/61` 起步），与 0~1 的相似度不在同一量级。
+>
+> **判定取「候选池全局最高余弦」，不取首位**（US-006）：自 §3.1 接入 rerank 起，排序键
+> 可能已是 cross-encoder 分，`results[0]` 不再保证是余弦最高的 chunk。若仍读
+> `results[0]["vector_sim"]`，会出现「rerank 判最相关、余弦却低于 0.65」→ 误判未命中
+> → 走 LLM 兜底，rerank 收益被吃掉。判定与灰区两处闸门共用
+> `rag_service._max_vector_sim(results)`（`max(r["vector_sim"] for r in results)`，空池 0.0）。
+> 阈值本身的**取值与标定依据不变**（仍是 bge-m3 余弦的分布空隙）。
 
 未命中后按相似度**三档分流**（P1，见 `docs/RAG优化方案.md` 第五节）：
 
-| 档位 | 条件（`results[0].vector_sim`） | 行为 |
+| 档位 | 条件（候选池全局最高 `vector_sim`） | 行为 |
 |---|---|---|
-| **命中** | `≥ 0.65` | 视 `SYNTH_MODE` 分流（见下节 4.1）：默认 `multi_doc` 档下，多文档信号命中走 LLM 合成，否则直出最优 chunk 原文；来源列表（按 `doc_id` 去重）不变 |
+| **命中** | `≥ 0.65` | 视 `SYNTH_MODE` 分流（见下节 4.1）：默认 `multi_doc` 档下，多文档信号命中走 LLM 合成，否则直出最优 chunk 原文（rerank 态 = cross-encoder 第一名，**收益而非回归**）；来源列表（按 `doc_id` 去重）不变 |
 | **注入兜底** | `[0.4, 0.65)` | 把灰区片段（带「来源 + 相似度」标注，上限 3 条）注入 system prompt，再调 LLM；片段同时作为来源返回供核验 |
 | **直接拒答** | `< 0.4` 或结果为空 | 回「知识库暂无相关内容」，**不调用 LLM**（无依据时不猜测，杜绝编造） |
+
+**来源列表过滤（US-006 起为双通道）**：`vector_sim >= SIMILARITY_THRESHOLD`
+**或** `rerank_score is not None` 的片段都保留——否则 rerank 提上来的「高相关但余弦低于
+阈值」的块会被误剔除，用户可见来源反而变少。纯 BM25 噪声（余弦 0 且无 rerank 分）仍被过滤。
 
 兜底 LLM 走 OpenAI 兼容接口（`LLM_API_BASE` / `LLM_MODEL`），并接入成本熔断记账
 （`ai/cost.py`，会话累计消费超阈值即中断征询）。
@@ -125,11 +165,16 @@ bash scripts/build_vector_store.sh
 | L1 | 进程内 `OrderedDict` LRU（256 条，TTL ≤60s） | 检索结果 | 命中 <0.05ms；同时也是 Redis 故障时的兜底 |
 | L2 | Redis（`RAG_CACHE_TTL`，默认 3600s，写时 ±10% 抖动） | 检索结果 JSON | 多进程/多 worker 共享；命中 ≈0.34ms |
 
-**缓存 key**：`rag:search:v2:{语料版本}:k{top_k}:{归一化问题}`
+**缓存 key**：`rag:search:v5:{语料版本}:k{top_k}:{归一化问题}`
 
 - 归一化：全角→半角、去空白、小写（「忘记密码」与「忘记密码！」同一个 key）
 - `top_k` 与**语料版本**（`bm25_index.json` + `chroma.sqlite3` 的 mtime 指纹）都必须进 key，
   否则不同 `top_k` 会串用结果、语料被替换后仍命中旧结果
+- **key 里不含检索策略/打分器维度**，所以每次改变排序或判定口径都必须
+  **升 `_CACHE_VERSION` + 清一次 `rag:search:*`**，否则 TTL 内继续命中旧口径结果
+  （表现为「改了策略线上没变」）。当前版本 **v5**：cross-encoder rerank 接入
+  （排序键换 rerank 分 + 命中判定/来源过滤口径变化，见 §3.1）。清缓存命令与时机见
+  `docs/Rerank方案.md` §6.1 上线执行清单
 - 知识库重建：刷新检索器单例（换掉旧 collection 句柄）→ 用**一次性连接**按前缀清空缓存。
   不要复用进程内单例 client：后台线程里的 `asyncio.run` 会建临时事件循环，
   单例连接绑上去后随即随循环关闭，之后主循环全部 `Event loop is closed`，缓存永久失效

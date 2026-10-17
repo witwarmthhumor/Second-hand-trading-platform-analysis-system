@@ -5,7 +5,9 @@
 设计要点：
 - key = 「语料版本 + top_k + 问题归一化」，避免：①「忘记密码」与「忘记密码！」算两个
   key；② 不同 top_k 的请求互相串用结果；③ 语料被替换后仍命中旧结果
-- 缓存 value 存检索结果 JSON（doc_id/text/rrf_score/vector_sim 列表）
+- 缓存 value 存 **[广度视图, 深度视图] 两份检索结果 JSON**（v5 起；每项含
+  doc_id/text/chunk_id/rrf_score/vector_sim/rerank_score 字段，rerank_score 仅
+  rerank 窗口内候选非 None）
 - 命中时返回缓存结果；未命中走原检索流程后写缓存（TTL 带 ±10% 随机抖动）
 - L1（进程内 LRU，容量 256）作为 Redis 故障时的二级兜底，先查 L1 再查 Redis
 - Redis 不可用时优雅降级：缓存读写静默跳过，不影响问答主流程；
@@ -42,7 +44,12 @@ _CACHE_PREFIX = "rag:search:"
 # 注：ANCHOR_QUOTA 的 A/B 实验（配额 1 vs 4）曾在同版本 key 下写入两套结果，实验后
 # 已清空 `rag:search:*`（见 RAGAS 评估实验.md 第十三节）；日后真正切换该值时**必须**
 # 再次清缓存或升版本。
-_CACHE_VERSION = "v4"  # v4：value 从单视图 list[dict] 变为 [breadth, depth] 双视图（P1-②）
+# v4（2026-09-17）：value 从单视图 list[dict] 变为 [breadth, depth] 双视图（P1-②）。
+# v5（2026-09-18）：cross-encoder rerank 接入——排序键由 bge-m3 余弦换成 rerank 分数
+# （US-005），命中判定与来源过滤口径随之变化（US-006）。缓存 key 不含打分器维度，
+# 不升版本则 TTL 内会继续命中旧排序/旧判定写下的结果，表现为「改了策略线上没变」。
+# 同时须执行 `purge_all(settings.redis_url)` 清空历史 `rag:search:*`（见 docs/Rerank方案.md 执行清单）。
+_CACHE_VERSION = "v5"
 
 # Redis 故障熔断窗口（秒）：一次失败后窗口内不再尝试建连
 _CIRCUIT_COOLDOWN = 30.0
@@ -115,7 +122,7 @@ class SearchCache:
         self._down_until: float = 0.0
         # L1 值形态：单视图族（get/set，list[dict]）或双视图族（get_pair/set_pair，
         # [breadth, depth]）二选一。⚠️ 同一 key 的读写必须用同一族——单视图写入后
-        # 用 get_pair 读取会把 dict 当视图迭代而报错。生产路径只用双视图族（v4），
+        # 用 get_pair 读取会把 dict 当视图迭代而报错。生产路径只用双视图族（v5），
         # 单视图族由测试与潜在调用方使用。
         self._l1: OrderedDict[str, tuple[float, list[dict] | list[list[dict]]]] = (
             OrderedDict()
